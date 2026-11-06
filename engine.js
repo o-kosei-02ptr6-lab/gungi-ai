@@ -41,7 +41,8 @@
   function canPlacePiece(state, row, col, piece) {
     if (!isInside(row, col) || !piece || state.phase !== "setup") return false;
     // 初期配置は先手が下3段、後手が上3段のみ。
-    if (piece.side === "先手" ? row < 6 : row > 2) return false;
+    if (piece.side === "先手" && row < 6) return false;
+    if (piece.side === "後手" && row > 2) return false;
     const stack = state.board[row][col];
     // 4段目は禁止。帥の上にも配置できない。
     if (stack.length >= 3) return false;
@@ -56,6 +57,8 @@
     const index = hand.findIndex(piece => piece.id === String(pieceId));
     if (index < 0) return { ok: false, reason: "その駒は持ち駒にありません。" };
     const piece = hand[index];
+    if (piece.side === "先手" && row < 6) return { ok: false, reason: "先手は下3段（7〜9段目）にのみ配置できます。" };
+    if (piece.side === "後手" && row > 2) return { ok: false, reason: "後手は上3段（1〜3段目）にのみ配置できます。" };
     if (!canPlacePiece(state, row, col, piece)) {
       return { ok: false, reason: piece.name === "帥" ? "帥は他の駒があるマスには配置できません。" : "このマスには配置できません。" };
     }
