@@ -10,3 +10,5 @@ main{width:min(100% - 24px,680px);margin:18px auto 36px;display:grid;gap:14px}.p
 .square.legal-target{background:#9bd39f!important;outline:3px solid #327b48;outline-offset:-3px}.square.legal-target::after{content:'●';font-size:clamp(12px,4vw,22px);color:#286b3b;opacity:.85}
 
 .mode-toggle{display:block!important;width:100%;padding:16px!important;margin:0!important;border:2px solid #9eafff!important;border-radius:12px!important;background:#394866!important;color:#fff!important;font-size:16px!important;font-weight:700!important;min-height:54px}
+
+.mode-toggle[hidden]{display:none!important}
