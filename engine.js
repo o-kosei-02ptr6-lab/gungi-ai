@@ -40,6 +40,8 @@
   }
   function canPlacePiece(state, row, col, piece) {
     if (!isInside(row, col) || !piece || state.phase !== "setup") return false;
+    // 初期配置は先手が下3段、後手が上3段のみ。
+    if (piece.side === "先手" ? row < 6 : row > 2) return false;
     const stack = state.board[row][col];
     // 4段目は禁止。帥の上にも配置できない。
     if (stack.length >= 3) return false;
@@ -48,6 +50,7 @@
   }
   function placePiece(state, row, col, side, pieceId) {
     if (!isInside(row, col) || state.phase !== "setup") return { ok: false, reason: "配置できる局面ではありません。" };
+    if (side !== state.setupTurn) return { ok: false, reason: "現在は" + state.setupTurn + "の配置番です。" };
     const hand = state.hands[side];
     if (!hand) return { ok: false, reason: "陣営が不正です。" };
     const index = hand.findIndex(piece => piece.id === String(pieceId));
@@ -59,7 +62,8 @@
     hand.splice(index, 1);
     state.board[row][col].push(piece);
     state.history.push({ type: "place", row, col, side, piece });
-    return { ok: true, piece };
+    state.setupTurn = side === "先手" ? "後手" : "先手";
+    return { ok: true, piece, nextSide: state.setupTurn };
   }
   // 対局中の配置では、敵駒に覆われた味方を最前列の判定から除外する。
   function getFrontmostFriendlyRow(state, side) {
@@ -278,7 +282,7 @@
     return {
       board: createEmptyBoard(),
       hands: { "先手": createInventory("先手"), "後手": createInventory("後手") },
-      turn: "先手", phase: "setup", moveNumber: 1, history: []
+      turn: "先手", setupTurn: "先手", phase: "setup", moveNumber: 1, history: []
     };
   }
   window.GungiEngine = Object.freeze({
