@@ -40,7 +40,10 @@
   }
   function canPlacePiece(state, row, col, piece) {
     if (!isInside(row, col) || !piece || state.phase !== "setup") return false;
-    if (piece.name === "帥" && state.board[row][col].length !== 0) return false;
+    const stack = state.board[row][col];
+    // Upper/intermediate setup permits the 帥 itself to be placed on a
+    // friendly stack, but no piece may be placed on top of an existing 帥.
+    if (stack.length && stack[stack.length - 1].name === "帥") return false;
     return true;
   }
   function placePiece(state, row, col, side, pieceId) {
@@ -71,7 +74,7 @@
     "大将": {1:[[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]],2:[[2,2],[2,-2],[-2,2],[-2,-2]],3:[[3,3],[3,-3],[-3,3],[-3,-3]],rays:[[1,0],[-1,0],[0,1],[0,-1]]},
     "中将": {1:[[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]],2:[[2,2],[2,-2],[-2,2],[-2,-2]],3:[[3,3],[3,-3],[-3,3],[-3,-3]],rays:[[1,1],[1,-1],[-1,1],[-1,-1]]},
     "少将": {1:[[1,0],[1,1],[1,-1],[0,1],[0,-1],[-1,0]],2:[[2,1],[2,-1],[0,2],[0,-2]],3:[[3,0],[3,2],[3,-2],[0,3],[0,-3]]},
-    "侍": {1:[[1,0],[1,1],[1,-1],[-1,0]],2:[[2,0],[2,2],[2,-2],[-2,0]],3:[[3,0],[3,3],[3,-3],[-3,0]]},
+    "侍": {1:[[1,0],[1,1],[1,-1],[-1,0]],2:[[2,0],[2,2],[2,-2]],3:[[3,0],[3,3],[3,-3]]},
     "槍": {1:[[1,0],[1,1],[1,-1],[-1,0],[2,0]],2:[[2,1],[2,-1],[3,0]],3:[[3,1],[3,-1],[4,0]]},
     "騎": {1:[[1,0],[-1,0],[2,0],[-2,0],[0,1],[0,-1]],2:[[3,0],[-3,0],[0,2],[0,-2]],3:[[4,0],[-4,0],[0,3],[0,-3]]},
     "忍": {1:[[1,1],[1,-1],[-1,1],[-1,-1],[2,2],[2,-2],[-2,2],[-2,-2]],2:[[3,3],[3,-3],[-3,3],[-3,-3]],3:[[4,4],[4,-4],[-4,4],[-4,-4]]},
@@ -127,12 +130,20 @@
     const option = getMovementTargets(state, fromRow, fromCol).find(p => p.row === toRow && p.col === toCol);
     if (!option) return false;
     if (option.jump) return true;
-    const dr = Math.sign(toRow - fromRow), dc = Math.sign(toCol - fromCol);
-    const distance = Math.max(Math.abs(toRow - fromRow), Math.abs(toCol - fromCol));
-    if (distance <= 1 || (!option.ray && distance <= 1)) return true;
-    for (let step = 1; step < distance; step += 1) {
-      const r = fromRow + dr * step, c = fromCol + dc * step;
-      if (getStack(state, r, c).length) return false;
+    const deltaRow = toRow - fromRow;
+    const deltaCol = toCol - fromCol;
+    const absRow = Math.abs(deltaRow), absCol = Math.abs(deltaCol);
+    // Check the exact lattice points between source and destination.
+    // This correctly handles diagonal, orthogonal and (2,1)-style offsets.
+    function gcd(a, b) {
+      while (b !== 0) { const t = b; b = a % b; a = t; }
+      return a;
+    }
+    const divisor = gcd(absRow, absCol);
+    if (divisor <= 1) return true;
+    const stepRow = deltaRow / divisor, stepCol = deltaCol / divisor;
+    for (let step = 1; step < divisor; step += 1) {
+      if (getStack(state, fromRow + stepRow * step, fromCol + stepCol * step).length) return false;
     }
     return true;
   }
