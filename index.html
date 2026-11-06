@@ -10,26 +10,18 @@
 <body>
   <header class="topbar">
     <div><p class="eyebrow">GUNGI PROJECT</p><h1>軍儀 AI</h1></div>
-    <span class="status" id="status">配置モード</span>
+    <span class="status" id="status">初期配置</span>
   </header>
   <main>
     <section class="panel intro">
       <h2>対局盤・初期配置</h2>
-      操作を「駒を配置する」にして、駒を選択して盤上のマスをタップします。同じマスに重ねて配置できます。「最上段の駒を手持ちに戻す」に切り替えると、配置を取り消せます。
+      <p>先手・後手を選び、駒のボタンを押してから盤上のマスをタップしてください。同じマスに重ねて配置できます。配置した駒を手持ちに戻す機能はありません。置き間違えた場合は「盤面を初期化」で最初からやり直してください。</p>
     </section>
     <section class="panel setup-controls">
       <label for="side-select">配置する陣営</label>
-      <select id="side-select">
-        <option value="先手">先手</option><option value="後手">後手</option>
-      </select>
-      <label for="operation-select">操作</label>
-      <select id="operation-select">
-        <option value="place">駒を配置する（重ねて配置可）</option>
-        <option value="remove">最上段の駒を手持ちに戻す</option>
-      </select>
-      <label for="piece-select">配置する駒</label>
-      <select id="piece-select"></select>
-      <p id="inventory-count" class="inventory-count"></p>
+      <select id="side-select"><option value="先手">先手</option><option value="後手">後手</option></select>
+      <div class="piece-heading"><strong>配置する駒</strong><span id="inventory-count">残数を表示</span></div>
+      <div id="piece-picker" class="piece-picker" aria-label="駒の選択"></div>
       <p id="message" role="status">駒を選択して盤面をタップしてください。</p>
     </section>
     <section class="board-wrap" aria-label="軍儀の盤面"><div class="board-coordinates" id="board"></div></section>
@@ -39,17 +31,10 @@
       <button id="clear-selection" type="button">選択解除</button>
       <button id="reset-board" type="button">盤面を初期化</button>
     </section>
-    <section class="panel">
-      <h2>駒の残数</h2><div id="inventory-summary" class="inventory-summary"></div>
-    </section>
+    <section class="panel"><h2>駒の残数</h2><div id="inventory-summary" class="inventory-summary"></div></section>
     <section class="panel">
       <h2>開発ロードマップ</h2>
-      <ol class="roadmap">
-        <li class="done">盤面・局面データ構造</li>
-        <li class="active">駒の配置と段（ツケ）の管理</li>
-        <li>合法手生成・王手判定</li><li>局面評価関数</li>
-        <li>探索エンジン（反復深化・枝刈り）</li><li>対局・棋譜・AI強度設定</li>
-      </ol>
+      <ol class="roadmap"><li class="done">盤面・局面データ構造</li><li class="active">駒の配置と段（ツケ）の管理</li><li>合法手生成・王手判定</li><li>局面評価関数</li><li>探索エンジン（反復深化・枝刈り）</li><li>対局・棋譜・AI強度設定</li></ol>
     </section>
   </main>
   <footer>Gungi AI · 開発用プロトタイプ</footer>
