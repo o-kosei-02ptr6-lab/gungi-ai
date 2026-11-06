@@ -87,6 +87,11 @@
     selectedElement.textContent = selected ? (selected.col + 1) + "-" + (selected.row + 1) : "なし";
     refreshPiecePicker();
     renderSummary();
+    document.getElementById("mode-toggle").textContent = mode === "setup" ? "移動モードに切り替え" : "配置モードに戻る";
+    document.getElementById("status").textContent = mode === "setup" ? "初期配置" : "移動確認";
+    pickerElement.hidden = mode !== "setup";
+    document.querySelector(".setup-controls label").hidden = mode !== "setup";
+    sideSelect.hidden = mode !== "setup";
   }
   function onSquare(row, col) {
     selected = { row, col };
@@ -153,6 +158,7 @@
   });
   document.getElementById("clear-selection").addEventListener("click", () => {
     selected = null;
+    moveTargets = [];
     infoElement.textContent = "盤面のマスをタップしてください。";
     render();
   });
