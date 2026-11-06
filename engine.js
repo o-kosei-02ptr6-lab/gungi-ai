@@ -189,6 +189,11 @@
     return true;
   }
   function movePiece(state, fromRow, fromCol, toRow, toCol) {
+    const sourceStack = getStack(state, fromRow, fromCol);
+    const sourceTop = sourceStack && sourceStack.length ? sourceStack[sourceStack.length - 1] : null;
+    if (!sourceTop || sourceTop.side !== state.turn) {
+      return { ok: false, reason: "現在の手番ではないため、その駒は動かせません。" };
+    }
     if (!canMoveTo(state, fromRow, fromCol, toRow, toCol)) {
       return { ok: false, reason: "その移動はできません。" };
     }
