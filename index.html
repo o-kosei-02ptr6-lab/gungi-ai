@@ -15,12 +15,17 @@
   <main>
     <section class="panel intro">
       <h2>対局盤・初期配置</h2>
-      <p>駒を選択して盤上のマスをタップすると配置します。配置済みの駒をタップすると、そのマスの最上段の駒を手持ちに戻します。</p>
+      操作を「駒を配置する」にして、駒を選択して盤上のマスをタップします。同じマスに重ねて配置できます。「最上段の駒を手持ちに戻す」に切り替えると、配置を取り消せます。
     </section>
     <section class="panel setup-controls">
       <label for="side-select">配置する陣営</label>
       <select id="side-select">
         <option value="先手">先手</option><option value="後手">後手</option>
+      </select>
+      <label for="operation-select">操作</label>
+      <select id="operation-select">
+        <option value="place">駒を配置する（重ねて配置可）</option>
+        <option value="remove">最上段の駒を手持ちに戻す</option>
       </select>
       <label for="piece-select">配置する駒</label>
       <select id="piece-select"></select>
