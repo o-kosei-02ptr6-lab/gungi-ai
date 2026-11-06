@@ -14,7 +14,7 @@
   let selectedName = "兵";
   let mode = "setup";
   let moveTargets = [];
-  function currentSide() { return sideSelect.value; }
+  function currentSide() { return mode === "move" ? state.turn : sideSelect.value; }
   function piecesInHand(side, name) {
     return state.hands[side].filter(piece => piece.name === name);
   }
@@ -88,7 +88,7 @@
     refreshPiecePicker();
     renderSummary();
     document.getElementById("mode-toggle").textContent = mode === "setup" ? "移動モードに切り替え" : "配置モードに戻る";
-    document.getElementById("status").textContent = mode === "setup" ? "初期配置" : "移動確認";
+    document.getElementById("status").textContent = mode === "setup" ? "初期配置" : state.turn + "の手番";
     pickerElement.hidden = mode !== "setup";
     document.querySelector(".setup-controls label").hidden = mode !== "setup";
     sideSelect.hidden = mode !== "setup";
@@ -144,8 +144,8 @@
     mode = mode === "setup" ? "move" : "setup";
     selected = null;
     moveTargets = [];
-    messageElement.textContent = mode === "setup" ? "配置モードに戻りました。" : "移動確認モードです。陣営を選び、盤上の駒をタップしてください。";
-    infoElement.textContent = "移動先は仮実装の移動規則に基づいて表示されます。";
+    messageElement.textContent = mode === "setup" ? "配置モードに戻りました。" : "移動モードです。先手から開始します。";
+    infoElement.textContent = mode === "move" ? "現在の手番：" + state.turn : "盤面のマスをタップしてください。";
     render();
   });
   sideSelect.addEventListener("change", () => {
@@ -167,6 +167,8 @@
     state.board = fresh.board;
     state.hands = fresh.hands;
     state.history = [];
+    state.turn = fresh.turn;
+    state.moveNumber = fresh.moveNumber;
     selected = null;
     selectedName = "兵";
     messageElement.textContent = "盤面と持ち駒を初期状態に戻しました。";
