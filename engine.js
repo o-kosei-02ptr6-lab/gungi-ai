@@ -62,6 +62,91 @@
     if (!destinationStack.length) return [];
     return destinationStack.every(piece => piece.side !== movingPiece.side) ? [] : destinationStack.slice();
   }
+
+  // Movement vectors use (forward, right). Forward is rotated by side.
+  // Each entry lists destinations added at that stack level.
+  const MOVE_RULES = Object.freeze({
+    "帥": {1:[[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]],2:[[2,1],[2,-1],[-2,1],[-2,-1],[1,2],[1,-2],[-1,2],[-1,-2]],3:[[3,0],[-3,0],[0,3],[0,-3],[3,3],[3,-3],[-3,3],[-3,-3]]},
+    "大将": {1:[[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]],2:[],3:[],rays:[[1,0],[-1,0],[0,1],[0,-1]]},
+    "中将": {1:[[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]],2:[],3:[],rays:[[1,1],[1,-1],[-1,1],[-1,-1]]},
+    "少将": {1:[[1,0],[1,1],[1,-1],[0,1],[0,-1],[-1,0]],2:[[2,1],[2,-1],[0,2],[0,-2]],3:[[3,0],[3,2],[3,-2],[0,3],[0,-3]]},
+    "侍": {1:[[1,0],[1,1],[1,-1],[-1,0]],2:[[2,0],[2,1],[2,-1],[-2,0]],3:[[3,0],[3,1],[3,-1],[-3,0]]},
+    "槍": {1:[[1,0],[1,1],[1,-1],[-1,0],[2,0]],2:[[2,1],[2,-1],[3,0]],3:[[3,1],[3,-1],[4,0]]},
+    "馬": {1:[[1,0],[-1,0],[2,0],[-2,0],[0,1],[0,-1]],2:[[3,0],[-3,0],[0,2],[0,-2]],3:[[4,0],[-4,0],[0,3],[0,-3]]},
+    "忍": {1:[[1,1],[1,-1],[-1,1],[-1,-1],[2,2],[2,-2],[-2,2],[-2,-2]],2:[[3,3],[3,-3],[-3,3],[-3,-3]],3:[[4,4],[4,-4],[-4,4],[-4,-4]]},
+    "砦": {1:[[1,0],[0,1],[0,-1],[-1,1],[-1,-1]],2:[[2,0],[0,2],[0,-2],[-2,2],[-2,-2]],3:[[3,0],[0,3],[0,-3],[-3,3],[-3,-3]]},
+    "兵": {1:[[1,0],[-1,0]],2:[[2,0]],3:[[3,0]]},
+    "砲": {1:[[1,0],[2,0],[0,1],[0,-1],[-1,0]],2:[[3,0],[0,2],[0,-2]],3:[[4,0],[0,3],[0,-3]],jumps:[[1,0],[2,0],[3,0]]},
+    "弓": {1:[[1,0],[1,1],[1,-1],[-1,0]],2:[[2,0],[2,1],[2,-1]],3:[[3,0],[3,1],[3,-1]],jumps:[[1,0],[1,1],[1,-1],[2,0],[2,1],[2,-1],[3,0],[3,1],[3,-1]]},
+    "筒": {1:[[1,0],[-1,1],[-1,-1]],2:[[2,0],[-2,2],[-2,-2]],3:[[3,0],[-3,3],[-3,-3]],jumps:[[1,0],[2,0],[3,0]]},
+    "謀": {1:[[1,1],[1,-1],[-1,0]],2:[[2,2],[2,-2],[-2,0]],3:[[3,3],[3,-3],[-3,0]]}
+  });
+  function rotateVector(forward, right, side) {
+    return side === "先手" ? [-forward, right] : [forward, right];
+  }
+  function getMovementTargets(state, row, col) {
+    const stack = getStack(state, row, col);
+    if (!stack || !stack.length || stack.length > 3) return [];
+    const piece = stack[stack.length - 1];
+    const level = stack.length;
+    const rule = MOVE_RULES[piece.name];
+    if (!rule) return [];
+    const vectors = [...rule[1], ...(level >= 2 ? rule[2] : []), ...(level >= 3 ? rule[3] : [])];
+    const targets = [];
+    const seen = new Set();
+    for (const [f, r] of vectors) {
+      const [dr, dc] = rotateVector(f, r, piece.side);
+      const tr = row + dr, tc = col + dc;
+      if (!isInside(tr, tc)) continue;
+      const key = tr + "," + tc;
+      if (!seen.has(key)) { seen.add(key); targets.push({ row: tr, col: tc, jump: (rule.jumps || []).some(v => v[0] === f && v[1] === r) }); }
+    }
+    for (const [f, r] of (rule.rays || [])) {
+      const [dr, dc] = rotateVector(f, r, piece.side);
+      let tr = row + dr, tc = col + dc;
+      while (isInside(tr, tc)) {
+        const key = tr + "," + tc;
+        if (!seen.has(key)) { seen.add(key); targets.push({ row: tr, col: tc, jump: false, ray: true }); }
+        const blocking = getTopPiece(state, tr, tc);
+        if (blocking) break;
+        tr += dr; tc += dc;
+      }
+    }
+    return targets;
+  }
+  function canMoveTo(state, fromRow, fromCol, toRow, toCol) {
+    if (!isInside(toRow, toCol) || (fromRow === toRow && fromCol === toCol)) return false;
+    const source = getStack(state, fromRow, fromCol);
+    if (!source || !source.length || source.length > 3) return false;
+    const moving = source[source.length - 1];
+    const target = getStack(state, toRow, toCol);
+    const top = target.length ? target[target.length - 1] : null;
+    if (top && top.side === moving.side) return false;
+    if (top && target.length >= 3) return false;
+    const option = getMovementTargets(state, fromRow, fromCol).find(p => p.row === toRow && p.col === toCol);
+    if (!option) return false;
+    if (option.jump) return true;
+    const dr = Math.sign(toRow - fromRow), dc = Math.sign(toCol - fromCol);
+    const distance = Math.max(Math.abs(toRow - fromRow), Math.abs(toCol - fromCol));
+    if (distance <= 1 || (!option.ray && distance <= 1)) return true;
+    for (let step = 1; step < distance; step += 1) {
+      const r = fromRow + dr * step, c = fromCol + dc * step;
+      if (getStack(state, r, c).length) return false;
+    }
+    return true;
+  }
+  function generateLegalMoves(state, side) {
+    const moves = [];
+    for (let row = 0; row < SIZE; row += 1) for (let col = 0; col < SIZE; col += 1) {
+      const stack = state.board[row][col];
+      if (!stack.length || stack[stack.length - 1].side !== side) continue;
+      for (const target of getMovementTargets(state, row, col)) {
+        if (canMoveTo(state, row, col, target.row, target.col)) moves.push({ from:{row,col}, to:{row:target.row,col:target.col}, piece:stack[stack.length-1] });
+      }
+    }
+    return moves;
+  }
+
   function createGameState() {
     return {
       board: createEmptyBoard(),
@@ -71,6 +156,7 @@
   }
   window.GungiEngine = Object.freeze({
     SIZE, PIECE_COUNTS, createEmptyBoard, createPiece, createInventory, createGameState,
-    isInside, getStack, getTopPiece, isMovablePiece, canPlacePiece, placePiece, resolveLandingStack
+    isInside, getStack, getTopPiece, isMovablePiece, canPlacePiece, placePiece, resolveLandingStack,
+    MOVE_RULES, getMovementTargets, canMoveTo, generateLegalMoves
   });
 })();
