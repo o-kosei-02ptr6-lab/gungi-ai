@@ -127,8 +127,8 @@
     const top = target.length ? target[target.length - 1] : null;
     // 味方へのツケは、相手先の段数が移動元の段数以下で、
     // かつ移動先が3段未満の場合のみ可能。
-    if (top && top.side === moving.side &&
-        (target.length > source.length || target.length >= 3)) return false;
+    if (top && target.length > source.length) return false;
+    if (top && top.side === moving.side && target.length >= 3) return false;
     const option = getMovementTargets(state, fromRow, fromCol).find(p => p.row === toRow && p.col === toCol);
     if (!option) return false;
     if (option.jump) {
@@ -188,7 +188,7 @@
     }
     return true;
   }
-  function movePiece(state, fromRow, fromCol, toRow, toCol) {
+  function movePiece(state, fromRow, fromCol, toRow, toCol, landingMode = "capture") {
     const sourceStack = getStack(state, fromRow, fromCol);
     const sourceTop = sourceStack && sourceStack.length ? sourceStack[sourceStack.length - 1] : null;
     if (!sourceTop || sourceTop.side !== state.turn) {
@@ -197,13 +197,29 @@
     if (!canMoveTo(state, fromRow, fromCol, toRow, toCol)) {
       return { ok: false, reason: "その移動はできません。" };
     }
+    const destinationBefore = state.board[toRow][toCol];
+    const destinationTop = destinationBefore.length ? destinationBefore[destinationBefore.length - 1] : null;
+    if (destinationTop && destinationTop.side !== sourceTop.side) {
+      if (landingMode !== "capture" && landingMode !== "tsuke") {
+        return { ok: false, reason: "移動方法を選択してください。" };
+      }
+      if (landingMode === "tsuke" && destinationBefore.length >= 3) {
+        return { ok: false, reason: "4段目になるため、ツケることはできません。" };
+      }
+    } else if (landingMode !== "capture") {
+      return { ok: false, reason: "この移動方法は選択できません。" };
+    }
     const source = state.board[fromRow][fromCol];
     const movingPiece = source.pop();
     const destination = state.board[toRow][toCol];
-    const survivors = resolveLandingStack(movingPiece, destination);
-    const captured = destination.filter(piece => piece.side !== movingPiece.side);
+    const captured = landingMode === "capture"
+      ? destination.filter(piece => piece.side !== movingPiece.side)
+      : [];
+    const survivors = landingMode === "tsuke"
+      ? destination.slice()
+      : resolveLandingStack(movingPiece, destination);
     state.board[toRow][toCol] = survivors.concat(movingPiece);
-    state.history.push({ type: "move", from:{row:fromRow,col:fromCol}, to:{row:toRow,col:toCol}, piece:movingPiece, captured });
+    state.history.push({ type: "move", from:{row:fromRow,col:fromCol}, to:{row:toRow,col:toCol}, piece:movingPiece, captured, landingMode });
     state.moveNumber += 1;
     state.turn = state.turn === "先手" ? "後手" : "先手";
     return { ok: true, piece: movingPiece, captured };
