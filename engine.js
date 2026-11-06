@@ -143,6 +143,30 @@
           }
         }
       }
+      if (moving.name === "弓") {
+        const forward = moving.side === "先手" ? -1 : 1;
+        const df = (toRow - fromRow) * forward;
+        const dr = toCol - fromCol;
+        if (df > 0 && Math.abs(dr) <= df) {
+          const higher = (f, r) => {
+            const stack = getStack(state, fromRow + forward * f, fromCol + r);
+            return stack && stack.length > source.length;
+          };
+          if (higher(1, 0)) return false;
+          if (dr > 0 && higher(1, 1)) return false;
+          if (dr < 0 && higher(1, -1)) return false;
+          const diagonal = Math.sign(dr);
+          if (diagonal !== 0) {
+            for (let f = 2; f < df; f += 1) {
+              if (higher(f, diagonal * (f - 1))) return false;
+            }
+          } else {
+            for (let f = 2; f < df; f += 1) {
+              if (higher(f, 0)) return false;
+            }
+          }
+        }
+      }
       return true;
     }
     const deltaRow = toRow - fromRow;
