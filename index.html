@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#151923">
   <title>軍儀 AI</title>
-  <link rel="stylesheet" href="style.css?v=20261106ae">
+  <link rel="stylesheet" href="style.css?v=20261106af">
 </head>
 <body>
   <header class="topbar">
@@ -15,10 +15,10 @@
   <main>
     <section class="panel intro">
       <h2>対局盤・初期配置</h2>
-      <p>先手・後手を選び、駒のボタンを押してから盤上のマスをタップしてください。同じマスに重ねて配置できます。配置した駒を手持ちに戻す機能はありません。置き間違えた場合は「盤面を初期化」で最初からやり直してください。</p>
+      <p>先手は下3段、後手は上3段に配置します。先手から交互に1枚ずつ置きます。同じマスに重ねて配置できます。配置した駒を手持ちに戻す機能はありません。置き間違えた場合は「盤面を初期化」で最初からやり直してください。</p>
     </section>
     <section class="panel setup-controls">
-      <label for="side-select">配置する陣営</label>
+      <label for="side-select">配置する陣営（自動交代）</label>
       <select id="side-select"><option value="先手">先手</option><option value="後手">後手</option></select>
       <div class="piece-heading"><strong>配置する駒</strong><span id="inventory-count">残数を表示</span></div>
       <div id="piece-picker" class="piece-picker" aria-label="駒の選択"></div>
@@ -45,6 +45,6 @@
     </section>
   </main>
   <footer>Gungi AI · 開発用プロトタイプ</footer>
-  <script src="engine.js?v=20261106ae"></script><script src="app.js?v=20261106ae"></script>
+  <script src="engine.js?v=20261106af"></script><script src="app.js?v=20261106af"></script>
 </body>
 </html>
