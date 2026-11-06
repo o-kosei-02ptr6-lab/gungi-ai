@@ -1,0 +1,53 @@
+:root {
+  color-scheme: dark;
+  --bg: #151923;
+  --panel: #202735;
+  --line: #465064;
+  --text: #f3f5f8;
+  --muted: #aab4c4;
+  --wood: #d8b77b;
+  --wood-dark: #9d7745;
+  --accent: #9eafff;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", sans-serif;
+}
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px max(16px, calc((100vw - 760px) / 2));
+  border-bottom: 1px solid #303949;
+}
+.eyebrow { margin: 0 0 4px; color: var(--muted); font-size: 10px; letter-spacing: .18em; }
+h1 { margin: 0; font-size: 25px; }
+.status { color: #d8c18f; font-size: 12px; border: 1px solid #756444; padding: 6px 9px; border-radius: 20px; }
+main { width: min(100% - 24px, 680px); margin: 18px auto 36px; display: grid; gap: 14px; }
+.panel { background: var(--panel); border: 1px solid #303b4d; border-radius: 14px; padding: 16px; }
+h2 { margin: 0 0 9px; font-size: 16px; }
+p { color: var(--muted); line-height: 1.65; font-size: 13px; margin: 0; }
+.board-wrap { padding: 10px; background: #292b2e; border-radius: 12px; }
+.board-coordinates {
+  display: grid; grid-template-columns: repeat(9, minmax(0, 1fr));
+  width: 100%; aspect-ratio: 1; border: 2px solid var(--wood-dark);
+  background: var(--wood); gap: 1px;
+}
+.square {
+  min-width: 0; border: 0; padding: 0; position: relative;
+  background: var(--wood); color: #332719; display: grid; place-items: center;
+  font-size: clamp(10px, 3.4vw, 19px); cursor: pointer; touch-action: manipulation;
+}
+.square:active { filter: brightness(.92); }
+.square.selected { outline: 3px solid #667fff; outline-offset: -3px; background: #f0d59f; }
+.square .coord { position: absolute; top: 2px; left: 3px; font-size: 8px; opacity: .55; }
+.control-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.control-heading h2 { margin: 0; }
+#selected { color: var(--accent); }
+button:not(.square) {
+  margin-top: 12px; border: 1px solid #596780; background: #303c51;
+  color: var(--text); border-radius: 9px; padding: 10px 14px; font-size: 13px;
+}
+.roadmap { margin: 8px 0 0; padding-left: 22px; color: var(--muted); line-height: 2; font-size: 13px; }
+.roadmap .active { color: #d8c18f; }
+footer { text-align: center; color: #778397; font-size: 11px; padding: 12px 0 26px; }
+@media (min-width: 600px) { main { margin-top: 26px; gap: 18px; } .board-wrap { padding: 16px; } }
