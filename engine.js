@@ -59,8 +59,9 @@
     return { ok: true, piece };
   }
   function resolveLandingStack(movingPiece, destinationStack) {
-    if (!destinationStack.length) return [];
-    return destinationStack.every(piece => piece.side !== movingPiece.side) ? [] : destinationStack.slice();
+    // When the destination's top piece is an enemy, remove all enemy pieces
+    // while preserving friendly pieces in a mixed stack.
+    return destinationStack.filter(piece => piece.side === movingPiece.side);
   }
 
   // Movement vectors use (forward, right). Forward is rotated by side.
@@ -122,7 +123,7 @@
     const target = getStack(state, toRow, toCol);
     const top = target.length ? target[target.length - 1] : null;
     if (top && top.side === moving.side) return false;
-    if (top && target.length >= 3) return false;
+    if (top && target.filter(piece => piece.side === moving.side).length >= 3) return false;
     const option = getMovementTargets(state, fromRow, fromCol).find(p => p.row === toRow && p.col === toCol);
     if (!option) return false;
     if (option.jump) return true;
@@ -134,6 +135,21 @@
       if (getStack(state, r, c).length) return false;
     }
     return true;
+  }
+  function movePiece(state, fromRow, fromCol, toRow, toCol) {
+    if (!canMoveTo(state, fromRow, fromCol, toRow, toCol)) {
+      return { ok: false, reason: "その移動はできません。" };
+    }
+    const source = state.board[fromRow][fromCol];
+    const movingPiece = source.pop();
+    const destination = state.board[toRow][toCol];
+    const survivors = resolveLandingStack(movingPiece, destination);
+    const captured = destination.filter(piece => piece.side !== movingPiece.side);
+    state.board[toRow][toCol] = survivors.concat(movingPiece);
+    state.history.push({ type: "move", from:{row:fromRow,col:fromCol}, to:{row:toRow,col:toCol}, piece:movingPiece, captured });
+    state.moveNumber += 1;
+    state.turn = state.turn === "先手" ? "後手" : "先手";
+    return { ok: true, piece: movingPiece, captured };
   }
   function generateLegalMoves(state, side) {
     const moves = [];
@@ -157,6 +173,6 @@
   window.GungiEngine = Object.freeze({
     SIZE, PIECE_COUNTS, createEmptyBoard, createPiece, createInventory, createGameState,
     isInside, getStack, getTopPiece, isMovablePiece, canPlacePiece, placePiece, resolveLandingStack,
-    MOVE_RULES, getMovementTargets, canMoveTo, generateLegalMoves
+    MOVE_RULES, getMovementTargets, canMoveTo, movePiece, generateLegalMoves
   });
 })();
