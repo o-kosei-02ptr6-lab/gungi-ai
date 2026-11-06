@@ -15,6 +15,7 @@
   let mode = "setup";
   let moveTargets = [];
   let pendingMove = null;
+  let actionMode = "move";
   const moveChoiceElement = document.getElementById("move-choice");
   const captureButton = document.getElementById("capture-choice");
   const tsukeButton = document.getElementById("tsuke-choice");
@@ -64,6 +65,12 @@
     }
   }
   function render() {
+    if (mode === "move" && actionMode === "deploy") {
+      const piece = piecesInHand(state.turn, selectedName)[0];
+      moveTargets = piece ? Array.from({ length: E.SIZE * E.SIZE }, (_, i) => ({
+        row: Math.floor(i / E.SIZE), col: i % E.SIZE
+      })).filter(p => E.canDeployPiece(state, p.row, p.col, state.turn, piece)) : [];
+    }
     boardElement.replaceChildren();
     for (let row = 0; row < E.SIZE; row += 1) {
       for (let col = 0; col < E.SIZE; col += 1) {
@@ -93,9 +100,11 @@
     renderSummary();
     document.getElementById("mode-toggle").textContent = mode === "setup" ? "移動モードに切り替え" : "配置モードに戻る";
     document.getElementById("status").textContent = mode === "setup" ? "初期配置" : state.turn + "の手番";
-    pickerElement.hidden = mode !== "setup";
+    pickerElement.hidden = mode === "setup" ? false : actionMode !== "deploy";
     document.querySelector(".setup-controls label").hidden = mode !== "setup";
     sideSelect.hidden = mode !== "setup";
+    document.getElementById("deploy-toggle").hidden = mode !== "move";
+    document.getElementById("deploy-toggle").textContent = actionMode === "deploy" ? "移動に戻る" : "駒を配置する";
   }
   function onSquare(row, col) {
     selected = { row, col };
@@ -134,6 +143,25 @@
     render();
   }
   function onMoveSquare(row, col) {
+    if (actionMode === "deploy") {
+      const piece = piecesInHand(state.turn, selectedName)[0];
+      if (!piece || !E.canDeployPiece(state, row, col, state.turn, piece)) {
+        messageElement.textContent = piece ? "このマスには駒を配置できません。" : "選択した駒は持ち駒にありません。";
+        return;
+      }
+      const result = E.deployPiece(state, row, col, state.turn, piece.id);
+      if (result.ok) {
+        messageElement.textContent = result.piece.name + "を " + (col + 1) + "-" + (row + 1) + " に配置しました。";
+        selected = null;
+        moveTargets = [];
+        actionMode = "move";
+        infoElement.textContent = "次の手番：" + state.turn;
+      } else {
+        messageElement.textContent = result.reason;
+      }
+      render();
+      return;
+    }
     if (selected && moveTargets.some(p => p.row === row && p.col === col)) {
       const target = E.getStack(state, row, col);
       const targetTop = target && target.length ? target[target.length - 1] : null;
@@ -168,8 +196,21 @@
   tsukeButton.addEventListener("click", () => {
     if (pendingMove) finishMove(pendingMove.to.row, pendingMove.to.col, "tsuke");
   });
+  document.getElementById("deploy-toggle").addEventListener("click", () => {
+    actionMode = actionMode === "move" ? "deploy" : "move";
+    selected = null;
+    pendingMove = null;
+    moveChoiceElement.hidden = true;
+    moveTargets = [];
+    messageElement.textContent = actionMode === "deploy"
+      ? "配置する駒を選び、緑色のマスをタップしてください。"
+      : "移動モードに戻りました。";
+    infoElement.textContent = actionMode === "deploy" ? "配置可能なマスを表示しています。" : "盤上の駒を選択してください。";
+    render();
+  });
   document.getElementById("mode-toggle").addEventListener("click", () => {
     mode = mode === "setup" ? "move" : "setup";
+    actionMode = "move";
     selected = null;
     moveTargets = [];
     pendingMove = null;
