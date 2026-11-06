@@ -19,7 +19,7 @@
   const moveChoiceElement = document.getElementById("move-choice");
   const captureButton = document.getElementById("capture-choice");
   const tsukeButton = document.getElementById("tsuke-choice");
-  function currentSide() { return mode === "move" ? state.turn : sideSelect.value; }
+  function currentSide() { return mode === "move" ? state.turn : state.setupTurn; }
   function piecesInHand(side, name) {
     return state.hands[side].filter(piece => piece.name === name);
   }
@@ -99,7 +99,9 @@
     refreshPiecePicker();
     renderSummary();
     document.getElementById("mode-toggle").textContent = mode === "setup" ? "移動モードに切り替え" : "配置モードに戻る";
-    document.getElementById("status").textContent = mode === "setup" ? "初期配置" : state.turn + "の手番";
+    document.getElementById("status").textContent = mode === "setup" ? state.setupTurn + "の配置番" : state.turn + "の手番";
+    sideSelect.value = state.setupTurn;
+    sideSelect.disabled = true;
     pickerElement.hidden = mode === "setup" ? false : actionMode !== "deploy";
     document.querySelector(".setup-controls label").hidden = mode !== "setup";
     sideSelect.hidden = mode !== "setup";
@@ -116,7 +118,7 @@
     } else {
       const result = E.placePiece(state, row, col, side, piece.id);
       messageElement.textContent = result.ok
-        ? side + "の" + selectedName + "を " + (col + 1) + "-" + (row + 1) + " に配置しました。"
+        ? side + "の" + selectedName + "を " + (col + 1) + "-" + (row + 1) + " に配置しました。次は" + result.nextSide + "の番です。"
         : result.reason;
       infoElement.textContent = result.ok
         ? "このマスの駒は " + state.board[row][col].length + " 枚です。"
@@ -241,6 +243,7 @@
     state.hands = fresh.hands;
     state.history = [];
     state.turn = fresh.turn;
+    state.setupTurn = fresh.setupTurn;
     state.moveNumber = fresh.moveNumber;
     selected = null;
     moveTargets = [];
