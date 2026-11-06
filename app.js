@@ -28,7 +28,12 @@
       option.disabled = count === 0;
       pieceSelect.append(option);
     }
-    if (names.includes(previous) && hand.some(piece => piece.name === previous)) pieceSelect.value = previous;
+    if (names.includes(previous) && hand.some(piece => piece.name === previous)) {
+      pieceSelect.value = previous;
+    } else {
+      const firstAvailable = names.find(name => hand.some(piece => piece.name === name));
+      if (firstAvailable) pieceSelect.value = firstAvailable;
+    }
     const available = hand.filter(piece => piece.name === selectedPiece());
     countElement.textContent = "選択中の駒の残数：" + available.length + " 枚";
     if (!available.length) countElement.textContent = "この陣営の持ち駒はありません。";
