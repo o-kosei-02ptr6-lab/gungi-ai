@@ -40,8 +40,7 @@
   }
   function canPlacePiece(state, row, col, piece) {
     if (!isInside(row, col) || !piece || state.phase !== "setup") return false;
-    const stack = state.board[row][col];
-    if (piece.name === "帥" && stack.length !== 0) return false;
+    if (piece.name === "帥" && state.board[row][col].length !== 0) return false;
     return true;
   }
   function placePiece(state, row, col, side, pieceId) {
@@ -59,14 +58,6 @@
     state.history.push({ type: "place", row, col, side, piece });
     return { ok: true, piece };
   }
-  function removeTopPiece(state, row, col) {
-    const stack = getStack(state, row, col);
-    if (!stack || !stack.length || state.phase !== "setup") return { ok: false, reason: "取り除ける駒がありません。" };
-    const piece = stack.pop();
-    state.hands[piece.side].push(piece);
-    state.history.push({ type: "remove", row, col, piece });
-    return { ok: true, piece };
-  }
   function resolveLandingStack(movingPiece, destinationStack) {
     if (!destinationStack.length) return [];
     return destinationStack.every(piece => piece.side !== movingPiece.side) ? [] : destinationStack.slice();
@@ -80,7 +71,6 @@
   }
   window.GungiEngine = Object.freeze({
     SIZE, PIECE_COUNTS, createEmptyBoard, createPiece, createInventory, createGameState,
-    isInside, getStack, getTopPiece, isMovablePiece, canPlacePiece, placePiece,
-    removeTopPiece, resolveLandingStack
+    isInside, getStack, getTopPiece, isMovablePiece, canPlacePiece, placePiece, resolveLandingStack
   });
 })();
