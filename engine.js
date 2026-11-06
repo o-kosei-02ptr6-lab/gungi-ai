@@ -41,8 +41,8 @@
   function canPlacePiece(state, row, col, piece) {
     if (!isInside(row, col) || !piece || state.phase !== "setup") return false;
     const stack = state.board[row][col];
-    // Upper/intermediate setup permits the 帥 itself to be placed on a
-    // friendly stack, but no piece may be placed on top of an existing 帥.
+    // 4段目は禁止。帥の上にも配置できない。
+    if (stack.length >= 3) return false;
     if (stack.length && stack[stack.length - 1].name === "帥") return false;
     return true;
   }
@@ -125,8 +125,10 @@
     const moving = source[source.length - 1];
     const target = getStack(state, toRow, toCol);
     const top = target.length ? target[target.length - 1] : null;
-    if (top && top.side === moving.side) return false;
-    if (top && target.filter(piece => piece.side === moving.side).length >= 3) return false;
+    // 味方へのツケは、相手先の段数が移動元の段数以下で、
+    // かつ移動先が3段未満の場合のみ可能。
+    if (top && top.side === moving.side &&
+        (target.length > source.length || target.length >= 3)) return false;
     const option = getMovementTargets(state, fromRow, fromCol).find(p => p.row === toRow && p.col === toCol);
     if (!option) return false;
     if (option.jump) {
