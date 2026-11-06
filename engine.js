@@ -61,6 +61,44 @@
     state.history.push({ type: "place", row, col, side, piece });
     return { ok: true, piece };
   }
+  // 対局中の配置では、敵駒に覆われた味方を最前列の判定から除外する。
+  function getFrontmostFriendlyRow(state, side) {
+    const rows = [];
+    for (let row = 0; row < SIZE; row += 1) for (let col = 0; col < SIZE; col += 1) {
+      const stack = state.board[row][col];
+      const top = stack.length ? stack[stack.length - 1] : null;
+      if (top && top.side === side) rows.push(row);
+    }
+    if (!rows.length) return null;
+    return side === "先手" ? Math.min(...rows) : Math.max(...rows);
+  }
+  function canDeployPiece(state, row, col, side, piece) {
+    if (!isInside(row, col) || !piece || !state.hands[side] || piece.side !== side) return false;
+    if (!state.hands[side].some(p => p.id === piece.id)) return false;
+    const front = getFrontmostFriendlyRow(state, side);
+    if (front === null || (side === "先手" ? row < front : row > front)) return false;
+    const stack = state.board[row][col];
+    if (stack.length >= 3) return false;
+    const top = stack.length ? stack[stack.length - 1] : null;
+    if (top && (top.side !== side || top.name === "帥")) return false;
+    return true;
+  }
+  function deployPiece(state, row, col, side, pieceId) {
+    if (side !== state.turn) return { ok: false, reason: "現在の手番では配置できません。" };
+    const hand = state.hands[side];
+    if (!hand) return { ok: false, reason: "陣営が不正です。" };
+    const index = hand.findIndex(piece => piece.id === String(pieceId));
+    if (index < 0) return { ok: false, reason: "その駒は持ち駒にありません。" };
+    const piece = hand[index];
+    if (!canDeployPiece(state, row, col, side, piece)) return { ok: false, reason: "このマスには駒を配置できません。" };
+    hand.splice(index, 1);
+    state.board[row][col].push(piece);
+    state.history.push({ type: "deploy", row, col, side, piece });
+    state.moveNumber += 1;
+    state.turn = state.turn === "先手" ? "後手" : "先手";
+    return { ok: true, piece };
+  }
+
   function resolveLandingStack(movingPiece, destinationStack) {
     // When the destination's top piece is an enemy, remove all enemy pieces
     // while preserving friendly pieces in a mixed stack.
@@ -245,7 +283,7 @@
   }
   window.GungiEngine = Object.freeze({
     SIZE, PIECE_COUNTS, createEmptyBoard, createPiece, createInventory, createGameState,
-    isInside, getStack, getTopPiece, isMovablePiece, canPlacePiece, placePiece, resolveLandingStack,
+    isInside, getStack, getTopPiece, isMovablePiece, canPlacePiece, placePiece, getFrontmostFriendlyRow, canDeployPiece, deployPiece, resolveLandingStack,
     MOVE_RULES, getMovementTargets, canMoveTo, movePiece, generateLegalMoves
   });
 })();
