@@ -129,7 +129,22 @@
     if (top && target.filter(piece => piece.side === moving.side).length >= 3) return false;
     const option = getMovementTargets(state, fromRow, fromCol).find(p => p.row === toRow && p.col === toCol);
     if (!option) return false;
-    if (option.jump) return true;
+    if (option.jump) {
+      // 筒・砲の前方射程では、自分より高い段数の駒が途中にあると
+      // その地点より先へは飛び越えられない。同段以下は飛び越え可能。
+      if ((moving.name === "筒" || moving.name === "砲") && toCol === fromCol) {
+        const forward = moving.side === "先手" ? -1 : 1;
+        const delta = toRow - fromRow;
+        if (Math.sign(delta) === forward) {
+          const distance = Math.abs(delta);
+          for (let step = 1; step < distance; step += 1) {
+            const obstacle = getStack(state, fromRow + forward * step, fromCol);
+            if (obstacle.length > source.length) return false;
+          }
+        }
+      }
+      return true;
+    }
     const deltaRow = toRow - fromRow;
     const deltaCol = toCol - fromCol;
     const absRow = Math.abs(deltaRow), absCol = Math.abs(deltaCol);
