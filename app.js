@@ -5,6 +5,7 @@
   const boardElement = document.getElementById("board");
   const sideSelect = document.getElementById("side-select");
   const pieceSelect = document.getElementById("piece-select");
+  const operationSelect = document.getElementById("operation-select");
   const countElement = document.getElementById("inventory-count");
   const summaryElement = document.getElementById("inventory-summary");
   const messageElement = document.getElementById("message");
@@ -82,7 +83,7 @@
   function onSquare(row, col) {
     const stack = state.board[row][col];
     selected = { row, col };
-    if (stack.length) {
+    if (operationSelect.value === "remove") {
       const result = E.removeTopPiece(state, row, col);
       if (result.ok) {
         messageElement.textContent = result.piece.side + "の" + result.piece.name + "を手持ちに戻しました。";
