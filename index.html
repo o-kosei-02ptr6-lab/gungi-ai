@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#151923">
   <title>軍儀 AI</title>
-  <link rel="stylesheet" href="style.css?v=20261106aa">
+  <link rel="stylesheet" href="style.css?v=20261106ab">
 </head>
 <body>
   <header class="topbar">
@@ -23,6 +23,11 @@
       <div class="piece-heading"><strong>配置する駒</strong><span id="inventory-count">残数を表示</span></div>
       <div id="piece-picker" class="piece-picker" aria-label="駒の選択"></div>
       <p id="message" role="status">駒を選択して盤面をタップしてください。</p>
+      <div id="move-choice" class="move-choice" hidden>
+        <p>敵駒のあるマスへの移動方法</p>
+        <button id="capture-choice" type="button">敵駒を取る</button>
+        <button id="tsuke-choice" type="button">敵駒の上にツケる</button>
+      </div>
     </section>
     <section class="board-wrap" aria-label="軍儀の盤面"><div class="board-coordinates" id="board"></div></section>
     <button id="mode-toggle" class="mode-toggle" type="button">移動モードに切り替え</button>
@@ -39,6 +44,6 @@
     </section>
   </main>
   <footer>Gungi AI · 開発用プロトタイプ</footer>
-  <script src="engine.js?v=20261106aa"></script><script src="app.js?v=20261106aa"></script>
+  <script src="engine.js?v=20261106ab"></script><script src="app.js?v=20261106ab"></script>
 </body>
 </html>
