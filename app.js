@@ -12,6 +12,8 @@
   const infoElement = document.getElementById("cell-info");
   let selected = null;
   let selectedName = "兵";
+  let mode = "setup";
+  let moveTargets = [];
   function currentSide() { return sideSelect.value; }
   function piecesInHand(side, name) {
     return state.hands[side].filter(piece => piece.name === name);
@@ -63,7 +65,8 @@
       for (let col = 0; col < E.SIZE; col += 1) {
         const button = document.createElement("button");
         button.type = "button";
-        button.className = "square" + (selected && selected.row === row && selected.col === col ? " selected" : "");
+        const isTarget = moveTargets.some(p => p.row === row && p.col === col);
+        button.className = "square" + (selected && selected.row === row && selected.col === col ? " selected" : "") + (isTarget ? " legal-target" : "");
         button.setAttribute("aria-label", (col + 1) + "-" + (row + 1) + " マス");
         const coord = document.createElement("span");
         coord.className = "coord";
@@ -77,7 +80,7 @@
           button.append(label);
           button.classList.add(stack[stack.length - 1].side === "先手" ? "first-side" : "second-side");
         }
-        button.addEventListener("click", () => onSquare(row, col));
+        button.addEventListener("click", () => mode === "setup" ? onSquare(row, col) : onMoveSquare(row, col));
         boardElement.append(button);
       }
     }
@@ -103,6 +106,43 @@
     }
     render();
   }
+  function onMoveSquare(row, col) {
+    if (selected && moveTargets.some(p => p.row === row && p.col === col)) {
+      const result = E.movePiece(state, selected.row, selected.col, row, col);
+      if (result.ok) {
+        messageElement.textContent = result.piece.name + "を " + (col + 1) + "-" + (row + 1) + " へ移動しました。" +
+          (result.captured.length ? " 敵駒" + result.captured.length + "枚を捕獲。" : "");
+        selected = null;
+        moveTargets = [];
+        infoElement.textContent = "次の手番：" + state.turn;
+      } else {
+        messageElement.textContent = result.reason;
+      }
+      render();
+      return;
+    }
+    const stack = E.getStack(state, row, col);
+    const top = stack && stack.length ? stack[stack.length - 1] : null;
+    if (!top || top.side !== currentSide()) {
+      messageElement.textContent = currentSide() + "の最上段の駒を選択してください。";
+      selected = null;
+      moveTargets = [];
+    } else {
+      selected = { row, col };
+      moveTargets = E.getMovementTargets(state, row, col).filter(p => E.canMoveTo(state, row, col, p.row, p.col));
+      messageElement.textContent = top.name + "（" + stack.length + "段目）の移動先を表示しています。";
+      infoElement.textContent = "移動可能なマス：" + moveTargets.length + "か所";
+    }
+    render();
+  }
+  document.getElementById("mode-toggle").addEventListener("click", () => {
+    mode = mode === "setup" ? "move" : "setup";
+    selected = null;
+    moveTargets = [];
+    messageElement.textContent = mode === "setup" ? "配置モードに戻りました。" : "移動確認モードです。陣営を選び、盤上の駒をタップしてください。";
+    infoElement.textContent = "移動先は仮実装の移動規則に基づいて表示されます。";
+    render();
+  });
   sideSelect.addEventListener("change", () => {
     const names = Object.keys(E.PIECE_COUNTS);
     if (!piecesInHand(currentSide(), selectedName).length) {
