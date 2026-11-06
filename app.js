@@ -14,6 +14,10 @@
   let selectedName = "兵";
   let mode = "setup";
   let moveTargets = [];
+  let pendingMove = null;
+  const moveChoiceElement = document.getElementById("move-choice");
+  const captureButton = document.getElementById("capture-choice");
+  const tsukeButton = document.getElementById("tsuke-choice");
   function currentSide() { return mode === "move" ? state.turn : sideSelect.value; }
   function piecesInHand(side, name) {
     return state.hands[side].filter(piece => piece.name === name);
@@ -111,19 +115,37 @@
     }
     render();
   }
+  function finishMove(row, col, landingMode) {
+    if (!pendingMove) return;
+    const from = pendingMove.from;
+    const result = E.movePiece(state, from.row, from.col, row, col, landingMode);
+    if (result.ok) {
+      messageElement.textContent = result.piece.name + "を " + (col + 1) + "-" + (row + 1) + " へ移動しました。" +
+        (landingMode === "tsuke" ? " 敵駒の上にツケました。" :
+          (result.captured.length ? " 敵駒" + result.captured.length + "枚を捕獲。" : ""));
+      selected = null;
+      moveTargets = [];
+      pendingMove = null;
+      moveChoiceElement.hidden = true;
+      infoElement.textContent = "次の手番：" + state.turn;
+    } else {
+      messageElement.textContent = result.reason;
+    }
+    render();
+  }
   function onMoveSquare(row, col) {
     if (selected && moveTargets.some(p => p.row === row && p.col === col)) {
-      const result = E.movePiece(state, selected.row, selected.col, row, col);
-      if (result.ok) {
-        messageElement.textContent = result.piece.name + "を " + (col + 1) + "-" + (row + 1) + " へ移動しました。" +
-          (result.captured.length ? " 敵駒" + result.captured.length + "枚を捕獲。" : "");
-        selected = null;
-        moveTargets = [];
-        infoElement.textContent = "次の手番：" + state.turn;
-      } else {
-        messageElement.textContent = result.reason;
+      const target = E.getStack(state, row, col);
+      const targetTop = target && target.length ? target[target.length - 1] : null;
+      if (targetTop && targetTop.side !== state.turn) {
+        pendingMove = { from: { ...selected }, to: { row, col } };
+        moveChoiceElement.hidden = false;
+        tsukeButton.hidden = target.length >= 3;
+        messageElement.textContent = "敵駒のあるマスです。敵駒を取るか、その上にツケるか選択してください。";
+        infoElement.textContent = "移動方法を選択してください。";
+        return;
       }
-      render();
+      finishMove(row, col, "capture");
       return;
     }
     const stack = E.getStack(state, row, col);
@@ -140,10 +162,18 @@
     }
     render();
   }
+  captureButton.addEventListener("click", () => {
+    if (pendingMove) finishMove(pendingMove.to.row, pendingMove.to.col, "capture");
+  });
+  tsukeButton.addEventListener("click", () => {
+    if (pendingMove) finishMove(pendingMove.to.row, pendingMove.to.col, "tsuke");
+  });
   document.getElementById("mode-toggle").addEventListener("click", () => {
     mode = mode === "setup" ? "move" : "setup";
     selected = null;
     moveTargets = [];
+    pendingMove = null;
+    moveChoiceElement.hidden = true;
     messageElement.textContent = mode === "setup" ? "配置モードに戻りました。" : "移動モードです。先手から開始します。";
     infoElement.textContent = mode === "move" ? "現在の手番：" + state.turn : "盤面のマスをタップしてください。";
     render();
@@ -159,6 +189,8 @@
   document.getElementById("clear-selection").addEventListener("click", () => {
     selected = null;
     moveTargets = [];
+    pendingMove = null;
+    moveChoiceElement.hidden = true;
     infoElement.textContent = "盤面のマスをタップしてください。";
     render();
   });
@@ -170,6 +202,9 @@
     state.turn = fresh.turn;
     state.moveNumber = fresh.moveNumber;
     selected = null;
+    moveTargets = [];
+    pendingMove = null;
+    moveChoiceElement.hidden = true;
     selectedName = "兵";
     messageElement.textContent = "盤面と持ち駒を初期状態に戻しました。";
     infoElement.textContent = "盤面を初期化しました。";
