@@ -116,8 +116,8 @@
     render();
   }
   function finishMove(row, col, landingMode) {
-    if (!pendingMove) return;
-    const from = pendingMove.from;
+    const from = pendingMove ? pendingMove.from : selected;
+    if (!from) return;
     const result = E.movePiece(state, from.row, from.col, row, col, landingMode);
     if (result.ok) {
       messageElement.textContent = result.piece.name + "を " + (col + 1) + "-" + (row + 1) + " へ移動しました。" +
