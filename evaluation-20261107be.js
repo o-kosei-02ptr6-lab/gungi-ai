@@ -55,6 +55,7 @@
     const enemy = opponent(side);
     const moveList = E.generateLegalMoves(state, side);
     const enemyMoves = E.generateLegalMoves(state, enemy);
+    const enemyMarshalForStack = E.getMarshalPosition(state, enemy);
     const moveCountByPiece = new Map();
     const controlledSquares = new Map();
     const controllersBySquare = new Map();
@@ -86,11 +87,46 @@
             // the exposed top piece actually has useful legal mobility.
             const depth = Math.max(0, stack.length - 1);
             const legalCount = moveCountByPiece.get(piece.id) || 0;
-            activity += depth * (3.5 + Math.min(6, legalCount) * 0.65);
+            // 高さそのものには加点せず、ツケた結果として得た移動能力だけを評価する。
+            activity += depth * Math.min(6, legalCount) * 0.65;
             activity += Math.min(8, legalCount) * 1.4;
           }
         }
       }
+    }
+
+    // ツケによって最上段の駒が得た攻撃的な移動先の質を評価する。
+    // 駒の保護や段数そのものには加点せず、敵帥への接近・包囲に役立つ移動だけを見る。
+    if (enemyMarshalForStack) {
+      let stackedTacticalActivity = 0;
+      for (let row = 0; row < E.SIZE; row += 1) {
+        for (let col = 0; col < E.SIZE; col += 1) {
+          const stack = state.board[row][col];
+          if (stack.length < 2 || stack[stack.length - 1].side !== side) continue;
+          const top = stack[stack.length - 1];
+          const currentDistance = Math.abs(row - enemyMarshalForStack.row) + Math.abs(col - enemyMarshalForStack.col);
+          const qualities = [];
+          for (const move of moveList) {
+            if (move.piece.id !== top.id) continue;
+            const target = state.board[move.to.row][move.to.col];
+            const targetTop = target.length ? target[target.length - 1] : null;
+            // 捕獲の価値は既存の threats で評価するため、ここでは重複させない。
+            if (targetTop && targetTop.side !== side) continue;
+            const nextDistance = Math.abs(move.to.row - enemyMarshalForStack.row) +
+              Math.abs(move.to.col - enemyMarshalForStack.col);
+            const distanceGain = Math.max(0, currentDistance - nextDistance);
+            const advanceGain = Math.max(0, advancement(move.to.row, side) - advancement(row, side));
+            const marshalZone = nextDistance <= 1 ? 18 : nextDistance <= 2 ? 10 : nextDistance <= 4 ? 4 : 0;
+            const quality = distanceGain * 4 + advanceGain * 2 + marshalZone;
+            if (quality > 0) qualities.push(quality);
+          }
+          qualities.sort((a, b) => b - a);
+          const bestThree = qualities.slice(0, 3).reduce((sum, value) => sum + value, 0);
+          const depthFactor = 1 + Math.max(0, stack.length - 2) * 0.25;
+          stackedTacticalActivity += Math.min(48, bestThree) * depthFactor;
+        }
+      }
+      activity += Math.min(150, stackedTacticalActivity);
     }
 
     // Reserve pieces retain strategic flexibility. Slightly increase their value
@@ -115,7 +151,7 @@
     // Redundant control is useful: two different pieces contesting the same
     // square make a plan less fragile than a single-piece threat. Give extra
     // value to coordinated control close to the opposing Marshal.
-    const enemyMarshal = E.getMarshalPosition(state, enemy);
+    const enemyMarshal = enemyMarshalForStack;
     let coordinatedControl = 0;
     for (const [key, controllers] of controllersBySquare) {
       if (controllers.size < 2) continue;
