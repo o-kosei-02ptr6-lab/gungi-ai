@@ -42,13 +42,13 @@
     <section class="panel"><h2>駒の残数</h2><div id="inventory-summary" class="inventory-summary"></div></section>
     <section class="panel training-panel">
       <h2>AIの自己対局学習</h2>
-      <p>「自己対局学習を実行」を押すと、独立したWorkerで2局を同時に進め、両局の結果を集約してTD(λ)学習に反映します。停止要求後は実行中の2局が終了してから停止し、学習結果を保存します。規定手数で決着しない場合は、固定評価基準で勝敗を判定して学習します。学習は別の盤面で行うため、現在の対局には影響しません。学習結果はこのブラウザに保存されます。</p>
+      <p>「自己対局学習を実行」を押すと、独立したWorkerで2局を同時に進め、両局の結果を集約してTD(λ)学習に反映します。停止要求後は実行中の2局が終了してから停止し、学習結果を保存します。規定手数72手までに帥を取れなかった対局は引き分けとして学習します。盤面評価だけで勝者を後付けしません。学習は別の盤面で行うため、現在の対局には影響しません。学習結果はこのブラウザに保存されます。</p>
       <button id="train-ai" class="mode-toggle" type="button">自己対局学習を実行</button>
       <p id="training-status" role="status">まだ学習していません。</p>
       <p id="training-info">「自己対局学習を実行」を押すと開始します。</p>
       <div class="transfer-tools">
         <h3>学習AIの実力検証</h3>
-        <p>学習AIを保存済みの最良AIと比較します。1回押すと、同じ初期配置で先手・後手を入れ替えて対局します。比較開始時点の学習AIと最良AIの重みを固定し、同じ初期配置で先手・後手を入れ替えて比較します。1局72手、最低40局で90%信頼区間を確認し、最大200局まで検証します。それでも改善・改善なしを判定できなければ「判定保留」とし、無理に勝敗を決めません。結果は端末内に保存されます。途中でボタンを押すと停止できます。</p>
+        <p>学習AIを保存済みの最良AIと比較します。1回押すと、同じ初期配置で先手・後手を入れ替えて対局します。比較開始時点の学習AIと最良AIの重みを固定し、同じ初期配置で先手・後手を入れ替えて比較します。1局72手、同じ初期配置で先後を入れ替えたペア単位で比較し、最低20ペアから90%信頼区間を確認、最大100ペア（200局）まで検証します。それでも改善・改善なしを判定できなければ「判定保留」とし、無理に勝敗を決めません。結果は端末内に保存されます。途中でボタンを押すと停止できます。</p>
         <button id="compare-ai" type="button">基準AIと実力を比較</button>
         <p id="compare-status" role="status">比較はまだ実行されていません。</p>
         <p id="compare-info">学習後に比較すると、調整した重みの効果を確認できます。</p>
@@ -70,6 +70,6 @@
     </section>
   </main>
   <footer>Gungi AI · 開発用プロトタイプ</footer>
-  <script src="engine-20261107bb.js?v=20261107bb"></script><script src="evaluation-20261107be.js?v=20261107coord1"></script><script src="search-20261107bd.js?v=20261107finish80"></script><script src="training-20261107a.js?v=20261107backup1"></script><script src="tournament-20261107a.js?v=20261107max200"></script><script src="app-20261107bc.js?v=20261107backup1"></script>
+  <script src="engine-20261107bb.js?v=20261107bb"></script><script src="evaluation-20261107be.js?v=20261107coord1"></script><script src="search-20261107bd.js?v=20261107mate1"></script><script src="training-20261107a.js?v=20261107outcome1"></script><script src="tournament-20261107a.js?v=20261107paired1"></script><script src="app-20261107bc.js?v=20261107outcome1"></script>
 </body>
 </html>
