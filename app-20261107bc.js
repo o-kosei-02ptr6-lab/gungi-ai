@@ -585,7 +585,7 @@
       compareButton.disabled = false;
       compareButton.textContent = "検証を停止";
       status.textContent = "統計的に有効な結論が出るまで、基準AIとの比較を自動で続けます。";
-      info.textContent = "同じ初期配置で先手・後手を入れ替えた対局を繰り返します。40局以上で95%信頼区間が50%を上回れば採用、下回れば不採用です。現在の盤面には影響しません。";
+      info.textContent = "同じ初期配置で先手・後手を入れ替えた対局を繰り返します。最低20局で90%信頼区間を確認し、最大40局でいったん判定します。現在の盤面には影響しません。";
       try {
         const result = await window.GungiTournament.compare({
           pairs: 2, maxPlies: 36, maxDepth: 2, timeMs: 60, maxNodes: 700, maxDeployCandidates: 2,
@@ -596,7 +596,7 @@
                 "局を対戦中… " + p.plies + "手 ／ " + p.nodes.toLocaleString() + "局面";
             } else if (p.phase === "pairDone") {
               status.textContent = "累計" + p.totalGames + "局。得点率 " + (p.scoreRate*100).toFixed(1) +
-                "% ／ 95%信頼区間 " + (p.lowerBound*100).toFixed(1) + "〜" + (p.upperBound*100).toFixed(1) + "%。検証を継続中…";
+                "% ／ 90%信頼区間 " + (p.lowerBound*100).toFixed(1) + "〜" + (p.upperBound*100).toFixed(1) + "%。検証を継続中…";
             } else if (p.phase === "continuing") {
               status.textContent = "累計" + p.totalGames + "局。統計的な結論が出るまで検証を続けています…";
             }
@@ -610,7 +610,8 @@
           const lower = (result.lowerBound * 100).toFixed(1);
           status.textContent = result.stopped
             ? "検証を停止しました。累計" + result.totalGames + "局のデータを保存しています。"
-            : result.inconclusive ? "40局を検証しました。現時点では優劣を判定できません。"\n            : "検証完了。累計" + result.totalGames + "局。学習AIの得点率：" + rate + "%";
+            : result.inconclusive ? "40局を検証しました。現時点では優劣を判定できません。"
+            : "検証完了。累計" + result.totalGames + "局。学習AIの得点率：" + rate + "%";
           info.textContent = "今回：" + result.candidateWins + "勝 ／ 最良AI " + result.championWins +
             "勝 ／ 引き分け " + result.draws + "局（" + result.games + "局、評価判定 " + result.adjudicated + "局）。累計：" +
             result.totalCandidateWins + "勝 ／ 最良AI " + result.totalChampionWins +
