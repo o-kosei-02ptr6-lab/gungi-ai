@@ -431,6 +431,8 @@
     let nodes = 0;
     let best = null;
     let bestScore = -INF;
+    let bestGain = -INF;
+    const baseScore = AI.evaluate(state, side);
     for (const action of candidates) {
       const piece = (state.hands[side] || []).find(p => p.id === action.pieceId);
       if (!piece) continue;
@@ -442,8 +444,10 @@
       const score = AI.evaluate(next, side) +
         deploymentPriority(state, side, piece, action.row, action.col) * 0.08 +
         stackBonus;
+      const gain = score - baseScore;
       if (score > bestScore) {
         bestScore = score;
+        bestGain = gain;
         best = action;
       }
       if (nodes % 24 === 0) {
@@ -455,8 +459,19 @@
       }
       if (now() >= deadline || nodes >= maxNodes) break;
     }
+    const deployedCount = state.history.filter(entry =>
+      entry.type === "place" && entry.side === side
+    ).length;
+    const hasPlacedMarshal = state.history.some(entry =>
+      entry.type === "place" && entry.side === side && entry.piece.name === "帥"
+    );
+    // 12枚以上を配置し、最善の追加配置の価値が小さくなったら「済」を選ぶ。
+    // 残り1枚なら、その1枚を配置して初期配置を終えられるよう必ず「済」にする。
+    const finishRecommended = !!best && !state.setupFinishPending && hasPlacedMarshal &&
+      ((state.hands[side] || []).length === 1 || (deployedCount >= 12 && bestGain < 52));
     return {
-      bestMove: best, score: bestScore, depth: 1, nodes,
+      bestMove: best, score: bestScore, gain: bestGain, finishRecommended,
+      deployedCount, depth: 1, nodes,
       candidateCount: candidates.length,
       stackingCandidates: candidates.filter(action => action.stacking).length,
       elapsedMs: Math.round(now() - started)
