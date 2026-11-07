@@ -120,12 +120,16 @@
   const GAME_RECORDS_KEY="gungi-ai-tournament-games-v1";
   const MAX_SAVED_GAMES=40;
   function saveTrainingGameRecord(record){
-    if(!record||!record.winner||record.draw||!record.finalState)return;
+    if(!record||(!record.winner&&!record.draw)||!record.finalState)return;
     try{
       const stored=JSON.parse(localStorage.getItem(GAME_RECORDS_KEY)||"[]");
-      const records=Array.isArray(stored)?stored.filter(item=>item&&item.winner&&!item.draw):[];
+      const records=Array.isArray(stored)?stored.filter(item=>item&&item.finalState&&(item.winner||item.draw)):[];
       records.push(record);
-      localStorage.setItem(GAME_RECORDS_KEY,JSON.stringify(records.slice(-MAX_SAVED_GAMES)));
+      while(records.length>MAX_SAVED_GAMES){
+        const oldestDraw=records.findIndex(item=>item.draw===true||!item.winner);
+        records.splice(oldestDraw>=0?oldestDraw:0,1);
+      }
+      localStorage.setItem(GAME_RECORDS_KEY,JSON.stringify(records));
     }catch(_){}
   }
   async function trainSequential(options={}){
@@ -168,8 +172,9 @@
       const finalTarget=state.phase==="finished"
         ?(state.winner===candidateSide?1:-1):0;
       if(adjudicated)adjudicatedGames++;
-      if(state.phase==="finished"){
-        saveTrainingGameRecord({id:"training-"+Date.now().toString(36)+"-"+game,pair:null,game:game+1,source:"自己学習",candidateSide,winner:state.winner,draw:false,plies:Math.min(plies+1,maxPlies),savedAt:new Date().toISOString(),finalState:{board:state.board,hands:state.hands,turn:state.turn,phase:state.phase,winner:state.winner,moveNumber:state.moveNumber}});
+      const isDraw=state.phase!=="finished"||!state.winner;
+      saveTrainingGameRecord({id:"training-"+Date.now().toString(36)+"-"+game,pair:null,game:game+1,source:"自己学習",candidateSide,winner:state.winner||null,draw:isDraw,plies:Math.min(plies+1,maxPlies),savedAt:new Date().toISOString(),finalState:{board:state.board,hands:state.hands,turn:state.turn,phase:state.phase,winner:state.winner||null,moveNumber:state.moveNumber}});
+      if(!isDraw){
         decisive++;
         if(state.winner===candidateSide)candidateWins++;else championWins++;
       }else draws++;
@@ -245,11 +250,8 @@
           nodes+=r.nodes||0;sampleCount+=r.trajectory.length;
           if(r.adjudicated)adjudicatedGames++;
           if(r.draw)draws++;
-          else{
-            decisive++;
-            if(r.finalTarget>0)candidateWins++;else championWins++;
-            saveTrainingGameRecord({id:"training-"+Date.now().toString(36)+"-"+completed,pair:null,game:completed+1,source:"自己学習",candidateSide:r.candidateSide,winner:r.winner,draw:false,plies:r.plies,savedAt:new Date().toISOString(),finalState:r.finalState});
-          }
+          else{decisive++;if(r.finalTarget>0)candidateWins++;else championWins++;}
+          saveTrainingGameRecord({id:"training-"+Date.now().toString(36)+"-"+completed,pair:null,game:completed+1,source:"自己学習",candidateSide:r.candidateSide,winner:r.winner||null,draw:!!r.draw,plies:r.plies,savedAt:new Date().toISOString(),finalState:r.finalState});
           if(r.trajectory.length){
             const learned=trainTrajectory(r.trajectory,r.finalTarget,candidate);
             candidate=learned.weights;totalTdError+=learned.meanTdError;tdUpdates+=learned.updates;
