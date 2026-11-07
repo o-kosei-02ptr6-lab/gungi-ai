@@ -83,7 +83,7 @@
   async function compare(options={}){
     const pairsPerBatch=Math.max(1,Math.min(5,Number(options.pairs)||2));
     const settings={
-      maxPlies:Math.max(20,Math.min(120,Number(options.maxPlies)||36)),
+      maxPlies:Math.max(20,Math.min(120,Number(options.maxPlies)||72)),
       maxDepth:Math.max(1,Math.min(3,Number(options.maxDepth)||2)),
       timeMs:Math.max(50,Math.min(500,Number(options.timeMs)||60)),
       maxNodes:Math.max(250,Math.min(5000,Number(options.maxNodes)||700)),
