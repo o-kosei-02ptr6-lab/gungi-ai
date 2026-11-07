@@ -5,7 +5,7 @@
   importScripts(
     "./engine-20261107bb.js?v=20261108marshalfrontrow1",
     "./evaluation-20261107be.js?v=20261108marshalnet1",
-    "./search-20261107bd.js?v=20261108marshalfrontrow1"
+    "./search-20261107bd.js?v=20261108matequiescence1"
   );
   const E=self.GungiEngine, AI=self.GungiAI, S=self.GungiSearch;
   const FEATURES=["material","hand","position","activity","mobility","threats","exposure","kingSafety"];
