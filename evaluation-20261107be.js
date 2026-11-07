@@ -57,12 +57,15 @@
     const enemyMoves = E.generateLegalMoves(state, enemy);
     const enemyMarshalForStack = E.getMarshalPosition(state, enemy);
     const moveCountByPiece = new Map();
+    const movesByPiece = new Map();
     const controlledSquares = new Map();
     const controllersBySquare = new Map();
 
     for (const move of moveList) {
       const id = move.piece.id;
       moveCountByPiece.set(id, (moveCountByPiece.get(id) || 0) + 1);
+      if (!movesByPiece.has(id)) movesByPiece.set(id, []);
+      movesByPiece.get(id).push(move);
       const key = move.to.row + "," + move.to.col;
       if (!controlledSquares.has(key)) controlledSquares.set(key, move.to);
       if (!controllersBySquare.has(key)) controllersBySquare.set(key, new Set());
@@ -106,8 +109,7 @@
           const top = stack[stack.length - 1];
           const currentDistance = Math.abs(row - enemyMarshalForStack.row) + Math.abs(col - enemyMarshalForStack.col);
           const qualities = [];
-          for (const move of moveList) {
-            if (move.piece.id !== top.id) continue;
+          for (const move of (movesByPiece.get(top.id) || [])) {
             const target = state.board[move.to.row][move.to.col];
             const targetTop = target.length ? target[target.length - 1] : null;
             // 捕獲の価値は既存の threats で評価するため、ここでは重複させない。
