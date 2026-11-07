@@ -8,8 +8,8 @@
   const STATS_KEY="gungi-ai-tournament-stats-v2";
   const GAMES_KEY="gungi-ai-tournament-games-v1";
   const MAX_SAVED_GAMES=40;
-  function saveGameRecord(record){try{const records=JSON.parse(localStorage.getItem(GAMES_KEY)||"[]");const next=Array.isArray(records)?records:[];next.push(record);localStorage.setItem(GAMES_KEY,JSON.stringify(next.slice(-MAX_SAVED_GAMES)));}catch(_){}}
-  function listGameRecords(){try{const records=JSON.parse(localStorage.getItem(GAMES_KEY)||"[]");return Array.isArray(records)?records:[];}catch(_){return [];}}
+  function saveGameRecord(record){if(!record||!record.winner||record.draw)return;try{const records=JSON.parse(localStorage.getItem(GAMES_KEY)||"[]");const next=Array.isArray(records)?records.filter(item=>item&&item.winner&&!item.draw):[];next.push(record);localStorage.setItem(GAMES_KEY,JSON.stringify(next.slice(-MAX_SAVED_GAMES)));}catch(_){}}
+  function listGameRecords(){try{const records=JSON.parse(localStorage.getItem(GAMES_KEY)||"[]");const wins=Array.isArray(records)?records.filter(item=>item&&item.winner&&!item.draw):[];return wins;}catch(_){return [];}}
   const other=side=>side==="先手"?"後手":"先手";
   const clone=S.cloneState;
   const featureKeys=Object.keys(INITIAL);
