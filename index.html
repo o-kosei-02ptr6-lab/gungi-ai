@@ -55,11 +55,12 @@
       </div>
       <div class="transfer-tools">
         <h3>学習結果の引き継ぎ</h3>
-        <p>元の端末でデータを書き出してコピーし、引き継ぎ先の端末で下の欄に貼り付けて読み込んでください。</p>
+        <p>学習AI・保存済みの最良AI・実力検証の累積結果をまとめて書き出せます。学習や検証でデータが更新される直前の状態は、端末内に1世代分、自動でバックアップされます。別端末へ移す場合は書き出したデータをコピーしてください。</p>
         <button id="export-training" type="button">引き継ぎデータを書き出す</button>
         <textarea id="training-transfer-data" rows="7" spellcheck="false" placeholder="書き出した引き継ぎデータ、または別端末からコピーしたデータをここに貼り付けます。"></textarea>
         <button id="copy-training" type="button">データをコピー</button>
         <button id="import-training" type="button">この端末に読み込む</button>
+        <button id="restore-training-backup" type="button">直前のバックアップを復元</button>
         <p id="transfer-status" role="status">引き継ぎデータはまだ操作されていません。</p>
       </div>
     </section>\n    <section class="panel history-panel"><div class="history-heading"><h2>棋譜</h2><strong id="history-count">0件</strong></div><ol id="move-history" class="move-history" aria-live="polite"><li class="history-empty">まだ棋譜はありません。</li></ol></section>
@@ -69,6 +70,6 @@
     </section>
   </main>
   <footer>Gungi AI · 開発用プロトタイプ</footer>
-  <script src="engine-20261107bb.js?v=20261107bb"></script><script src="evaluation-20261107be.js?v=20261107eval2"></script><script src="search-20261107bd.js?v=20261107finish80"></script><script src="training-20261107a.js?v=20261107parallel1"></script><script src="tournament-20261107a.js?v=20261107max200"></script><script src="app-20261107bc.js?v=20261107max200"></script>
+  <script src="engine-20261107bb.js?v=20261107bb"></script><script src="evaluation-20261107be.js?v=20261107eval2"></script><script src="search-20261107bd.js?v=20261107finish80"></script><script src="training-20261107a.js?v=20261107backup1"></script><script src="tournament-20261107a.js?v=20261107max200"></script><script src="app-20261107bc.js?v=20261107backup1"></script>
 </body>
 </html>
