@@ -136,7 +136,7 @@
   async function trainSequential(options={}){
     const continuous=options.continuous===true;
     const games=Math.max(1,Math.min(4,Number(options.games)||2));
-    const maxPlies=Math.max(20,Math.min(144,Number(options.maxPlies)||144));
+    const maxPlies=Math.max(20,Math.min(108,Number(options.maxPlies)||108));
     let previousGames=0;
     try{const previous=JSON.parse(localStorage.getItem(STORAGE_KEY)||"null");previousGames=previous&&Number.isFinite(previous.games)?previous.games:0;}catch(_){}
     loadWeights();
@@ -204,13 +204,13 @@
   }
 
   function createWorker(){
-    return new Worker("./training-worker-20261107a.js?v=20261108marshalfrontrow1");
+    return new Worker("./training-worker-20261107a.js?v=20261108max108");
   }
   async function trainParallel(options={}){
     const continuous=options.continuous===true;
     const games=Math.max(1,Math.min(4,Number(options.games)||2));
     const parallel=Math.max(2,Math.min(4,Number(options.parallelGames)||2));
-    const maxPlies=Math.max(20,Math.min(144,Number(options.maxPlies)||144));
+    const maxPlies=Math.max(20,Math.min(108,Number(options.maxPlies)||108));
     let previousGames=0;
     try{const previous=JSON.parse(localStorage.getItem(STORAGE_KEY)||"null");previousGames=previous&&Number.isFinite(previous.games)?previous.games:0;}catch(_){}
     loadWeights();
