@@ -156,7 +156,7 @@
         const result=await S.findBestMove(state,{maxDepth:3,timeMs:180,maxNodes:2500,maxDeployCandidates:3});
         nodes+=result.nodes||0;
         if(!result.bestMove){
-          state.phase="finished";state.winner=isCandidate?otherSide(side):side;
+          state.phase="finished";state.winner=otherSide(side);
           break;
         }
         const action=result.bestMove;
@@ -205,7 +205,7 @@
   }
 
   function createWorker(){
-    return new Worker("./training-worker-20261107a.js?v=20261108marshalcol1");
+    return new Worker("./training-worker-20261107a.js?v=20261108marshalfirst1");
   }
   async function trainParallel(options={}){
     const continuous=options.continuous===true;
