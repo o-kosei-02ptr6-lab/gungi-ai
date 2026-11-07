@@ -348,6 +348,12 @@
           return;
         }
         const side = state.setupTurn;
+        let pressedFinish = false;
+        if (result.finishRecommended) {
+          const finish = E.finishSetup(state, side);
+          if (!finish.ok) throw new Error("AIの「済」を実行できませんでした。" + finish.reason);
+          pressedFinish = true;
+        }
         const applied = E.placePiece(state, action.row, action.col, side, action.pieceId);
         if (!applied.ok) {
           messageElement.textContent = "AIが選んだ配置を実行できませんでした。" + applied.reason;
@@ -356,11 +362,14 @@
             mode = "move";
             actionMode = "move";
           }
-          messageElement.textContent = "AI（" + side + "）は" + applied.piece.name + "を " +
+          messageElement.textContent = "AI（" + side + "）は" +
+            (pressedFinish ? "「済」を押し、" : "") + applied.piece.name + "を " +
             (action.col + 1) + "-" + (action.row + 1) + " に配置しました。" +
             (applied.complete ? " 初期配置が完了し、移動モードに移ります。" : " 次は" + state.setupTurn + "の配置です。");
-          infoElement.textContent = "配置評価値 " + Math.round(result.score) + " ／ " +
-            result.nodes.toLocaleString() + "候補 ／ " + result.elapsedMs + " ms";
+          infoElement.textContent = "配置評価値 " + Math.round(result.score) +
+            " ／ 追加配置の評価 " + Math.round(result.gain) +
+            (pressedFinish ? " ／ AIが初期配置の終了を判断" : "") +
+            " ／ " + result.nodes.toLocaleString() + "候補 ／ " + result.elapsedMs + " ms";
         }
       } catch (error) {
         messageElement.textContent = "AIの配置中にエラーが発生しました：" + (error && error.message ? error.message : String(error));
