@@ -242,6 +242,19 @@
     return actions;
   }
 
+  // 静止探索用：通常の捕獲に加え、帥手を掛ける静かな手も読む。
+  // 連続王手からの詰み筋・逃げ道封鎖を探索の末端で見落としにくくする。
+  function generateCheckingActions(state, side, maxDeployCandidates) {
+    const checks = [];
+    const actions = getSearchActions(state, side, maxDeployCandidates);
+    for (const action of actions) {
+      const child = applyAction(state, action);
+      if (!child || child.phase === "finished") continue;
+      if (E.isInCheck(child, child.turn)) checks.push(action);
+    }
+    return checks;
+  }
+
   function findBestMove(state, options = {}) {
     return new Promise((resolve, reject) => {
       (async () => {
@@ -304,7 +317,15 @@
           // 応手がなければ、その場で詰みとして扱う。
           const tactical = inCheck
             ? getSearchActions(position, position.turn, maxDeployCandidates)
-            : generateCaptureActions(position, position.turn);
+            : (() => {
+                const captures = generateCaptureActions(position, position.turn);
+                // 深い静止探索での分岐爆発を抑えつつ、序盤の王手筋を追加する。
+                if (qply >= 4) return captures;
+                const captureKeys = new Set(captures.map(actionKey));
+                const checks = generateCheckingActions(position, position.turn, maxDeployCandidates)
+                  .filter(action => !captureKeys.has(actionKey(action)));
+                return captures.concat(checks);
+              })();
           const ordered = orderActions(position, tactical, null, ply, killers, historyScores);
           if (inCheck && !ordered.length) return -MATE + ply;
           // 長い連続王手では探索資源を守りつつ、少なくとも王手回避手を
