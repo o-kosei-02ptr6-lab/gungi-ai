@@ -109,16 +109,21 @@
       }
     }
     deployments.sort((a,b) => b.priority - a.priority);
-    const perPiece = new Map();
-    const selected = [];
-    for (const action of deployments) {
-      const count = perPiece.get(action.pieceName) || 0;
-      if (count >= 2) continue;
-      perPiece.set(action.pieceName, count + 1);
-      selected.push(action);
+    if (E.isInCheck(state, side)) {
+      // 帥手中は合い駒の見落としを防ぐため、配置候補を省略しない。
+      actions.push(...deployments.map(({priority, ...action}) => action));
+    } else {
+      const perPiece = new Map();
+      const selected = [];
+      for (const action of deployments) {
+        const count = perPiece.get(action.pieceName) || 0;
+        if (count >= 2) continue;
+        perPiece.set(action.pieceName, count + 1);
+        selected.push(action);
+      }
+      selected.sort((a,b) => b.priority - a.priority);
+      actions.push(...selected.slice(0, maxDeployCandidates).map(({priority, ...action}) => action));
     }
-    selected.sort((a,b) => b.priority - a.priority);
-    actions.push(...selected.slice(0, maxDeployCandidates).map(({priority, ...action}) => action));
 
     // A legal immediate Marshal capture always overrides every other move.
     // Test the real engine transition so stack/capture rules are respected.
@@ -150,6 +155,22 @@
       result = E.movePiece(next, action.from.row, action.from.col, action.to.row, action.to.col, action.landingMode);
     }
     return result && result.ok ? next : null;
+  }
+
+  // 帥手中は、着手後に自分の帥がなお捕獲可能な手を除外する。
+  // 移動・捕獲・ツケ・「新」による合い駒を同じ基準で検査する。
+  function getSearchActions(state, side, maxDeployCandidates) {
+    const actions = generateActions(state, side, maxDeployCandidates);
+    if (!E.isInCheck(state, side)) return actions;
+    const evasions = [];
+    for (const action of actions) {
+      const child = applyAction(state, action);
+      if (child && (child.phase === "finished" || !E.isInCheck(child, side))) {
+        evasions.push(action);
+      }
+    }
+    // 完全に防げない局面でも探索を続け、最も粘れる手を選べるようにする。
+    return evasions.length ? evasions : actions;
   }
 
   function orderActions(state, actions, ttMove) {
@@ -234,13 +255,21 @@
             return position.winner === position.turn ? MATE - ply : -MATE + ply;
           }
 
+          const inCheck = E.isInCheck(position, position.turn);
           const standPat = AI.evaluate(position, position.turn);
-          if (qply >= 5) return standPat;
-          if (standPat >= beta) return standPat;
-          if (standPat > alpha) alpha = standPat;
+          if (qply >= 10) return inCheck ? standPat - 20000 : standPat;
+          if (qply >= 5 && !inCheck) return standPat;
+          if (!inCheck) {
+            if (standPat >= beta) return standPat;
+            if (standPat > alpha) alpha = standPat;
+          }
 
-          const captures = generateCaptureActions(position, position.turn);
-          const ordered = orderActions(position, captures, null);
+          // 帥手中は静止探索でも全応手を読む。通常局面では捕獲手だけを読む。
+          const tactical = inCheck
+            ? getSearchActions(position, position.turn, maxDeployCandidates)
+            : generateCaptureActions(position, position.turn);
+          const ordered = orderActions(position, tactical, null);
+          if (inCheck && !ordered.length) return -MATE + ply;
           for (const action of ordered) {
             checkStop();
             const child = applyAction(position, action);
@@ -271,7 +300,7 @@
             else if (cached.flag === "upper") beta = Math.min(beta, cached.score);
             if (alpha >= beta) return cached.score;
           }
-          const actions = orderActions(position, generateActions(position, position.turn, maxDeployCandidates), cached && cached.best);
+          const actions = orderActions(position, getSearchActions(position, position.turn, maxDeployCandidates), cached && cached.best);
           if (!actions.length) return AI.evaluate(position, position.turn);
           let bestScore = -INF;
           let bestAction = null;
@@ -299,7 +328,7 @@
         function searchRoot(root, depth, previousBest) {
           const key = positionKey(root);
           const cached = table.get(key);
-          const actions = orderActions(root, generateActions(root, root.turn, maxDeployCandidates), previousBest || (cached && cached.best));
+          const actions = orderActions(root, getSearchActions(root, root.turn, maxDeployCandidates), previousBest || (cached && cached.best));
           let alpha = -INF;
           const beta = INF;
           let bestScore = -INF;
@@ -321,7 +350,7 @@
 
         let completed = null;
         let previousBest = null;
-        const fallback = generateActions(state, state.turn, maxDeployCandidates)[0] || null;
+        const fallback = getSearchActions(state, state.turn, maxDeployCandidates)[0] || null;
         if (!fallback) { resolve({ bestMove: null, score: AI.evaluate(state, state.turn), depth: 0, nodes: 0, elapsedMs: now() - started }); return; }
         for (let depth = 1; depth <= maxDepth; depth += 1) {
           try {
