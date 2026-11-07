@@ -115,7 +115,7 @@
   async function trainSequential(options={}){
     const continuous=options.continuous===true;
     const games=Math.max(1,Math.min(4,Number(options.games)||2));
-    const maxPlies=Math.max(20,Math.min(80,Number(options.maxPlies)||48));
+    const maxPlies=Math.max(20,Math.min(80,Number(options.maxPlies)||72));
     let previousGames=0;
     try{const previous=JSON.parse(localStorage.getItem(STORAGE_KEY)||"null");previousGames=previous&&Number.isFinite(previous.games)?previous.games:0;}catch(_){}
     loadWeights();
@@ -145,17 +145,10 @@
         if(options.onProgress)options.onProgress({game:game+1,games,ply:plies+1,maxPlies,nodes,phase:"selfplay",candidateSide,opponent:"保存済み最良AI"});
         if(plies%4===3)await new Promise(resolve=>setTimeout(resolve,0));
       }
-      // Adjudicate unfinished games with fixed baseline weights. This keeps
-      // the result independent of the candidate/champion evaluator being trained.
-      let adjudicated=false,adjudicationScore=null;
-      if(state.phase!=="finished"){
-        AI.setWeights(Object.fromEntries(FEATURES.map(key=>[key,1])));
-        adjudicationScore=AI.evaluate(state,candidateSide);
-        adjudicated=true;
-        const margin=250;
-        if(adjudicationScore>margin){state.phase="finished";state.winner=candidateSide;}
-        else if(adjudicationScore< -margin){state.phase="finished";state.winner=otherSide(candidateSide);}
-      }
+      // 規定手数までに帥を取れなかった対局は引き分けとして扱う。
+      // 盤面評価で勝者を作らず、実際の終局結果だけを学習ラベルにする。
+      const adjudicated=false;
+      const adjudicationScore=null;
       const finalTarget=state.phase==="finished"
         ?(state.winner===candidateSide?1:-1):0;
       if(adjudicated)adjudicatedGames++;
@@ -193,7 +186,7 @@
     const continuous=options.continuous===true;
     const games=Math.max(1,Math.min(4,Number(options.games)||2));
     const parallel=Math.max(2,Math.min(4,Number(options.parallelGames)||2));
-    const maxPlies=Math.max(20,Math.min(80,Number(options.maxPlies)||48));
+    const maxPlies=Math.max(20,Math.min(80,Number(options.maxPlies)||72));
     let previousGames=0;
     try{const previous=JSON.parse(localStorage.getItem(STORAGE_KEY)||"null");previousGames=previous&&Number.isFinite(previous.games)?previous.games:0;}catch(_){}
     loadWeights();
