@@ -163,6 +163,9 @@
   // 移動・捕獲・ツケ・「新」による合い駒を同じ基準で検査する。
   function getSearchActions(state, side, maxDeployCandidates) {
     const actions = generateActions(state, side, maxDeployCandidates);
+    // 軍儀では帥手を受けても、帥手を解消しない着手自体は禁止されない。
+    // その局面では全ての合法手を残し、相手の帥を取る反撃も探索する。
+    if (E.isInCheck(state, side)) return actions;
     const safeActions = [];
     for (const action of actions) {
       const child = applyAction(state, action);
@@ -298,7 +301,7 @@
             ? getSearchActions(position, position.turn, maxDeployCandidates)
             : generateCaptureActions(position, position.turn);
           const ordered = orderActions(position, tactical, null, ply, killers, historyScores);
-          if (inCheck && !ordered.length) return -MATE + ply;
+          if (inCheck && !ordered.length) return AI.evaluate(position, position.turn);
           // 長い連続王手では探索資源を守りつつ、少なくとも王手回避手を
           // 1手実行してから評価する。王手中の静止評価による誤判定を防ぐ。
           if (inCheck && qply >= 10) {
@@ -312,7 +315,7 @@
                 : -AI.evaluate(child, child.turn);
               if (score > bestEvasion) bestEvasion = score;
             }
-            return bestEvasion === -INF ? -MATE + ply : bestEvasion;
+            return bestEvasion === -INF ? AI.evaluate(position, position.turn) : bestEvasion;
           }
           for (const action of ordered) {
             checkStop();
