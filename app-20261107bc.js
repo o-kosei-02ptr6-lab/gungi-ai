@@ -23,6 +23,7 @@
   const aiButton = document.getElementById("ai-move");
   let aiThinking = false;
   let trainingRunning = false;
+  let tournamentRunning = false;
   let checkOverlayTimer = null;
   let checkOverlayFadeTimer = null;
   function showCheck(side) {
@@ -546,6 +547,48 @@
         trainingRunning = false;
         trainButton.disabled = false;
         trainButton.textContent = "自己対局学習を実行";
+      }
+    });
+  }
+  const compareButton = document.getElementById("compare-ai");
+  if (compareButton && window.GungiTournament) {
+    compareButton.addEventListener("click", async () => {
+      if (trainingRunning || aiThinking || tournamentRunning) return;
+      tournamentRunning = true;
+      compareButton.disabled = true;
+      compareButton.textContent = "比較対局中…";
+      const status = document.getElementById("compare-status");
+      const info = document.getElementById("compare-info");
+      status.textContent = "同じ初期配置で先手・後手を入れ替え、基準AIとの対戦を開始しました。";
+      info.textContent = "各AIは同じ探索条件で着手します。現在の盤面には影響しません。";
+      try {
+        const result = await window.GungiTournament.compare({
+          pairs: 2, maxPlies: 36, maxDepth: 2, timeMs: 110, maxNodes: 1100, maxDeployCandidates: 3,
+          onProgress: p => {
+            if (p.phase === "game") {
+              status.textContent = "第" + p.pair + "/" + p.pairs + "組・第" + p.game +
+                "局を対戦中… " + p.plies + "手 ／ " + p.nodes.toLocaleString() + "局面";
+            } else if (p.phase === "pairDone") {
+              status.textContent = p.pair + "/" + p.pairs + "組完了。合計" + p.games + "局を検証しました。";
+            }
+          }
+        });
+        const rate = (result.scoreRate * 100).toFixed(1);
+        status.textContent = "比較完了。学習AIの得点率：" + rate + "%";
+        info.textContent = "学習AI " + result.candidateWins + "勝 ／ 基準AI " + result.baselineWins +
+          "勝 ／ 引き分け " + result.draws + "局（計" + result.games + "局） ／ " +
+          result.plies + "手 ／ 探索 " + result.nodes.toLocaleString() + "局面。 " +
+          (result.scoreRate > 0.5 ? "今回の短期テストでは学習AIが上回りました。" :
+            result.scoreRate < 0.5 ? "今回の短期テストでは基準AIが上回りました。" :
+              "今回の短期テストでは互角でした。") +
+          " 4局だけでは統計的な強さの証明にはなりません。";
+      } catch (error) {
+        status.textContent = "比較中にエラーが発生しました。";
+        info.textContent = error && error.message ? error.message : String(error);
+      } finally {
+        tournamentRunning = false;
+        compareButton.disabled = false;
+        compareButton.textContent = "基準AIと実力を比較（4局）";
       }
     });
   }
