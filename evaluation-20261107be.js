@@ -47,6 +47,28 @@
       : targetStack.filter(piece => piece.side !== attackingSide);
   }
 
+  function countSafeMarshalEscapes(state, side, moves, marshal) {
+    if (!marshal) return 0;
+    let safe = 0;
+    for (const move of moves) {
+      if (move.piece.id !== marshal.piece.id) continue;
+      const nextState = {
+        ...state,
+        turn: side,
+        board: state.board.map(line => line.map(stack => stack.slice())),
+        hands: state.hands,
+        history: Array.isArray(state.history) ? state.history.slice() : []
+      };
+      const destination = nextState.board[move.to.row][move.to.col];
+      const landingMode = destination.length && destination[destination.length - 1].side === side
+        ? "tsuke" : "capture";
+      const result = E.movePiece(nextState, move.from.row, move.from.col,
+        move.to.row, move.to.col, landingMode);
+      if (result.ok && !result.gameOver && !E.isInCheck(nextState, side)) safe += 1;
+    }
+    return safe;
+  }
+
   function sideBreakdown(state, side) {
     let material = 0, hand = 0, position = 0, activity = 0;
     let threats = 0, exposure = 0, kingSafety = 0;
@@ -223,6 +245,16 @@
     }
     threats += Math.min(180, marshalPressure);
 
+    // 敵帥が現在王手ではない場合でも、安全な移動先が少なければ詰めろに近い状態として評価。
+    // 逃げ道0〜3に応じて段階的に加点し、4以上では追加点を与えない。
+    if (enemyMarshalForStack && !E.isInCheck(state, enemy)) {
+      const enemySafeEscapes = countSafeMarshalEscapes(
+        state, enemy, enemyMoves, enemyMarshalForStack
+      );
+      const netPressure = [190, 110, 55, 20, 0][Math.min(4, enemySafeEscapes)];
+      threats += netPressure;
+    }
+
     const ownTargets = new Map();
     for (const move of moveList) {
       const key = move.to.row + "," + move.to.col;
@@ -282,25 +314,9 @@
 
       // 帥を実際に動かした局面を作り、相手が次の手で帥を取れない移動先だけを
       // 安全な逃げ道として数える。単なる移動可能マスは逃げ道に含めない。
-      const marshalMoves = moveList.filter(move => move.piece.id === marshal.piece.id);
-      let safeMarshalEscapes = 0;
-      for (const move of marshalMoves) {
-        const nextState = {
-          ...state,
-          turn: side,
-          board: state.board.map(line => line.map(stack => stack.slice())),
-          hands: state.hands,
-          history: Array.isArray(state.history) ? state.history.slice() : []
-        };
-        const destination = nextState.board[move.to.row][move.to.col];
-        const landingMode = destination.length && destination[destination.length - 1].side === side
-          ? "tsuke" : "capture";
-        const result = E.movePiece(nextState, move.from.row, move.from.col,
-          move.to.row, move.to.col, landingMode);
-        if (result.ok && !result.gameOver && !E.isInCheck(nextState, side)) {
-          safeMarshalEscapes += 1;
-        }
-      }
+      const safeMarshalEscapes = countSafeMarshalEscapes(
+        state, side, moveList, marshal
+      );
       kingSafety += Math.min(4, safeMarshalEscapes) * 12;
       // 帥手中に安全な逃げ道が少ないほど詰みに近い。相手側の評価にも反映する。
       if (E.isInCheck(state, side)) {
