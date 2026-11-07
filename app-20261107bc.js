@@ -560,10 +560,10 @@
       const status = document.getElementById("compare-status");
       const info = document.getElementById("compare-info");
       status.textContent = "同じ初期配置で先手・後手を入れ替え、基準AIとの対戦を開始しました。";
-      info.textContent = "各AIは同じ探索条件で着手します。現在の盤面には影響しません。";
+      info.textContent = "各AIは同じ探索条件で着手します。72手で決着しない場合は、両者共通の固定評価基準で勝敗を判定します。現在の盤面には影響しません。";
       try {
         const result = await window.GungiTournament.compare({
-          pairs: 2, maxPlies: 36, maxDepth: 2, timeMs: 110, maxNodes: 1100, maxDeployCandidates: 3,
+          pairs: 2, maxPlies: 72, maxDepth: 2, timeMs: 110, maxNodes: 1100, maxDeployCandidates: 3,
           onProgress: p => {
             if (p.phase === "game") {
               status.textContent = "第" + p.pair + "/" + p.pairs + "組・第" + p.game +
@@ -581,9 +581,9 @@
           const lower = (result.lowerBound * 100).toFixed(1);
           status.textContent = "累計 " + result.totalGames + "局。学習AIの得点率：" + rate + "%";
           info.textContent = "今回：" + result.candidateWins + "勝 ／ 最良AI " + result.championWins +
-            "勝 ／ 引き分け " + result.draws + "局（" + result.games + "局）。累計：" +
+            "勝 ／ 引き分け " + result.draws + "局（" + result.games + "局、評価判定 " + result.adjudicated + "局）。累計：" +
             result.totalCandidateWins + "勝 ／ 最良AI " + result.totalChampionWins +
-            "勝 ／ 引き分け " + result.totalDraws + "局。95%信頼下限の目安 " + lower + "%。 " +
+            "勝 ／ 引き分け " + result.totalDraws + "局。評価判定 " + result.totalAdjudicated + "局。95%信頼下限の目安 " + lower + "%。 " +
             (result.promoted ? "基準を満たしたため、新しい評価関数を最良AIとして保存しました。" :
               result.rejected ? "十分な対局数で改善を確認できなかったため、最良AIの評価関数に戻しました。" :
               "まだ採用判定に必要な対局数・信頼度に達していません。結果は次回以降に累積します。") +
