@@ -164,22 +164,17 @@
         (1 + Math.min(2, item.attackers - 1) * 0.3));
     }
 
-    // Deep penetration into the opponent's back three ranks creates increasing
-    // pressure on the enemy Marshal. Give the strongest bonus to top pieces
-    // that have advanced all the way to the far rank, especially near the Marshal.
+    // 敵陣への進出度に応じて、敵帥への脅威を固定値で加点する。
+    // 奥3列は各+20、4列目は+10、5列目は+5。帥との距離による倍率は付けない。
     let marshalPressure = 0;
     for (let row = 0; row < E.SIZE; row += 1) {
       for (let col = 0; col < E.SIZE; col += 1) {
         const stack = state.board[row][col];
         if (!stack.length || stack[stack.length - 1].side !== side) continue;
         const advance = advancement(row, side);
-        if (advance < 6) continue;
-        const base = advance === 6 ? 14 : advance === 7 ? 25 : 40;
-        const distance = enemyMarshal
-          ? Math.abs(row - enemyMarshal.row) + Math.abs(col - enemyMarshal.col)
-          : 8;
-        const proximity = distance <= 2 ? 1.8 : distance <= 4 ? 1.35 : 1;
-        marshalPressure += base * proximity;
+        if (advance >= 6) marshalPressure += 20;
+        else if (advance === 5) marshalPressure += 10;
+        else if (advance === 4) marshalPressure += 5;
       }
     }
     threats += Math.min(180, marshalPressure);
