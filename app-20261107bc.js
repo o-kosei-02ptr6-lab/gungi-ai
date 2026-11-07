@@ -669,6 +669,21 @@
       }
     });
   }
+  const restoreBackupButton = document.getElementById("restore-training-backup");
+  if (restoreBackupButton && window.GungiTraining) {
+    restoreBackupButton.addEventListener("click", () => {
+      try {
+        const result = window.GungiTraining.restorePreviousBackup();
+        transferStatus.textContent = "直前のバックアップを復元しました。学習AI " + result.games +
+          "局分 ／ 最良AI " + (result.hasChampion ? "あり" : "初期状態") +
+          " ／ 検証記録 " + (result.hasTournament ? "あり" : "なし") + "。復元前の状態も直前バックアップとして保存されています。";
+        const trainingStatus = document.getElementById("training-status");
+        if (trainingStatus) trainingStatus.textContent = "バックアップから学習データを復元しました。";
+      } catch (error) {
+        transferStatus.textContent = "バックアップを復元できませんでした：" + (error.message || String(error));
+      }
+    });
+  }
   if (importTrainingButton && window.GungiTraining) {
     importTrainingButton.addEventListener("click", () => {
       try {
