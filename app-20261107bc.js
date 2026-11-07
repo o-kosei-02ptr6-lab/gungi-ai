@@ -23,6 +23,7 @@
   const aiButton = document.getElementById("ai-move");
   let aiThinking = false;
   let trainingRunning = false;
+  let trainingStopRequested = false;
   let tournamentRunning = false;
   let checkOverlayTimer = null;
   let checkOverlayFadeTimer = null;
@@ -516,27 +517,39 @@
   const trainButton = document.getElementById("train-ai");
   if (trainButton && window.GungiTraining) {
     trainButton.addEventListener("click", async () => {
-      if (trainingRunning || aiThinking || tournamentRunning) return;
-      trainingRunning = true;
-      trainButton.disabled = true;
-      trainButton.textContent = "学習中…";
       const trainingStatus = document.getElementById("training-status");
       const trainingInfo = document.getElementById("training-info");
-      trainingStatus.textContent = "自己対局を開始しています。現在の盤面には影響しません。";
-      trainingInfo.textContent = "AI同士の対局と評価関数の調整を実行します。";
+      if (trainingRunning) {
+        trainingStopRequested = true;
+        trainButton.disabled = true;
+        trainButton.textContent = "停止中…";
+        trainingStatus.textContent = "停止要求を受け付けました。現在の対局を終えてから停止します。";
+        return;
+      }
+      if (aiThinking || tournamentRunning) return;
+      trainingRunning = true;
+      trainingStopRequested = false;
+      trainButton.disabled = false;
+      trainButton.textContent = "学習を停止";
+      trainingStatus.textContent = "自己対局学習を開始しました。停止ボタンを押すまで繰り返します。";
+      trainingInfo.textContent = "学習は別の盤面で行い、各局終了時に重みを保存します。";
+      let result = null;
       try {
-        const result = await window.GungiTraining.train({
-          games: 2,
+        result = await window.GungiTraining.train({
+          continuous: true,
           maxPlies: 48,
+          shouldStop: () => trainingStopRequested,
           onProgress: p => {
             trainingStatus.textContent = p.phase === "selfplay"
-              ? "第" + p.game + "/" + p.games + "局：自己対局 " + p.ply + "/" + p.maxPlies + "手"
-              : "第" + p.game + "局の結果を評価関数へ反映中…";
-            trainingInfo.textContent = "探索局面 " + p.nodes.toLocaleString() + " ／ " +
-              (p.phase === "learning" ? "教師目標 " + Number(p.target).toFixed(3) : "学習データ収集中");
+              ? "第" + p.game + "局：自己対局 " + p.ply + "/" + p.maxPlies + "手（停止ボタンで終了）"
+              : "第" + p.game + "局の結果を評価関数へ反映・保存中…";
+            trainingInfo.textContent = "累計探索局面 " + p.nodes.toLocaleString() + " ／ " +
+              (p.phase === "learning" ? "TD目標 " + Number(p.target).toFixed(3) : "学習データ収集中");
           }
         });
-        trainingStatus.textContent = "学習完了。評価関数の重みをこのブラウザに保存しました。";
+        trainingStatus.textContent = trainingStopRequested
+          ? "学習を停止しました。学習済みの重みは保存されています。"
+          : "学習処理が終了しました。学習済みの重みは保存されています。";
         trainingInfo.textContent = result.games + "局 ／ 決着 " + result.decisive + "局 ／ " +
           "先手勝利 " + result.firstWins + "局 ／ 学習局面 " + result.samples +
           " ／ TD更新 " + result.tdUpdates + "回 ／ 平均TD誤差 " + result.meanTdError.toFixed(4) +
@@ -546,6 +559,7 @@
         trainingInfo.textContent = error && error.message ? error.message : String(error);
       } finally {
         trainingRunning = false;
+        trainingStopRequested = false;
         trainButton.disabled = false;
         trainButton.textContent = "自己対局学習を実行";
       }
