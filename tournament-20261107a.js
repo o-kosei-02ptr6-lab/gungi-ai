@@ -5,7 +5,7 @@
   if(!E||!AI||!S||!T) throw new Error("Engine, evaluator, search and training must load before tournament.");
   const INITIAL=Object.freeze({material:1,hand:1,position:1,activity:1,mobility:1,threats:1,exposure:1,kingSafety:1});
   const CHAMPION_KEY="gungi-ai-champion-weights-v1";
-  const STATS_KEY="gungi-ai-tournament-stats-v1";
+  const STATS_KEY="gungi-ai-tournament-stats-v2";
   const other=side=>side==="先手"?"後手":"先手";
   const clone=S.cloneState;
   const featureKeys=Object.keys(INITIAL);
@@ -39,7 +39,7 @@
   function saveStats(stats){try{localStorage.setItem(STATS_KEY,JSON.stringify(stats));}catch(_){}}
   function wilsonBounds(rate,n){
     if(!n)return {lower:0,upper:1};
-    const z=1.96,z2=z*z,den=1+z2/n;
+    const z=1.645,z2=z*z,den=1+z2/n;
     const center=rate+z2/(2*n);
     const margin=z*Math.sqrt((rate*(1-rate)+z2/(4*n))/n);
     return {lower:(center-margin)/den,upper:(center+margin)/den};
@@ -83,11 +83,11 @@
   async function compare(options={}){
     const pairsPerBatch=Math.max(1,Math.min(5,Number(options.pairs)||2));
     const settings={
-      maxPlies:Math.max(20,Math.min(120,Number(options.maxPlies)||72)),
+      maxPlies:Math.max(20,Math.min(120,Number(options.maxPlies)||36)),
       maxDepth:Math.max(1,Math.min(3,Number(options.maxDepth)||2)),
-      timeMs:Math.max(60,Math.min(500,Number(options.timeMs)||110)),
-      maxNodes:Math.max(300,Math.min(5000,Number(options.maxNodes)||1100)),
-      maxDeployCandidates:Math.max(2,Math.min(6,Number(options.maxDeployCandidates)||3))
+      timeMs:Math.max(50,Math.min(500,Number(options.timeMs)||60)),
+      maxNodes:Math.max(250,Math.min(5000,Number(options.maxNodes)||700)),
+      maxDeployCandidates:Math.max(2,Math.min(6,Number(options.maxDeployCandidates)||2))
     };
     const candidate=normalize(AI.getWeights()),original=AI.getWeights();
     let champion=readChampion();
@@ -101,7 +101,7 @@
     try{
       // Continue in paired batches until the 95% confidence interval separates
       // from 50%, or the user explicitly requests a stop.
-      while(!promoted&&!rejected&&!stopped){
+      while(!promoted&&!rejected&&!stopped&&totals.games<40){
         for(let pair=0;pair<pairsPerBatch;pair++){
           if(options.shouldStop&&options.shouldStop()){stopped=true;break;}
           const pairNumber=totals.pairs+1;
@@ -123,10 +123,10 @@
           const score=totals.candidateWins+totals.draws*.5;
           const scoreRate=score/totals.games;
           const bounds=wilsonBounds(scoreRate,totals.games);
-          if(totals.games>=40&&bounds.lower>.5){
+          if(totals.games>=20&&bounds.lower>.5){
             saveChampion(candidate);champion=candidate;promoted=true;
             try{localStorage.removeItem(STATS_KEY);}catch(_){}
-          }else if(totals.games>=40&&bounds.upper<.5){
+          }else if(totals.games>=20&&bounds.upper<.5){
             AI.setWeights(champion);
             const saved=T.exportData();
             T.saveWeights(champion,saved.games||0);
@@ -155,7 +155,7 @@
         ...run,totalGames:totals.games,totalCandidateWins:totals.candidateWins,
         totalChampionWins:totals.championWins,totalDraws:totals.draws,
         totalAdjudicated:totals.adjudicated,scoreRate,lowerBound:bounds.lower,upperBound:bounds.upper,
-        promoted,rejected,stopped,candidateWeights:candidate,championWeights:champion,settings
+        promoted,rejected,stopped,inconclusive,candidateWeights:candidate,championWeights:champion,settings
       };
     } finally {if(!promoted&&!rejected)AI.setWeights(original);}
   }
