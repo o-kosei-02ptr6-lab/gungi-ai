@@ -78,6 +78,7 @@
     // Legal capture pressure. Use the engine's complete move legality,
     // including stack-height and piece-specific jump restrictions.
     const enemy = opponent(side);
+    const ownMoves = E.generateLegalMoves(state, side);
     const enemyMoves = E.generateLegalMoves(state, enemy);
     const attacksBySquare = new Map();
     for (const move of enemyMoves) {
@@ -100,7 +101,18 @@
       if (!loss) continue;
       const pressure = Math.min(360, loss * 0.18 * (1 + Math.min(2, attackers.length - 1) * 0.3));
       exposure -= pressure;
-      threats += Math.min(180, loss * 0.16);
+    }
+
+    // Score this side's own legal capture opportunities separately.
+    for (const move of ownMoves) {
+      const targetStack = state.board[move.to.row][move.to.col];
+      if (!targetStack.length || targetStack[targetStack.length - 1].side === side) continue;
+      const hasFriendlyUnderneath = targetStack.some(piece => piece.side === side);
+      const capturable = hasFriendlyUnderneath
+        ? [targetStack[targetStack.length - 1]]
+        : targetStack.filter(piece => piece.side === enemy);
+      const value = capturable.reduce((sum, piece) => sum + (PIECE_VALUES[piece.name] || 0), 0);
+      threats += Math.min(180, value * 0.16);
     }
 
     if (E.isInCheck(state, side)) kingSafety -= 5200;
