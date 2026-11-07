@@ -40,13 +40,13 @@
       <button id="reset-board" type="button">盤面を初期化</button>
     </section>
     <section class="panel"><h2>駒の残数</h2><div id="inventory-summary" class="inventory-summary"></div></section>
-    <section class="panel history-panel"><div class="history-heading"><h2>棋譜</h2><strong id="history-count">0件</strong></div><ol id="move-history" class="move-history" aria-live="polite"><li class="history-empty">まだ棋譜はありません。</li></ol></section>
+    <section class="panel training-panel">\n      <h2>AIの自己対局学習</h2>\n      <p>AI同士の対局を2局行い、勝敗または終局時の評価を使って評価関数の重みを調整します。学習は別の盤面で行うため、現在の対局には影響しません。学習結果はこのブラウザに保存されます。</p>\n      <button id="train-ai" class="mode-toggle" type="button">自己対局学習を実行</button>\n      <p id="training-status" role="status">まだ学習していません。</p>\n      <p id="training-info">「自己対局学習を実行」を押すと開始します。</p>\n    </section>\n    <section class="panel history-panel"><div class="history-heading"><h2>棋譜</h2><strong id="history-count">0件</strong></div><ol id="move-history" class="move-history" aria-live="polite"><li class="history-empty">まだ棋譜はありません。</li></ol></section>
     <section class="panel">
       <h2>開発ロードマップ</h2>
       <ol class="roadmap"><li class="done">盤面・局面データ構造</li><li class="done">駒の配置と段（ツケ）の管理</li><li class="done">合法手生成・帥手判定</li><li class="done">帥の捕獲による勝敗判定</li><li class="done">棋譜の記録・表示</li><li class="done">局面評価関数（初版）</li><li class="done">探索エンジン（反復深化・枝刈り）</li><li class="active">AI着手ボタン・思考時間設定</li><li>対局・棋譜・AI強度設定</li></ol>
     </section>
   </main>
   <footer>Gungi AI · 開発用プロトタイプ</footer>
-  <script src="engine-20261107bb.js?v=20261107bb"></script><script src="evaluation-20261107be.js?v=20261107be"></script><script src="search-20261107bd.js?v=20261107bh"></script><script src="app-20261107bb.js?v=20261107bh"></script>
+  <script src="engine-20261107bb.js?v=20261107bb"></script><script src="evaluation-20261107be.js?v=20261107be"></script><script src="search-20261107bd.js?v=20261107bh"></script><script src="training-20261107a.js?v=20261107a"></script><script src="app-20261107bc.js?v=20261107bc"></script>
 </body>
 </html>
