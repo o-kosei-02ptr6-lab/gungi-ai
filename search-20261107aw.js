@@ -251,7 +251,7 @@
         let completed = null;
         let previousBest = null;
         const fallback = generateActions(state, state.turn, maxDeployCandidates)[0] || null;
-        if (!fallback) return { bestMove: null, score: AI.evaluate(state, state.turn), depth: 0, nodes: 0, elapsedMs: now() - started };
+        if (!fallback) { resolve({ bestMove: null, score: AI.evaluate(state, state.turn), depth: 0, nodes: 0, elapsedMs: now() - started }); return; }
         for (let depth = 1; depth <= maxDepth; depth += 1) {
           try {
             checkStop();
