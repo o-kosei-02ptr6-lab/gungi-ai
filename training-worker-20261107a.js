@@ -39,7 +39,7 @@
     return state;
   }
   async function play(message){
-    const {candidateWeights,championWeights,candidateSide,maxPlies=48,searchOptions={}}=message;
+    const {candidateWeights,championWeights,candidateSide,maxPlies=72,searchOptions={}}=message;
     const state=makeStartPosition(),trajectory=[];
     let nodes=0,plies=0;
     for(;plies<maxPlies&&state.phase==="move";plies++){
@@ -57,13 +57,8 @@
         :E.movePiece(state,a.from.row,a.from.col,a.to.row,a.to.col,a.landingMode);
       if(!applied||!applied.ok)throw new Error("学習対局の着手に失敗しました: "+(applied&&applied.reason||"不明なエラー"));
     }
-    let adjudicated=false,adjudicationScore=null;
-    if(state.phase!=="finished"){
-      AI.setWeights(Object.fromEntries(FEATURES.map(k=>[k,1])));
-      adjudicationScore=AI.evaluate(state,candidateSide);adjudicated=true;
-      if(adjudicationScore>250){state.phase="finished";state.winner=candidateSide;}
-      else if(adjudicationScore< -250){state.phase="finished";state.winner=other(candidateSide);}
-    }
+    // 規定手数までに帥を取れなければ引き分け。盤面評価で勝者を決めない。
+    const adjudicated=false,adjudicationScore=null;
     const finalTarget=state.phase==="finished"?(state.winner===candidateSide?1:-1):0;
     const oriented=candidateSide==="先手"?trajectory:trajectory.map(f=>Object.fromEntries(FEATURES.map(k=>[k,-f[k]])));
     return {candidateSide,trajectory:oriented,finalTarget,winner:state.winner||null,draw:state.phase!=="finished",
