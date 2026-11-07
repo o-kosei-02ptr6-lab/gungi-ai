@@ -514,10 +514,10 @@
     const hasPlacedMarshal = state.history.some(entry =>
       entry.type === "place" && entry.side === side && entry.piece.name === "帥"
     );
-    // 12枚以上を配置し、最善の追加配置の価値が小さくなったら「済」を選ぶ。
-    // 残り1枚なら、その1枚を配置して初期配置を終えられるよう必ず「済」にする。
+    // 帥を配置済みで、最善の追加配置による評価上昇が80未満なら「済」を選ぶ。
+    // 配置枚数による下限は設けず、残り1枚の場合も必ず最後の配置前に「済」を選ぶ。
     const finishRecommended = !!best && !state.setupFinishPending && hasPlacedMarshal &&
-      ((state.hands[side] || []).length === 1 || (deployedCount >= 12 && bestGain < 52));
+      ((state.hands[side] || []).length === 1 || bestGain < 80);
     return {
       bestMove: best, score: bestScore, gain: bestGain, finishRecommended,
       deployedCount, depth: 1, nodes,
