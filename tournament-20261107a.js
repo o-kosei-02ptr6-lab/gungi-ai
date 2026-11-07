@@ -34,7 +34,7 @@
       const saved=JSON.parse(localStorage.getItem(STATS_KEY)||"null");
       if(saved&&saved.fingerprint===fingerprint(candidate))return saved;
     }catch(_){}
-    return {fingerprint:fingerprint(candidate),games:0,candidateWins:0,championWins:0,draws:0,pairs:0,nodes:0,plies:0};
+    return {fingerprint:fingerprint(candidate),games:0,candidateWins:0,championWins:0,draws:0,adjudicated:0,pairs:0,nodes:0,plies:0};
   }
   function saveStats(stats){try{localStorage.setItem(STATS_KEY,JSON.stringify(stats));}catch(_){}}
   function wilsonLowerBound(rate,n){
@@ -63,12 +63,25 @@
       if(applied.gameOver)break;
       if(plies%2===1)await new Promise(resolve=>setTimeout(resolve,0));
     }
-    return {winner:state.winner,plies:Math.min(plies+1,settings.maxPlies),nodes,draw:state.phase!=="finished"};
+    let adjudicated=false,adjudicationScore=null;
+    if(state.phase!=="finished"){
+      // Use a fixed referee evaluator so neither competing weight set judges itself.
+      AI.setWeights(INITIAL);
+      adjudicationScore=AI.evaluate(state,"先手");
+      adjudicated=true;
+      const margin=250;
+      if(adjudicationScore>margin)state.winner="先手";
+      else if(adjudicationScore< -margin)state.winner="後手";
+    }
+    return {
+      winner:state.winner,plies:Math.min(plies+1,settings.maxPlies),nodes,
+      draw:!state.winner,adjudicated,adjudicationScore
+    };
   }
   async function compare(options={}){
     const pairs=Math.max(1,Math.min(5,Number(options.pairs)||2));
     const settings={
-      maxPlies:Math.max(12,Math.min(60,Number(options.maxPlies)||36)),
+      maxPlies:Math.max(20,Math.min(120,Number(options.maxPlies)||72)),
       maxDepth:Math.max(1,Math.min(3,Number(options.maxDepth)||2)),
       timeMs:Math.max(60,Math.min(500,Number(options.timeMs)||110)),
       maxNodes:Math.max(300,Math.min(5000,Number(options.maxNodes)||1100)),
@@ -80,7 +93,8 @@
       return {alreadyChampion:true,games:0,scoreRate:1,championWeights:champion,candidateWeights:candidate};
     }
     const totals=readStats(candidate);
-    const run={candidateWins:0,championWins:0,draws:0,games:0,nodes:0,plies:0};
+    totals.adjudicated=Number(totals.adjudicated)||0;
+    const run={candidateWins:0,championWins:0,draws:0,games:0,nodes:0,plies:0,adjudicated:0};
     let promoted=false,rejected=false;
     try{
       for(let pair=0;pair<pairs;pair++){
@@ -92,6 +106,7 @@
           const championWon=!result.draw&&!candidateWon;
           totals.games++;totals.nodes+=result.nodes;totals.plies+=result.plies;
           run.games++;run.nodes+=result.nodes;run.plies+=result.plies;
+          if(result.adjudicated){totals.adjudicated++;run.adjudicated++;}
           if(result.draw){totals.draws++;run.draws++;}
           else if(candidateWon){totals.candidateWins++;run.candidateWins++;}
           else{totals.championWins++;run.championWins++;}
@@ -117,7 +132,7 @@
       return {
         ...run,totalGames:totals.games,totalCandidateWins:totals.candidateWins,
         totalChampionWins:totals.championWins,totalDraws:totals.draws,
-        scoreRate,lowerBound:lower,promoted,rejected,
+        totalAdjudicated:totals.adjudicated,scoreRate,lowerBound:lower,promoted,rejected,
         candidateWeights:candidate,championWeights:champion,settings
       };
     } finally {if(!promoted&&!rejected)AI.setWeights(original);}
