@@ -74,7 +74,7 @@
     }catch(_){}
     return fallback;
   }
-  async function train(options={}){
+  async function trainSequential(options={}){
     const continuous=options.continuous===true;
     const games=Math.max(1,Math.min(4,Number(options.games)||2));
     const maxPlies=Math.max(20,Math.min(80,Number(options.maxPlies)||48));
@@ -147,6 +147,83 @@
     return {games:completed,decisive,candidateWins,championWins,draws,adjudicatedGames,firstWins:candidateWins,
       samples:sampleCount,nodes,tdUpdates,meanTdError:tdUpdates?totalTdError/tdUpdates:0,weights:candidate};
   }
+
+  function createWorker(){
+    return new Worker("./training-worker-20261107a.js?v=20261107parallel1");
+  }
+  async function trainParallel(options={}){
+    const continuous=options.continuous===true;
+    const games=Math.max(1,Math.min(4,Number(options.games)||2));
+    const parallel=Math.max(2,Math.min(4,Number(options.parallelGames)||2));
+    const maxPlies=Math.max(20,Math.min(80,Number(options.maxPlies)||48));
+    let previousGames=0;
+    try{const previous=JSON.parse(localStorage.getItem(STORAGE_KEY)||"null");previousGames=previous&&Number.isFinite(previous.games)?previous.games:0;}catch(_){}
+    loadWeights();
+    let candidate=AI.getWeights();
+    const champion=championWeights();
+    let completed=0,decisive=0,candidateWins=0,championWins=0,draws=0,adjudicatedGames=0,nodes=0,sampleCount=0,totalTdError=0,tdUpdates=0;
+    const workers=[];
+    try{
+      for(let i=0;i<parallel;i++)workers.push(createWorker());
+      for(let batch=0;continuous||completed<games;batch++){
+        if(options.shouldStop&&options.shouldStop())break;
+        const count=continuous?parallel:Math.min(parallel,games-completed);
+        const candidateSnapshot={...candidate},championSnapshot={...champion};
+        const jobs=Array.from({length:count},(_,i)=>new Promise((resolve,reject)=>{
+          const worker=workers[i];
+          const id="gungi-"+batch+"-"+i;
+          const cleanup=()=>{
+            worker.removeEventListener("message",onMessage);
+            worker.removeEventListener("error",onError);
+          };
+          const onMessage=event=>{
+            if(!event.data||event.data.id!==id)return;
+            cleanup();
+            if(event.data.ok)resolve(event.data.result);
+            else reject(new Error(event.data.error||"並列学習Workerでエラーが発生しました。"));
+          };
+          const onError=event=>{cleanup();reject(new Error(event.message||"並列学習Workerを実行できません。"));};
+          worker.addEventListener("message",onMessage);
+          worker.addEventListener("error",onError);
+          worker.postMessage({id,candidateWeights:candidateSnapshot,championWeights:championSnapshot,
+            candidateSide:(completed+i)%2===0?"先手":"後手",maxPlies});
+        }));
+        if(options.onProgress)options.onProgress({game:completed+1,games,ply:0,maxPlies,nodes,phase:"parallel",parallelGames:count,completedGames:completed});
+        const results=await Promise.all(jobs);
+        // All games in a batch use identical weights; apply their updates in a
+        // deterministic order only after every isolated worker has finished.
+        for(let i=0;i<results.length;i++){
+          const r=results[i];
+          nodes+=r.nodes||0;sampleCount+=r.trajectory.length;
+          if(r.adjudicated)adjudicatedGames++;
+          if(r.draw)draws++;
+          else{decisive++;if(r.finalTarget>0)candidateWins++;else championWins++;}
+          if(r.trajectory.length){
+            const learned=trainTrajectory(r.trajectory,r.finalTarget,candidate);
+            candidate=learned.weights;totalTdError+=learned.meanTdError;tdUpdates+=learned.updates;
+          }
+          completed++;
+          saveWeights(candidate,previousGames+completed);
+          if(options.onProgress)options.onProgress({
+            game:completed,games,ply:r.plies,nodes,phase:"learning",target:r.finalTarget,
+            adjudicated:r.adjudicated,adjudicationScore:r.adjudicationScore,adjudicatedGames,
+            parallelGames:results.length,completedGames:completed,
+            meanTdError:tdUpdates?totalTdError/tdUpdates:0,candidateWins,championWins,draws
+          });
+        }
+        AI.setWeights(candidate);
+        if(options.shouldStop&&options.shouldStop())break;
+      }
+    }finally{for(const worker of workers)worker.terminate();}
+    AI.setWeights(candidate);saveWeights(candidate,previousGames+completed);
+    return {games:completed,decisive,candidateWins,championWins,draws,adjudicatedGames,firstWins:candidateWins,
+      samples:sampleCount,nodes,tdUpdates,meanTdError:tdUpdates?totalTdError/tdUpdates:0,weights:candidate,parallelGames:parallel};
+  }
+  async function train(options={}){
+    const requested=Math.max(1,Math.min(4,Number(options.parallelGames)||2));
+    if(requested>1&&typeof Worker!=="undefined")return trainParallel({...options,parallelGames:requested});
+    return trainSequential(options);
+  }
   function otherSide(side){return side==="先手"?"後手":"先手";}
   function exportData(){
     let saved=null;
@@ -175,6 +252,6 @@
     saveWeights(AI.getWeights(),Math.max(0,Number(data.games)||0));
     return {weights:AI.getWeights(),games:Math.max(0,Number(data.games)||0)};
   }
-  window.GungiTraining=Object.freeze({train,loadWeights,saveWeights,makeStartPosition,exportData,importData});
+  window.GungiTraining=Object.freeze({train,trainSequential,trainParallel,loadWeights,saveWeights,makeStartPosition,exportData,importData});
   loadWeights();
 })();
