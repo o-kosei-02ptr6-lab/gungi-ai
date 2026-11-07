@@ -539,6 +539,7 @@
         trainingStatus.textContent = "学習完了。評価関数の重みをこのブラウザに保存しました。";
         trainingInfo.textContent = result.games + "局 ／ 決着 " + result.decisive + "局 ／ " +
           "先手勝利 " + result.firstWins + "局 ／ 学習局面 " + result.samples +
+          " ／ TD更新 " + result.tdUpdates + "回 ／ 平均TD誤差 " + result.meanTdError.toFixed(4) +
           " ／ 探索 " + result.nodes.toLocaleString() + "局面";
       } catch (error) {
         trainingStatus.textContent = "学習中にエラーが発生しました。";
