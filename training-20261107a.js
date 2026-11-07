@@ -124,7 +124,7 @@
       completed++;
       saveWeights(candidate,previousGames+completed);
       if(options.onProgress)options.onProgress({
-        game:game+1,games,ply,nodes,phase:"learning",target:finalTarget,
+        game:game+1,games,ply:plies,nodes,phase:"learning",target:finalTarget,
         meanTdError:tdUpdates?totalTdError/tdUpdates:0,candidateWins,championWins,draws
       });
       if(options.shouldStop&&options.shouldStop())break;
