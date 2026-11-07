@@ -14,6 +14,19 @@
   });
   const SIDES = Object.freeze(["先手", "後手"]);
   const CENTER = 4;
+  const WEIGHT_KEYS = ["material", "hand", "position", "activity", "mobility", "threats", "exposure", "kingSafety"];
+  const weights = Object.fromEntries(WEIGHT_KEYS.map(key => [key, 1]));
+  function setWeights(next) {
+    for (const key of WEIGHT_KEYS) {
+      const value = Number(next && next[key]);
+      if (Number.isFinite(value)) weights[key] = Math.max(0.25, Math.min(2.5, value));
+    }
+    return getWeights();
+  }
+  function getWeights() { return Object.freeze({ ...weights }); }
+  function weightedTotal(parts) {
+    return Math.round(WEIGHT_KEYS.reduce((sum, key) => sum + (parts[key] || 0) * weights[key], 0));
+  }
 
   function opponent(side) {
     return side === "先手" ? "後手" : "先手";
@@ -143,7 +156,7 @@
       kingSafety: Math.round(kingSafety),
       boardPieces,
       handPieces,
-      total: Math.round(material + hand + position + activity + mobility * 2.2 + threats + exposure + kingSafety)
+      total: weightedTotal({ material, hand, position, activity, mobility: mobility * 2.2, threats, exposure, kingSafety })
     };
   }
 
@@ -158,6 +171,7 @@
       terminal = state.winner === "先手" ? 100000000 : -100000000;
     }
     return {
+      weights: getWeights(),
       "先手": first,
       "後手": second,
       score: terminal === null ? first.total - second.total : terminal,
@@ -175,6 +189,8 @@
 
   window.GungiAI = Object.freeze({
     PIECE_VALUES,
+    setWeights,
+    getWeights,
     evaluate,
     evaluateBreakdown
   });
