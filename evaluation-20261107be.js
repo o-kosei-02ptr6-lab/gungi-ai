@@ -181,7 +181,7 @@
     }
 
     const marshal = E.getMarshalPosition(state, side);
-    if (E.isInCheck(state, side)) kingSafety -= 5200;
+    if (E.isInCheck(state, side)) kingSafety -= 8500;
     if (marshal) {
       let nearbyFriends = 0;
       const adjacentSquares = new Set();
@@ -208,6 +208,11 @@
       // A Marshal with legal escape squares is less vulnerable to a forced net.
       const marshalEscapes = moveList.filter(move => move.piece.id === marshal.piece.id).length;
       kingSafety += Math.min(4, marshalEscapes) * 7;
+      // 帥手中に逃げ道が少ないほど詰みに近い。相手側の評価にも反映され、
+      // 単に王手をかけるだけでなく、逃げ道を封じる攻めを選びやすくする。
+      if (E.isInCheck(state, side)) {
+        kingSafety -= Math.max(0, 4 - Math.min(4, marshalEscapes)) * 450;
+      }
     }
 
     const mobility = moveList.length;
