@@ -22,6 +22,7 @@
   const checkOverlay = document.getElementById("check-overlay");
   const aiButton = document.getElementById("ai-move");
   let aiThinking = false;
+  let trainingRunning = false;
   let checkOverlayTimer = null;
   let checkOverlayFadeTimer = null;
   function showCheck(side) {
@@ -511,5 +512,42 @@
     infoElement.textContent = "盤面を初期化しました。";
     render();
   });
+  const trainButton = document.getElementById("train-ai");
+  if (trainButton && window.GungiTraining) {
+    trainButton.addEventListener("click", async () => {
+      if (trainingRunning || aiThinking) return;
+      trainingRunning = true;
+      trainButton.disabled = true;
+      trainButton.textContent = "学習中…";
+      const trainingStatus = document.getElementById("training-status");
+      const trainingInfo = document.getElementById("training-info");
+      trainingStatus.textContent = "自己対局を開始しています。現在の盤面には影響しません。";
+      trainingInfo.textContent = "AI同士の対局と評価関数の調整を実行します。";
+      try {
+        const result = await window.GungiTraining.train({
+          games: 2,
+          maxPlies: 48,
+          onProgress: p => {
+            trainingStatus.textContent = p.phase === "selfplay"
+              ? "第" + p.game + "/" + p.games + "局：自己対局 " + p.ply + "/" + p.maxPlies + "手"
+              : "第" + p.game + "局の結果を評価関数へ反映中…";
+            trainingInfo.textContent = "探索局面 " + p.nodes.toLocaleString() + " ／ " +
+              (p.phase === "learning" ? "教師目標 " + Number(p.target).toFixed(3) : "学習データ収集中");
+          }
+        });
+        trainingStatus.textContent = "学習完了。評価関数の重みをこのブラウザに保存しました。";
+        trainingInfo.textContent = result.games + "局 ／ 決着 " + result.decisive + "局 ／ " +
+          "先手勝利 " + result.firstWins + "局 ／ 学習局面 " + result.samples +
+          " ／ 探索 " + result.nodes.toLocaleString() + "局面";
+      } catch (error) {
+        trainingStatus.textContent = "学習中にエラーが発生しました。";
+        trainingInfo.textContent = error && error.message ? error.message : String(error);
+      } finally {
+        trainingRunning = false;
+        trainButton.disabled = false;
+        trainButton.textContent = "自己対局学習を実行";
+      }
+    });
+  }
   render();
 })();
