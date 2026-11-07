@@ -54,17 +54,16 @@
     if(!piece)throw new Error(side+"の配置可能な駒がありません。");
     const squares=[];
     for(let row=0;row<E.SIZE;row++)for(let col=0;col<E.SIZE;col++){
-      // 帥は各陣営から見た1列目（自陣側の左端）にだけ配置する。
-      // 先手は盤面左端、後手は盤面右端。列番号は先手側の表示基準。
-      if(piece.name==="帥" && col!==(side==="先手"?E.SIZE-1:0))continue;
+      // 帥は各陣営の最前列に配置する。先手は最下段、後手は最上段。
+      if(piece.name==="帥" && row!==(side==="先手"?E.SIZE-1:0))continue;
       if(E.canPlacePiece(state,row,col,piece))squares.push({row,col});
     }
     if(!squares.length)throw new Error(side+"の配置可能なマスがありません。");
     const at=random(squares),result=E.placePiece(state,at.row,at.col,side,piece.id);
     if(!result.ok)throw new Error("自己対局の初期配置に失敗: "+result.reason);
     if(piece.name==="帥" && (state.board[at.row][at.col].length!==1 ||
-      at.col!==(side==="先手"?E.SIZE-1:0)))
-      throw new Error("帥を自陣側の1列目に単独配置できませんでした。");
+      at.row!==(side==="先手"?E.SIZE-1:0)))
+      throw new Error("帥を自陣の最前列に単独配置できませんでした。");
   }
   function makeStartPosition(){
     const state=E.createGameState();
@@ -205,7 +204,7 @@
   }
 
   function createWorker(){
-    return new Worker("./training-worker-20261107a.js?v=20261108marshalfirst1");
+    return new Worker("./training-worker-20261107a.js?v=20261108marshalfrontrow1");
   }
   async function trainParallel(options={}){
     const continuous=options.continuous===true;
