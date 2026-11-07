@@ -569,23 +569,36 @@
   const compareButton = document.getElementById("compare-ai");
   if (compareButton && window.GungiTournament) {
     compareButton.addEventListener("click", async () => {
-      if (trainingRunning || aiThinking || tournamentRunning) return;
+      if (trainingRunning || aiThinking) return;
+      if (tournamentRunning) {
+        tournamentRunning = false;
+        compareButton.disabled = true;
+        compareButton.textContent = "停止処理中…";
+        status.textContent = "停止要求を受け付けました。実行中の先後1組が終わった時点で停止します。";
+        return;
+      }
       tournamentRunning = true;
       compareButton.disabled = true;
       compareButton.textContent = "比較対局中…";
       const status = document.getElementById("compare-status");
       const info = document.getElementById("compare-info");
-      status.textContent = "同じ初期配置で先手・後手を入れ替え、基準AIとの対戦を開始しました。";
-      info.textContent = "各AIは同じ探索条件で着手します。72手で決着しない場合は、両者共通の固定評価基準で勝敗を判定します。現在の盤面には影響しません。";
+      compareButton.disabled = false;
+      compareButton.textContent = "検証を停止";
+      status.textContent = "統計的に有効な結論が出るまで、基準AIとの比較を自動で続けます。";
+      info.textContent = "同じ初期配置で先手・後手を入れ替えた対局を繰り返します。40局以上で95%信頼区間が50%を上回れば採用、下回れば不採用です。現在の盤面には影響しません。";
       try {
         const result = await window.GungiTournament.compare({
           pairs: 2, maxPlies: 72, maxDepth: 2, timeMs: 110, maxNodes: 1100, maxDeployCandidates: 3,
+          shouldStop: () => !tournamentRunning,
           onProgress: p => {
             if (p.phase === "game") {
-              status.textContent = "第" + p.pair + "/" + p.pairs + "組・第" + p.game +
+              status.textContent = "累計" + (p.totalGames||0) + "局・第" + p.pair + "組の第" + p.game +
                 "局を対戦中… " + p.plies + "手 ／ " + p.nodes.toLocaleString() + "局面";
             } else if (p.phase === "pairDone") {
-              status.textContent = p.pair + "/" + p.pairs + "組完了。合計" + p.games + "局を検証しました。";
+              status.textContent = "累計" + p.totalGames + "局。得点率 " + (p.scoreRate*100).toFixed(1) +
+                "% ／ 95%信頼区間 " + (p.lowerBound*100).toFixed(1) + "〜" + (p.upperBound*100).toFixed(1) + "%。検証を継続中…";
+            } else if (p.phase === "continuing") {
+              status.textContent = "累計" + p.totalGames + "局。統計的な結論が出るまで検証を続けています…";
             }
           }
         });
@@ -595,15 +608,17 @@
         } else {
           const rate = (result.scoreRate * 100).toFixed(1);
           const lower = (result.lowerBound * 100).toFixed(1);
-          status.textContent = "累計 " + result.totalGames + "局。学習AIの得点率：" + rate + "%";
+          status.textContent = result.stopped
+            ? "検証を停止しました。累計" + result.totalGames + "局のデータを保存しています。"
+            : "検証完了。累計" + result.totalGames + "局。学習AIの得点率：" + rate + "%";
           info.textContent = "今回：" + result.candidateWins + "勝 ／ 最良AI " + result.championWins +
             "勝 ／ 引き分け " + result.draws + "局（" + result.games + "局、評価判定 " + result.adjudicated + "局）。累計：" +
             result.totalCandidateWins + "勝 ／ 最良AI " + result.totalChampionWins +
-            "勝 ／ 引き分け " + result.totalDraws + "局。評価判定 " + result.totalAdjudicated + "局。95%信頼下限の目安 " + lower + "%。 " +
-            (result.promoted ? "基準を満たしたため、新しい評価関数を最良AIとして保存しました。" :
-              result.rejected ? "十分な対局数で改善を確認できなかったため、最良AIの評価関数に戻しました。" :
-              "まだ採用判定に必要な対局数・信頼度に達していません。結果は次回以降に累積します。") +
-            " 採用には40局以上かつ95%信頼下限が50%を超えることが必要です。";
+            "勝 ／ 引き分け " + result.totalDraws + "局。評価判定 " + result.totalAdjudicated +
+            "局。95%信頼区間 " + lower + "〜" + (result.upperBound*100).toFixed(1) + "%。 " +
+            (result.promoted ? "統計的に改善が確認されたため、新しい評価関数を最良AIとして保存しました。" :
+              result.rejected ? "統計的に改善が確認できなかったため、最良AIの評価関数に戻しました。" :
+              "途中停止しました。累積データは保存されているため、次回は続きから検証できます。");
         }
       } catch (error) {
         status.textContent = "比較中にエラーが発生しました。";
@@ -611,7 +626,7 @@
       } finally {
         tournamentRunning = false;
         compareButton.disabled = false;
-        compareButton.textContent = "基準AIと実力を比較（4局）";
+        compareButton.textContent = "基準AIと実力を比較";
       }
     });
   }
