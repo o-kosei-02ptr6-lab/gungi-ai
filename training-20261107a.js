@@ -112,6 +112,17 @@
     }catch(_){}
     return fallback;
   }
+  const GAME_RECORDS_KEY="gungi-ai-tournament-games-v1";
+  const MAX_SAVED_GAMES=40;
+  function saveTrainingGameRecord(record){
+    if(!record||!record.winner||record.draw||!record.finalState)return;
+    try{
+      const stored=JSON.parse(localStorage.getItem(GAME_RECORDS_KEY)||"[]");
+      const records=Array.isArray(stored)?stored.filter(item=>item&&item.winner&&!item.draw):[];
+      records.push(record);
+      localStorage.setItem(GAME_RECORDS_KEY,JSON.stringify(records.slice(-MAX_SAVED_GAMES)));
+    }catch(_){}
+  }
   async function trainSequential(options={}){
     const continuous=options.continuous===true;
     const games=Math.max(1,Math.min(4,Number(options.games)||2));
@@ -153,6 +164,7 @@
         ?(state.winner===candidateSide?1:-1):0;
       if(adjudicated)adjudicatedGames++;
       if(state.phase==="finished"){
+        saveTrainingGameRecord({id:"training-"+Date.now().toString(36)+"-"+game,pair:null,game:game+1,source:"自己学習",candidateSide,winner:state.winner,draw:false,plies:Math.min(plies+1,maxPlies),savedAt:new Date().toISOString(),finalState:{board:state.board,hands:state.hands,turn:state.turn,phase:state.phase,winner:state.winner,moveNumber:state.moveNumber}});
         decisive++;
         if(state.winner===candidateSide)candidateWins++;else championWins++;
       }else draws++;
@@ -228,7 +240,11 @@
           nodes+=r.nodes||0;sampleCount+=r.trajectory.length;
           if(r.adjudicated)adjudicatedGames++;
           if(r.draw)draws++;
-          else{decisive++;if(r.finalTarget>0)candidateWins++;else championWins++;}
+          else{
+            decisive++;
+            if(r.finalTarget>0)candidateWins++;else championWins++;
+            saveTrainingGameRecord({id:"training-"+Date.now().toString(36)+"-"+completed,pair:null,game:completed+1,source:"自己学習",candidateSide:r.candidateSide,winner:r.winner,draw:false,plies:r.plies,savedAt:new Date().toISOString(),finalState:r.finalState});
+          }
           if(r.trajectory.length){
             const learned=trainTrajectory(r.trajectory,r.finalTarget,candidate);
             candidate=learned.weights;totalTdError+=learned.meanTdError;tdUpdates+=learned.updates;
