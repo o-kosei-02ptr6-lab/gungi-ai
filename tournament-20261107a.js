@@ -6,6 +6,10 @@
   const INITIAL=Object.freeze({material:1,hand:1,position:1,activity:1,mobility:1,threats:1,exposure:1,kingSafety:1});
   const CHAMPION_KEY="gungi-ai-champion-weights-v1";
   const STATS_KEY="gungi-ai-tournament-stats-v2";
+  const GAMES_KEY="gungi-ai-tournament-games-v1";
+  const MAX_SAVED_GAMES=40;
+  function saveGameRecord(record){try{const records=JSON.parse(localStorage.getItem(GAMES_KEY)||"[]");const next=Array.isArray(records)?records:[];next.push(record);localStorage.setItem(GAMES_KEY,JSON.stringify(next.slice(-MAX_SAVED_GAMES)));}catch(_){}}
+  function listGameRecords(){try{const records=JSON.parse(localStorage.getItem(GAMES_KEY)||"[]");return Array.isArray(records)?records:[];}catch(_){return [];}}
   const other=side=>side==="先手"?"後手":"先手";
   const clone=S.cloneState;
   const featureKeys=Object.keys(INITIAL);
@@ -73,7 +77,8 @@
     const adjudicated=false,adjudicationScore=null;
     return {
       winner:state.winner,plies:Math.min(plies+1,settings.maxPlies),nodes,
-      draw:!state.winner,adjudicated,adjudicationScore
+      draw:!state.winner,adjudicated,adjudicationScore,
+      finalState:{board:state.board,hands:state.hands,turn:state.turn,phase:state.phase,winner:state.winner,moveNumber:state.moveNumber}
     };
   }
   async function compare(options={}){
@@ -103,7 +108,8 @@
           const start=T.makeStartPosition();
           const first=await playOne(start,"後手",candidate,champion,settings,p=>options.onProgress&&options.onProgress({...p,pair:pairNumber,game:1,totalGames:totals.games}));
           const second=await playOne(start,"先手",candidate,champion,settings,p=>options.onProgress&&options.onProgress({...p,pair:pairNumber,game:2,totalGames:totals.games}));
-          for(const [result,candidateSide] of [[first,"後手"],[second,"先手"]]){
+          for(const [result,candidateSide,gameNumber] of [[first,"後手",1],[second,"先手",2]]){
+            saveGameRecord({id:Date.now().toString(36)+"-"+totals.games, pair:pairNumber, game:gameNumber, candidateSide, winner:result.winner||null, draw:!!result.draw, plies:result.plies, savedAt:new Date().toISOString(), finalState:result.finalState});
             const candidateWon=!result.draw&&result.winner===candidateSide;
             const championWon=!result.draw&&!candidateWon;
             totals.games++;totals.nodes+=result.nodes;totals.plies+=result.plies;
@@ -171,5 +177,5 @@
       };
     } finally {if(!promoted&&!rejected)AI.setWeights(original);}
   }
-  window.GungiTournament=Object.freeze({compare,baselineWeights:readChampion,championWeights:readChampion});
+  window.GungiTournament=Object.freeze({compare,baselineWeights:readChampion,championWeights:readChampion,listGameRecords});
 })();
