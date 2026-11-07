@@ -99,8 +99,7 @@
     const run={candidateWins:0,championWins:0,draws:0,games:0,nodes:0,plies:0,adjudicated:0};
     let promoted=false,rejected=false,stopped=false;
     try{
-      // Continue in paired batches until the 95% confidence interval separates
-      // from 50%, or the user explicitly requests a stop.
+      // Use a 90% confidence interval and a bounded sample for a faster, honest verdict.
       while(!promoted&&!rejected&&!stopped&&totals.games<40){
         for(let pair=0;pair<pairsPerBatch;pair++){
           if(options.shouldStop&&options.shouldStop()){stopped=true;break;}
@@ -151,6 +150,7 @@
       const score=totals.candidateWins+totals.draws*.5;
       const scoreRate=totals.games?score/totals.games:0;
       const bounds=wilsonBounds(scoreRate,totals.games);
+      const inconclusive=!promoted&&!rejected&&!stopped&&totals.games>=40;
       return {
         ...run,totalGames:totals.games,totalCandidateWins:totals.candidateWins,
         totalChampionWins:totals.championWins,totalDraws:totals.draws,
