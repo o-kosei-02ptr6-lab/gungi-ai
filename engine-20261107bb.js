@@ -64,6 +64,8 @@
     const piece = hand[index];
     const hasPlacedAnyPiece = state.history.some(entry => entry.type === "place" && entry.side === side);
     if (!hasPlacedAnyPiece && piece.name !== "帥") return { ok: false, reason: "配置フェーズでは、最初に帥を配置してください。" };
+    if (!hasPlacedAnyPiece && piece.name === "帥" && col !== (side === "先手" ? SIZE - 1 : 0))
+      return { ok: false, reason: "帥は自陣から見た1列目にのみ配置できます。" };
     if (piece.side === "先手" && row < 6) return { ok: false, reason: "先手は下3段（7〜9段目）にのみ配置できます。" };
     if (piece.side === "後手" && row > 2) return { ok: false, reason: "後手は上3段（1〜3段目）にのみ配置できます。" };
     if (!canPlacePiece(state, row, col, piece)) {
