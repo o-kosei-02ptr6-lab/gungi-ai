@@ -389,14 +389,14 @@
     pendingMove = null;
     moveChoiceElement.hidden = true;
     messageElement.textContent = state.turn + "のAIが次の手を考えています。";
-    infoElement.textContent = "反復深化・αβ枝刈りで探索中です。";
+    infoElement.textContent = "反復深化・αβ枝刈り・手順序改善・PVSで最大5秒間探索します。";
     render();
     try {
       const result = await window.GungiSearch.findBestMove(state, {
-        maxDepth: 4,
-        timeMs: 1800,
-        maxNodes: 60000,
-        maxDeployCandidates: 10,
+        maxDepth: 6,
+        timeMs: 5000,
+        maxNodes: 180000,
+        maxDeployCandidates: 12,
         onProgress: progress => {
           messageElement.textContent = "AI思考中… 深さ " + progress.depth + " ／ " + progress.nodes.toLocaleString() + "局面を探索";
         }
