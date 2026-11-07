@@ -143,7 +143,7 @@
     loadWeights();
     let candidate=AI.getWeights();
     const champion=championWeights();
-    let completed=0,decisive=0,candidateWins=0,championWins=0,draws=0,adjudicatedGames=0,nodes=0,sampleCount=0,totalTdError=0,tdUpdates=0;
+    let completed=0,decisive=0,candidateWins=0,championWins=0,firstWins=0,secondWins=0,draws=0,adjudicatedGames=0,nodes=0,sampleCount=0,totalTdError=0,tdUpdates=0;
     for(let game=0;continuous||game<games;game++){
       if(options.shouldStop&&options.shouldStop())break;
       const state=makeStartPosition(),candidateSide=game%2===0?"先手":"後手",trajectory=[];
@@ -179,6 +179,7 @@
       if(!isDraw){
         decisive++;
         if(state.winner===candidateSide)candidateWins++;else championWins++;
+        if(state.winner==="先手")firstWins++;else secondWins++;
       }else draws++;
       sampleCount+=trajectory.length;
       AI.setWeights(candidate);
@@ -193,13 +194,13 @@
       if(options.onProgress)options.onProgress({
         game:game+1,games,ply:plies,nodes,phase:"learning",target:finalTarget,
         adjudicated,adjudicationScore,adjudicatedGames,
-        meanTdError:tdUpdates?totalTdError/tdUpdates:0,candidateWins,championWins,draws
+        meanTdError:tdUpdates?totalTdError/tdUpdates:0,candidateWins,championWins,firstWins,secondWins,draws
       });
       if(options.shouldStop&&options.shouldStop())break;
     }
     AI.setWeights(candidate);
     saveWeights(candidate,previousGames+completed);
-    return {games:completed,decisive,candidateWins,championWins,draws,adjudicatedGames,firstWins:candidateWins,
+    return {games:completed,decisive,candidateWins,championWins,firstWins,secondWins,draws,adjudicatedGames,
       samples:sampleCount,nodes,tdUpdates,meanTdError:tdUpdates?totalTdError/tdUpdates:0,weights:candidate};
   }
 
@@ -216,7 +217,7 @@
     loadWeights();
     let candidate=AI.getWeights();
     const champion=championWeights();
-    let completed=0,decisive=0,candidateWins=0,championWins=0,draws=0,adjudicatedGames=0,nodes=0,sampleCount=0,totalTdError=0,tdUpdates=0;
+    let completed=0,decisive=0,candidateWins=0,championWins=0,firstWins=0,secondWins=0,draws=0,adjudicatedGames=0,nodes=0,sampleCount=0,totalTdError=0,tdUpdates=0;
     const workers=[];
     try{
       for(let i=0;i<parallel;i++)workers.push(createWorker());
@@ -252,7 +253,7 @@
           nodes+=r.nodes||0;sampleCount+=r.trajectory.length;
           if(r.adjudicated)adjudicatedGames++;
           if(r.draw)draws++;
-          else{decisive++;if(r.finalTarget>0)candidateWins++;else championWins++;}
+          else{decisive++;if(r.finalTarget>0)candidateWins++;else championWins++;if(r.winner==="先手")firstWins++;else secondWins++;}
           saveTrainingGameRecord({id:"training-"+Date.now().toString(36)+"-"+completed,pair:null,game:completed+1,source:"自己学習",candidateSide:r.candidateSide,winner:r.winner||null,draw:!!r.draw,plies:r.plies,savedAt:new Date().toISOString(),finalState:r.finalState});
           if(r.trajectory.length){
             const learned=trainTrajectory(r.trajectory,r.finalTarget,candidate);
@@ -264,7 +265,7 @@
             game:completed,games,ply:r.plies,nodes,phase:"learning",target:r.finalTarget,
             adjudicated:r.adjudicated,adjudicationScore:r.adjudicationScore,adjudicatedGames,
             parallelGames:results.length,completedGames:completed,
-            meanTdError:tdUpdates?totalTdError/tdUpdates:0,candidateWins,championWins,draws
+            meanTdError:tdUpdates?totalTdError/tdUpdates:0,candidateWins,championWins,firstWins,secondWins,draws
           });
         }
         AI.setWeights(candidate);
@@ -272,7 +273,7 @@
       }
     }finally{for(const worker of workers)worker.terminate();}
     AI.setWeights(candidate);saveWeights(candidate,previousGames+completed);
-    return {games:completed,decisive,candidateWins,championWins,draws,adjudicatedGames,firstWins:candidateWins,
+    return {games:completed,decisive,candidateWins,championWins,firstWins,secondWins,draws,adjudicatedGames,
       samples:sampleCount,nodes,tdUpdates,meanTdError:tdUpdates?totalTdError/tdUpdates:0,weights:candidate,parallelGames:parallel};
   }
   async function train(options={}){
