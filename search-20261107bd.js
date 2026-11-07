@@ -163,17 +163,22 @@
   // 移動・捕獲・ツケ・「新」による合い駒を同じ基準で検査する。
   function getSearchActions(state, side, maxDeployCandidates) {
     const actions = generateActions(state, side, maxDeployCandidates);
-    // 軍儀では帥手を受けても、帥手を解消しない着手自体は禁止されない。
-    // その局面では全ての合法手を残し、相手の帥を取る反撃も探索する。
-    if (E.isInCheck(state, side)) return actions;
+    const inCheck = E.isInCheck(state, side);
     const safeActions = [];
     for (const action of actions) {
       const child = applyAction(state, action);
-      if (child && (child.phase === "finished" || !E.isInCheck(child, side))) {
+      // 帥手中は、着手後に自分の帥手が解消される手だけを許す。
+      // 相手の帥を取って終局する手も、通常の終局勝ちとして許可する。
+      if (child && (
+        (child.phase === "finished" && child.winner === side) ||
+        !E.isInCheck(child, side)
+      )) {
         safeActions.push(action);
       }
     }
-    // 安全な手が一つもない局面では、探索を続けて最も粘れる手を選ぶ。
+    // 帥手中に回避手がなければ、非回避手へフォールバックしない。
+    if (inCheck) return safeActions;
+    // 通常局面では従来どおり、自分の帥を危険にさらす手を除外する。
     return safeActions.length ? safeActions : actions;
   }
 
@@ -301,7 +306,7 @@
             ? getSearchActions(position, position.turn, maxDeployCandidates)
             : generateCaptureActions(position, position.turn);
           const ordered = orderActions(position, tactical, null, ply, killers, historyScores);
-          if (inCheck && !ordered.length) return AI.evaluate(position, position.turn);
+          if (inCheck && !ordered.length) return -MATE + ply;
           // 長い連続王手では探索資源を守りつつ、少なくとも王手回避手を
           // 1手実行してから評価する。王手中の静止評価による誤判定を防ぐ。
           if (inCheck && qply >= 10) {
@@ -315,7 +320,7 @@
                 : -AI.evaluate(child, child.turn);
               if (score > bestEvasion) bestEvasion = score;
             }
-            return bestEvasion === -INF ? AI.evaluate(position, position.turn) : bestEvasion;
+            return bestEvasion === -INF ? -MATE + ply : bestEvasion;
           }
           for (const action of ordered) {
             checkStop();
@@ -353,7 +358,7 @@
             if (alpha >= beta) return cached.score;
           }
           const actions = orderActions(position, getSearchActions(position, position.turn, maxDeployCandidates), cached && cached.best, ply, killers, historyScores);
-          if (!actions.length) return AI.evaluate(position, position.turn);
+          if (!actions.length) return E.isInCheck(position, position.turn) ? -MATE + ply : AI.evaluate(position, position.turn);
           let bestScore = -INF;
           let bestAction = null;
           for (let index = 0; index < actions.length; index += 1) {
