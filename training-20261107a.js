@@ -180,7 +180,7 @@
   }
 
   function createWorker(){
-    return new Worker("./training-worker-20261107a.js?v=20261107outcome1");
+    return new Worker("./training-worker-20261107a.js?v=20261107outcome2");
   }
   async function trainParallel(options={}){
     const continuous=options.continuous===true;
