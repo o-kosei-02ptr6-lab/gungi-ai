@@ -33,17 +33,29 @@
     if(state.phase!=="move")throw new Error("初期配置を完了できませんでした。");
     return state;
   }
-  function sigmoid(x){return 1/(1+Math.exp(-Math.max(-12,Math.min(12,x))));}
-  function trainWeights(samples,target,initial){
-    const weights={...initial};
-    const predict=s=>sigmoid(FEATURES.reduce((sum,k)=>sum+weights[k]*(s[k]||0)/1800,0));
-    const loss=()=>samples.reduce((sum,s)=>{const p=Math.max(.0001,Math.min(.9999,predict(s)));return sum-(target*Math.log(p)+(1-target)*Math.log(1-p));},0)/Math.max(1,samples.length);
-    const lossBefore=loss();
-    for(let epoch=0;epoch<5;epoch++)for(const sample of samples){
-      const p=predict(sample);
-      for(const key of FEATURES)weights[key]=Math.max(.25,Math.min(2.5,weights[key]+.035*(target-p)*(sample[key]||0)/1800));
+  // TD(lambda): learn from each transition, not one label copied across a whole game.
+  function valueOf(features,weights){
+    const raw=FEATURES.reduce((sum,key)=>sum+weights[key]*(features[key]||0),0)/1800;
+    return Math.tanh(Math.max(-8,Math.min(8,raw)));
+  }
+  function trainTrajectory(trajectory,finalTarget,initial){
+    const weights={...initial},trace=Object.fromEntries(FEATURES.map(key=>[key,0]));
+    const alpha=.0025,gamma=.985,lambda=.72;
+    let absoluteError=0,updates=0;
+    for(let i=0;i<trajectory.length;i++){
+      const current=trajectory[i];
+      const currentValue=valueOf(current,weights);
+      const terminal=i===trajectory.length-1;
+      const nextValue=terminal?finalTarget:valueOf(trajectory[i+1],weights);
+      const delta=nextValue-gamma*0-currentValue;
+      for(const key of FEATURES){
+        trace[key]=gamma*lambda*trace[key]+(current[key]||0)/1800;
+        const gradient=1-currentValue*currentValue;
+        weights[key]=Math.max(.25,Math.min(2.5,weights[key]+alpha*delta*gradient*trace[key]));
+      }
+      absoluteError+=Math.abs(delta);updates++;
     }
-    return {weights,lossBefore,lossAfter:loss()};
+    return {weights,meanTdError:updates?absoluteError/updates:0,updates};
   }
   function loadWeights(){
     try{const saved=JSON.parse(localStorage.getItem(STORAGE_KEY)||"null");if(saved&&saved.weights)AI.setWeights(saved.weights);}catch(_){}
@@ -58,30 +70,42 @@
     let previousGames=0;
     try{const previous=JSON.parse(localStorage.getItem(STORAGE_KEY)||"null");previousGames=previous&&Number.isFinite(previous.games)?previous.games:0;}catch(_){}
     loadWeights();
-    let completed=0,decisive=0,firstWins=0,nodes=0,sampleCount=0;
+    let completed=0,decisive=0,firstWins=0,nodes=0,sampleCount=0,totalTdError=0,tdUpdates=0;
     for(let game=0;game<games;game++){
-      const state=makeStartPosition(),samples=[];
+      const state=makeStartPosition(),trajectory=[];
       for(let ply=0;ply<maxPlies&&state.phase==="move";ply++){
-        samples.push(snapshotFeatures(state));
+        trajectory.push(snapshotFeatures(state));
         const result=await S.findBestMove(state,{maxDepth:2,timeMs:130,maxNodes:1400,maxDeployCandidates:3});
         nodes+=result.nodes||0;
         if(!result.bestMove)break;
-        const a=result.bestMove;
-        const applied=a.type==="deploy"?E.deployPiece(state,a.row,a.col,state.turn,a.pieceId):
-          E.movePiece(state,a.from.row,a.from.col,a.to.row,a.to.col,a.landingMode);
+        const action=result.bestMove;
+        const applied=action.type==="deploy"
+          ?E.deployPiece(state,action.row,action.col,state.turn,action.pieceId)
+          :E.movePiece(state,action.from.row,action.from.col,action.to.row,action.to.col,action.landingMode);
         if(!applied||!applied.ok)break;
         if(options.onProgress)options.onProgress({game:game+1,games,ply:ply+1,maxPlies,nodes,phase:"selfplay"});
         if(ply%4===3)await new Promise(resolve=>setTimeout(resolve,0));
       }
-      const target=state.phase==="finished"?(state.winner==="先手"?1:0):sigmoid(AI.evaluate(state,"先手")/2600);
-      if(state.phase==="finished"){decisive++;if(target===1)firstWins++;}
-      sampleCount+=samples.length;
-      const learned=trainWeights(samples,target,AI.getWeights());
-      AI.setWeights(learned.weights);completed++;
-      if(options.onProgress)options.onProgress({game:game+1,games,ply:state.moveNumber-1,maxPlies,nodes,phase:"learning",target,lossBefore:learned.lossBefore,lossAfter:learned.lossAfter});
+      // The target is always expressed from 先手's perspective.
+      const finalTarget=state.phase==="finished"
+        ?(state.winner==="先手"?1:-1)
+        :valueOf(snapshotFeatures(state),AI.getWeights());
+      if(state.phase==="finished"){decisive++;if(state.winner==="先手")firstWins++;}
+      sampleCount+=trajectory.length;
+      if(trajectory.length){
+        const learned=trainTrajectory(trajectory,finalTarget,AI.getWeights());
+        AI.setWeights(learned.weights);
+        totalTdError+=learned.meanTdError;tdUpdates+=learned.updates;
+      }
+      completed++;
+      if(options.onProgress)options.onProgress({
+        game:game+1,games,ply:state.moveNumber-1,maxPlies,nodes,phase:"learning",
+        target:finalTarget,meanTdError:tdUpdates?totalTdError/tdUpdates:0
+      });
     }
     const weights=AI.getWeights();saveWeights(weights,previousGames+completed);
-    return {games:completed,decisive,firstWins,samples:sampleCount,nodes,weights};
+    return {games:completed,decisive,firstWins,samples:sampleCount,nodes,tdUpdates,
+      meanTdError:tdUpdates?totalTdError/tdUpdates:0,weights};
   }
   function exportData(){
     let saved=null;
