@@ -27,6 +27,7 @@
     return {...INITIAL};
   }
   function saveChampion(weights){
+    T.createBackup();
     try{localStorage.setItem(CHAMPION_KEY,JSON.stringify({weights,updatedAt:new Date().toISOString()}));}catch(_){}
   }
   function readStats(candidate){
@@ -36,7 +37,7 @@
     }catch(_){}
     return {fingerprint:fingerprint(candidate),games:0,candidateWins:0,championWins:0,draws:0,adjudicated:0,pairs:0,nodes:0,plies:0};
   }
-  function saveStats(stats){try{localStorage.setItem(STATS_KEY,JSON.stringify(stats));}catch(_){}}
+  function saveStats(stats){T.createBackup();try{localStorage.setItem(STATS_KEY,JSON.stringify(stats));}catch(_){}}
   function wilsonBounds(rate,n){
     if(!n)return {lower:0,upper:1};
     const z=1.645,z2=z*z,den=1+z2/n;
