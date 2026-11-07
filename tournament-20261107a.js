@@ -90,12 +90,13 @@
         for(const [result,candidateSide] of [[first,"後手"],[second,"先手"]]){
           const candidateWon=!result.draw&&result.winner===candidateSide;
           const championWon=!result.draw&&!candidateWon;
-          totals.games++;totals.pairs++;totals.nodes+=result.nodes;totals.plies+=result.plies;
+          totals.games++;totals.nodes+=result.nodes;totals.plies+=result.plies;
           run.games++;run.nodes+=result.nodes;run.plies+=result.plies;
           if(result.draw){totals.draws++;run.draws++;}
           else if(candidateWon){totals.candidateWins++;run.candidateWins++;}
           else{totals.championWins++;run.championWins++;}
         }
+        totals.pairs++;
         saveStats(totals);
         if(options.onProgress)options.onProgress({phase:"pairDone",pair:pair+1,pairs,...run,totalGames:totals.games});
       }
