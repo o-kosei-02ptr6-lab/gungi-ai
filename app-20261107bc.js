@@ -562,7 +562,7 @@
       try {
         result = await window.GungiTraining.train({
           continuous: true,
-          maxPlies: 72,
+          maxPlies: 144,
           parallelGames: 2,
           shouldStop: () => trainingStopRequested,
           onProgress: p => {
@@ -613,7 +613,7 @@
       info.textContent = "同じ初期配置で先手・後手を入れ替えた対局を繰り返します。比較開始時点の学習AIと最良AIの重みを固定し、同じ初期配置で先手・後手を入れ替えて比較します。最低40局から90%信頼区間を確認し、最大200局まで検証します。現在の盤面には影響しません。";
       try {
         const result = await window.GungiTournament.compare({
-          pairs: 2, maxPlies: 72, maxDepth: 2, timeMs: 60, maxNodes: 700, maxDeployCandidates: 2,
+          pairs: 2, maxPlies: 144, maxDepth: 2, timeMs: 60, maxNodes: 700, maxDeployCandidates: 2,
           shouldStop: () => !tournamentRunning,
           onProgress: p => {
             if (p.phase === "game") {
