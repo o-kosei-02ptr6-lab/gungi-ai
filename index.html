@@ -47,6 +47,13 @@
       <p id="training-status" role="status">まだ学習していません。</p>
       <p id="training-info">「自己対局学習を実行」を押すと開始します。</p>
       <div class="transfer-tools">
+        <h3>学習AIの実力検証</h3>
+        <p>学習AIと初期評価AI（全重み1.0）を同じ初期配置から対戦させます。各組で先手・後手を入れ替え、先手有利の影響を抑えます。短時間の対戦結果だけで強くなったと断定せず、勝率の目安として確認します。</p>
+        <button id="compare-ai" type="button">基準AIと実力を比較（4局）</button>
+        <p id="compare-status" role="status">比較はまだ実行されていません。</p>
+        <p id="compare-info">学習後に比較すると、調整した重みの効果を確認できます。</p>
+      </div>
+      <div class="transfer-tools">
         <h3>学習結果の引き継ぎ</h3>
         <p>元の端末でデータを書き出してコピーし、引き継ぎ先の端末で下の欄に貼り付けて読み込んでください。</p>
         <button id="export-training" type="button">引き継ぎデータを書き出す</button>
