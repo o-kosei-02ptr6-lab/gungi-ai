@@ -164,17 +164,23 @@
         (1 + Math.min(2, item.attackers - 1) * 0.3));
     }
 
-    // 敵陣への進出度に応じて、敵帥への脅威を固定値で加点する。
-    // 奥3列は各+20、4列目は+10、5列目は+5。帥との距離による倍率は付けない。
+    // 敵陣への進出度に応じた基本ボーナスに、敵帥とのマンハッタン距離倍率を掛ける。
+    // 奥3列は各+20、4列目は+10、5列目は+5。
+    // 距離2以内は×1.8、3〜4は×1.35、5以上は×1.0。
     let marshalPressure = 0;
     for (let row = 0; row < E.SIZE; row += 1) {
       for (let col = 0; col < E.SIZE; col += 1) {
         const stack = state.board[row][col];
         if (!stack.length || stack[stack.length - 1].side !== side) continue;
         const advance = advancement(row, side);
-        if (advance >= 6) marshalPressure += 20;
-        else if (advance === 5) marshalPressure += 10;
-        else if (advance === 4) marshalPressure += 5;
+        const baseBonus = advance >= 6 ? 20 : advance === 5 ? 10 : advance === 4 ? 5 : 0;
+        if (!baseBonus) continue;
+        const distanceToEnemyMarshal = enemyMarshal
+          ? Math.abs(row - enemyMarshal.row) + Math.abs(col - enemyMarshal.col)
+          : 8;
+        const distanceMultiplier = distanceToEnemyMarshal <= 2 ? 1.8
+          : distanceToEnemyMarshal <= 4 ? 1.35 : 1.0;
+        marshalPressure += baseBonus * distanceMultiplier;
       }
     }
     threats += Math.min(180, marshalPressure);
