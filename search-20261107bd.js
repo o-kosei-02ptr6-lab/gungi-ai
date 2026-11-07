@@ -174,14 +174,27 @@
     return safeActions.length ? safeActions : actions;
   }
 
-  function orderActions(state, actions, ttMove) {
+  function isQuietAction(state, action) {
+    if (action.type === "deploy") return true;
+    const target = state.board[action.to.row][action.to.col];
+    return !target.length || target[target.length - 1].side === state.turn;
+  }
+
+  function orderActions(state, actions, ttMove, ply = 0, killers = null, historyScores = null) {
     const preferred = actionKey(ttMove);
+    const killerList = killers && killers.get(ply) || [];
     return actions.map(action => {
       let score = actionKey(action) === preferred ? 100000000 : 0;
       if (action.type === "deploy") {
         const piece = state.hands[state.turn].find(p => p.id === action.pieceId);
         if (piece) score += deploymentPriority(state, state.turn, piece, action.row, action.col) * 3;
       } else {
+        if (isQuietAction(state, action)) {
+          const key = actionKey(action);
+          const killerIndex = killerList.indexOf(key);
+          if (killerIndex >= 0) score += 42000 - killerIndex * 4000;
+          if (historyScores) score += historyScores.get(key) || 0;
+        }
         const target = state.board[action.to.row][action.to.col];
         const attacker = state.board[action.from.row][action.from.col].slice(-1)[0];
         if (target.length && target[target.length - 1].side !== state.turn) {
@@ -236,6 +249,21 @@
         const deadline = started + timeMs;
         const table = new Map();
         const stats = { nodes: 0, qnodes: 0, cutoffs: 0, ttHits: 0 };
+        // Killer moves and history scores improve ordering of quiet moves.
+        // They are local to one search and never alter legal move generation.
+        const killers = new Map();
+        const historyScores = new Map();
+        function rememberQuietCutoff(position, action, depth, ply) {
+          if (!isQuietAction(position, action)) return;
+          const key = actionKey(action);
+          const list = killers.get(ply) || [];
+          if (!list.includes(key)) {
+            list.unshift(key);
+            if (list.length > 2) list.length = 2;
+            killers.set(ply, list);
+          }
+          historyScores.set(key, Math.min(200000, (historyScores.get(key) || 0) + depth * depth * 32));
+        }
         const checkStop = () => {
           if (stats.nodes >= maxNodes || now() >= deadline) throw new SearchAbort();
         };
@@ -269,7 +297,7 @@
           const tactical = inCheck
             ? getSearchActions(position, position.turn, maxDeployCandidates)
             : generateCaptureActions(position, position.turn);
-          const ordered = orderActions(position, tactical, null);
+          const ordered = orderActions(position, tactical, null, ply, killers, historyScores);
           if (inCheck && !ordered.length) return -MATE + ply;
           for (const action of ordered) {
             checkStop();
@@ -301,15 +329,26 @@
             else if (cached.flag === "upper") beta = Math.min(beta, cached.score);
             if (alpha >= beta) return cached.score;
           }
-          const actions = orderActions(position, getSearchActions(position, position.turn, maxDeployCandidates), cached && cached.best);
+          const actions = orderActions(position, getSearchActions(position, position.turn, maxDeployCandidates), cached && cached.best, ply, killers, historyScores);
           if (!actions.length) return AI.evaluate(position, position.turn);
           let bestScore = -INF;
           let bestAction = null;
-          for (const action of actions) {
+          for (let index = 0; index < actions.length; index += 1) {
+            const action = actions[index];
             checkStop();
             const child = applyAction(position, action);
             if (!child) continue;
-            const score = -negamax(child, depth - 1, -beta, -alpha, ply + 1);
+            let score;
+            if (index === 0) {
+              score = -negamax(child, depth - 1, -beta, -alpha, ply + 1);
+            } else {
+              // Principal Variation Search: later moves first receive a null-window
+              // probe, and are fully re-searched only when they improve alpha.
+              score = -negamax(child, depth - 1, -alpha - 1, -alpha, ply + 1);
+              if (score > alpha && score < beta) {
+                score = -negamax(child, depth - 1, -beta, -alpha, ply + 1);
+              }
+            }
             if (score > bestScore) {
               bestScore = score;
               bestAction = action;
@@ -317,6 +356,7 @@
             if (score > alpha) alpha = score;
             if (alpha >= beta) {
               stats.cutoffs += 1;
+              rememberQuietCutoff(position, action, depth, ply);
               break;
             }
           }
@@ -329,16 +369,25 @@
         function searchRoot(root, depth, previousBest) {
           const key = positionKey(root);
           const cached = table.get(key);
-          const actions = orderActions(root, getSearchActions(root, root.turn, maxDeployCandidates), previousBest || (cached && cached.best));
+          const actions = orderActions(root, getSearchActions(root, root.turn, maxDeployCandidates), previousBest || (cached && cached.best), 0, killers, historyScores);
           let alpha = -INF;
           const beta = INF;
           let bestScore = -INF;
           let bestAction = null;
-          for (const action of actions) {
+          for (let index = 0; index < actions.length; index += 1) {
+            const action = actions[index];
             checkStop();
             const child = applyAction(root, action);
             if (!child) continue;
-            const score = -negamax(child, depth - 1, -beta, -alpha, 1);
+            let score;
+            if (index === 0) {
+              score = -negamax(child, depth - 1, -beta, -alpha, 1);
+            } else {
+              score = -negamax(child, depth - 1, -alpha - 1, -alpha, 1);
+              if (score > alpha && score < beta) {
+                score = -negamax(child, depth - 1, -beta, -alpha, 1);
+              }
+            }
             if (score > bestScore) {
               bestScore = score;
               bestAction = action;
