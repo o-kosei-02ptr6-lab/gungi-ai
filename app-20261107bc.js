@@ -544,14 +544,14 @@
               ? "第" + p.game + "局：自己対局 " + p.ply + "/" + p.maxPlies + "手（停止ボタンで終了）"
               : "第" + p.game + "局の結果を評価関数へ反映・保存中…";
             trainingInfo.textContent = "累計探索局面 " + p.nodes.toLocaleString() + " ／ " +
-              (p.phase === "learning" ? "TD目標 " + Number(p.target).toFixed(3) + " ／ 学習AI " + p.candidateWins + "勝・最良AI " + p.championWins + "勝" : "学習データ収集中");
+              (p.phase === "learning" ? "TD目標 " + Number(p.target).toFixed(3) + " ／ 学習AI " + p.candidateWins + "勝・最良AI " + p.championWins + "勝・固定判定 " + (p.adjudicatedGames||0) + "局" : "学習データ収集中");
           }
         });
         trainingStatus.textContent = trainingStopRequested
           ? "学習を停止しました。学習済みの重みは保存されています。"
           : "学習処理が終了しました。学習済みの重みは保存されています。";
         trainingInfo.textContent = result.games + "局 ／ 決着 " + result.decisive + "局 ／ " +
-          "学習AI " + result.candidateWins + "勝 ／ 最良AI " + result.championWins + "勝 ／ 引き分け " + result.draws + "局 ／ 学習局面 " + result.samples +
+          "学習AI " + result.candidateWins + "勝 ／ 最良AI " + result.championWins + "勝 ／ 引き分け " + result.draws + "局（固定判定 " + result.adjudicatedGames + "局） ／ 学習局面 " + result.samples +
           " ／ TD更新 " + result.tdUpdates + "回 ／ 平均TD誤差 " + result.meanTdError.toFixed(4) +
           " ／ 探索 " + result.nodes.toLocaleString() + "局面";
       } catch (error) {
