@@ -101,7 +101,7 @@
     try{
       // Use a 90% confidence interval and a bounded sample for a faster, honest verdict.
       while(!promoted&&!rejected&&!stopped&&totals.games<40){
-        for(let pair=0;pair<pairsPerBatch;pair++){
+        for(let pair=0;pair<pairsPerBatch&&totals.games<40;pair++){
           if(options.shouldStop&&options.shouldStop()){stopped=true;break;}
           const pairNumber=totals.pairs+1;
           const start=T.makeStartPosition();
