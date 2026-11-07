@@ -81,6 +81,33 @@
     const weights=AI.getWeights();saveWeights(weights,completed);
     return {games:completed,decisive,firstWins,samples:sampleCount,nodes,weights};
   }
-  window.GungiTraining=Object.freeze({train,loadWeights,saveWeights,makeStartPosition});
+  function exportData(){
+    let saved=null;
+    try{saved=JSON.parse(localStorage.getItem(STORAGE_KEY)||"null");}catch(_){}
+    return {
+      format:"gungi-ai-training-transfer",
+      version:1,
+      exportedAt:new Date().toISOString(),
+      weights:AI.getWeights(),
+      games:saved&&Number.isFinite(saved.games)?saved.games:0,
+      learnedAt:saved&&saved.updatedAt?saved.updatedAt:null
+    };
+  }
+  function importData(input){
+    const data=typeof input==="string"?JSON.parse(input):input;
+    if(!data||data.format!=="gungi-ai-training-transfer"||data.version!==1)
+      throw new Error("引き継ぎデータの形式またはバージョンが違います。");
+    if(!data.weights||typeof data.weights!=="object")
+      throw new Error("評価関数の重みが見つかりません。");
+    for(const key of FEATURES){
+      const value=data.weights[key];
+      if(typeof value!=="number"||!Number.isFinite(value)||value<0.25||value>2.5)
+        throw new Error("重み「"+key+"」の値が不正です。");
+    }
+    AI.setWeights(data.weights);
+    saveWeights(AI.getWeights(),Math.max(0,Number(data.games)||0));
+    return {weights:AI.getWeights(),games:Math.max(0,Number(data.games)||0)};
+  }
+  window.GungiTraining=Object.freeze({train,loadWeights,saveWeights,makeStartPosition,exportData,importData});
   loadWeights();
 })();
