@@ -57,12 +57,15 @@
     const enemyMoves = E.generateLegalMoves(state, enemy);
     const moveCountByPiece = new Map();
     const controlledSquares = new Map();
+    const controllersBySquare = new Map();
 
     for (const move of moveList) {
       const id = move.piece.id;
       moveCountByPiece.set(id, (moveCountByPiece.get(id) || 0) + 1);
       const key = move.to.row + "," + move.to.col;
       if (!controlledSquares.has(key)) controlledSquares.set(key, move.to);
+      if (!controllersBySquare.has(key)) controllersBySquare.set(key, new Set());
+      controllersBySquare.get(key).add(id);
     }
 
     for (let row = 0; row < E.SIZE; row += 1) {
@@ -78,10 +81,13 @@
           boardPieces += 1;
           if (isTop) {
             position += positionalBonus(row, col, side, piece.name);
-            // Stacked pieces are protected, but remain less useful while buried.
-            activity += Math.max(0, stack.length - 1) * 7;
+            // A stack gains tactical reach from its height, but buried pieces
+            // are not treated as independently active. Reward height more when
+            // the exposed top piece actually has useful legal mobility.
+            const depth = Math.max(0, stack.length - 1);
             const legalCount = moveCountByPiece.get(piece.id) || 0;
-            activity += Math.min(8, legalCount) * 1.8;
+            activity += depth * (3.5 + Math.min(6, legalCount) * 0.65);
+            activity += Math.min(8, legalCount) * 1.4;
           }
         }
       }
@@ -105,6 +111,23 @@
     }
     position += Math.min(65, controlScore);
 
+    // Redundant control is useful: two different pieces contesting the same
+    // square make a plan less fragile than a single-piece threat. Give extra
+    // value to coordinated control close to the opposing Marshal.
+    const enemyMarshal = E.getMarshalPosition(state, enemy);
+    let coordinatedControl = 0;
+    for (const [key, controllers] of controllersBySquare) {
+      if (controllers.size < 2) continue;
+      const [row, col] = key.split(",").map(Number);
+      const distanceToEnemyMarshal = enemyMarshal
+        ? Math.abs(row - enemyMarshal.row) + Math.abs(col - enemyMarshal.col)
+        : 8;
+      const strategicFactor = distanceToEnemyMarshal <= 2 ? 1.8
+        : distanceToEnemyMarshal <= 4 ? 1.25 : 1;
+      coordinatedControl += Math.min(2, controllers.size - 1) * strategicFactor;
+    }
+    position += Math.min(24, coordinatedControl * 1.6);
+
     // Reward adjacent friendly top pieces as a modest coordination bonus.
     let friendlyPairs = 0;
     for (let row = 0; row < E.SIZE; row += 1) {
@@ -119,7 +142,7 @@
         }
       }
     }
-    position += Math.min(36, friendlyPairs * 3);
+    position += Math.min(30, friendlyPairs * 2.5);
 
     // Deduplicate threats by target square. Multiple attackers improve pressure,
     // but must not count the same capturable stack as several separate prizes.
