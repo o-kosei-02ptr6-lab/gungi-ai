@@ -153,13 +153,16 @@
           // 2局の候補AI得点が1点超なら組勝ち、1点未満なら組負け、
           // ちょうど1点なら組引き分け。統計上の独立単位は「組」とする。
           const drawPoint = result => result.draw && Number.isFinite(result.candidateFinalScore)
-            ? 0.5 + Math.max(-0.2,Math.min(0.2,Math.tanh(result.candidateFinalScore/1200)*0.2))
-            : 0.5;
+            ? 0.3 + Math.max(-0.2,Math.min(0.2,Math.tanh(result.candidateFinalScore/1200)*0.2))
+            : 0.3;
           const pairCandidateScore =
             (first.draw ? drawPoint(first) : first.winner === "後手" ? 1 : 0) +
             (second.draw ? drawPoint(second) : second.winner === "先手" ? 1 : 0);
-          if(pairCandidateScore>1)totals.pairWins++;
-          else if(pairCandidateScore<1)totals.pairLosses++;
+          // 引き分けは基準0.3点、勝敗がついた局は同等実力時の期待値0.5点。
+          // ペア内の引き分け数に応じて比較基準も変え、引き分け自体で不当に不利にならないようにする。
+          const pairBaseline = (first.draw ? 0.3 : 0.5) + (second.draw ? 0.3 : 0.5);
+          if(pairCandidateScore>pairBaseline+1e-9)totals.pairWins++;
+          else if(pairCandidateScore<pairBaseline-1e-9)totals.pairLosses++;
           else totals.pairDraws++;
           saveStats(totals);
           const decisivePairs=totals.pairWins+totals.pairLosses;
