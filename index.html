@@ -48,11 +48,11 @@
       <p id="training-info">「自己対局学習を実行」を押すと開始します。</p>
       <div class="transfer-tools">
         <h3>学習AIの実力検証</h3>
-        <p>学習AIを保存済みの最良AIと比較します。1回押すと、同じ初期配置で先手・後手を入れ替えて対局します。比較開始時点の学習AIと最良AIの重みを固定し、同じ初期配置で先手・後手を入れ替えて比較します。1局72手、同じ初期配置で先後を入れ替えたペア単位で比較し、最低20ペアから90%信頼区間を確認、最大100ペア（200局）まで検証します。それでも改善・改善なしを判定できなければ「判定保留」とし、無理に勝敗を決めません。結果は端末内に保存されます。途中でボタンを押すと停止できます。</p>
+        <p>学習AIを保存済みの最良AIと比較します。1回押すと、同じ初期配置で先手・後手を入れ替えて対局します。比較開始時点の学習AIと最良AIの重みを固定し、同じ初期配置で先手・後手を入れ替えて比較します。1局144手、同じ初期配置で先後を入れ替えたペア単位で比較し、最低20ペアから90%信頼区間を確認、最大100ペア（200局）まで検証します。それでも改善・改善なしを判定できなければ「判定保留」とし、無理に勝敗を決めません。結果は端末内に保存されます。途中でボタンを押すと停止できます。</p>
         <button id="compare-ai" type="button">基準AIと実力を比較</button>
         <p id="compare-status" role="status">比較はまだ実行されていません。</p>
         <p id="compare-info">学習後に比較すると、調整した重みの効果を確認できます。</p>
-        <div class="saved-games"><h3>検証対局の最終局面</h3><p>対局を選ぶと、72手終了時点（または帥を取った時点）の盤面を確認できます。直近40局を保存します。</p><select id="tournament-game-select" aria-label="確認する検証対局" disabled><option>保存された検証局面はありません</option></select><p id="tournament-game-detail">検証対局が保存されると、ここに局面が表示されます。</p><div id="tournament-board-view" class="board-wrap tournament-board-wrap" hidden><div id="tournament-board" class="board-coordinates tournament-board"></div></div></div>
+        <div class="saved-games"><h3>検証対局の最終局面</h3><p>対局を選ぶと、144手終了時点（または帥を取った時点）の盤面を確認できます。直近40局を保存します。</p><select id="tournament-game-select" aria-label="確認する検証対局" disabled><option>保存された検証局面はありません</option></select><p id="tournament-game-detail">検証対局が保存されると、ここに局面が表示されます。</p><div id="tournament-board-view" class="board-wrap tournament-board-wrap" hidden><div id="tournament-board" class="board-coordinates tournament-board"></div></div></div>
       </div>
       <div class="transfer-tools">
         <h3>学習結果の引き継ぎ</h3>
