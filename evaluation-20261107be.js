@@ -265,13 +265,35 @@
       }
       kingSafety -= Math.min(126, threatenedAdjacent * 18);
 
-      // A Marshal with legal escape squares is less vulnerable to a forced net.
-      const marshalEscapes = moveList.filter(move => move.piece.id === marshal.piece.id).length;
-      kingSafety += Math.min(4, marshalEscapes) * 7;
-      // 帥手中に逃げ道が少ないほど詰みに近い。相手側の評価にも反映され、
-      // 単に王手をかけるだけでなく、逃げ道を封じる攻めを選びやすくする。
+      // 味方の護衛が少ない帥は包囲・詰みの危険が高い。
+      // 周囲8マスの味方が4枚未満なら不足分を減点し、完全に孤立していれば追加減点。
+      kingSafety -= Math.max(0, 4 - nearbyFriends) * 12;
+      if (nearbyFriends === 0) kingSafety -= 40;
+
+      // 帥を実際に動かした局面を作り、相手が次の手で帥を取れない移動先だけを
+      // 安全な逃げ道として数える。単なる移動可能マスは逃げ道に含めない。
+      const marshalMoves = moveList.filter(move => move.piece.id === marshal.piece.id);
+      let safeMarshalEscapes = 0;
+      for (const move of marshalMoves) {
+        const nextState = {
+          ...state,
+          board: state.board.map(line => line.map(stack => stack.slice())),
+          hands: state.hands,
+          history: Array.isArray(state.history) ? state.history.slice() : []
+        };
+        const destination = nextState.board[move.to.row][move.to.col];
+        const landingMode = destination.length && destination[destination.length - 1].side === side
+          ? "tsuke" : "capture";
+        const result = E.movePiece(nextState, move.from.row, move.from.col,
+          move.to.row, move.to.col, landingMode);
+        if (result.ok && !result.gameOver && !E.isInCheck(nextState, side)) {
+          safeMarshalEscapes += 1;
+        }
+      }
+      kingSafety += Math.min(4, safeMarshalEscapes) * 12;
+      // 帥手中に安全な逃げ道が少ないほど詰みに近い。相手側の評価にも反映する。
       if (E.isInCheck(state, side)) {
-        kingSafety -= Math.max(0, 4 - Math.min(4, marshalEscapes)) * 450;
+        kingSafety -= Math.max(0, 4 - Math.min(4, safeMarshalEscapes)) * 450;
       }
     }
 
