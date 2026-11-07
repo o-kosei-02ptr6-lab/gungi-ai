@@ -186,7 +186,7 @@
         button.setAttribute("aria-label", (E.SIZE - col) + "-" + (row + 1) + " マス");
         const coord = document.createElement("span");
         coord.className = "coord";
-        coord.textContent = (col + 1) + "," + (row + 1);
+        coord.textContent = (E.SIZE - col) + "," + (row + 1);
         button.append(coord);
         const stack = state.board[row][col];
         if (stack.length) {
