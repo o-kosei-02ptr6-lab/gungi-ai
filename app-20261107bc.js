@@ -86,7 +86,7 @@
     }
   }
   function formatSquare(row, col, layer) {
-    const base = (col + 1) + "-" + (row + 1);
+    const base = (E.SIZE - col) + "-" + (row + 1);
     return layer == null ? base : base + "-" + layer;
   }
   function renderHistory() {
@@ -142,7 +142,7 @@
     const board=document.getElementById("tournament-board");if(!board)return;board.replaceChildren();
     for(let row=0;row<E.SIZE;row++)for(let col=0;col<E.SIZE;col++){
       const cell=document.createElement("div");cell.className="square "+((row+col)%2===0?"parity-light":"parity-brown");
-      const coord=document.createElement("span");coord.className="coord";coord.textContent=(col+1)+","+(row+1);cell.append(coord);
+      const coord=document.createElement("span");coord.className="coord";coord.textContent=(E.SIZE-col)+","+(row+1);cell.append(coord);
       const stack=snapshot.board[row][col]||[];
       if(stack.length){const label=document.createElement("span");label.className="stack-label";
         stack.forEach((piece,layer)=>{const face=document.createElement("span");face.className="stack-piece "+(piece.side==="先手"?"piece-white":"piece-black");face.textContent=layer===stack.length-1?piece.name:"";face.setAttribute("aria-label",(layer+1)+"段目・"+piece.side+"・"+piece.name);face.style.setProperty("top","calc(50% - "+(layer*12)+"%)","important");if(piece.side==="後手")face.style.setProperty("transform","translate(-50%, -50%) rotate(180deg)","important");face.style.zIndex=String(layer+1);label.append(face);});
@@ -183,7 +183,7 @@
         button.disabled = state.phase === "finished";
         const isTarget = moveTargets.some(p => p.row === row && p.col === col);
         button.className = "square " + ((row + col) % 2 === 0 ? "parity-light" : "parity-brown") + (selected && selected.row === row && selected.col === col ? " selected" : "") + (isTarget ? " legal-target" : "");
-        button.setAttribute("aria-label", (col + 1) + "-" + (row + 1) + " マス");
+        button.setAttribute("aria-label", (E.SIZE - col) + "-" + (row + 1) + " マス");
         const coord = document.createElement("span");
         coord.className = "coord";
         coord.textContent = (col + 1) + "," + (row + 1);
@@ -213,7 +213,7 @@
         boardElement.append(button);
       }
     }
-    selectedElement.textContent = selected ? (selected.col + 1) + "-" + (selected.row + 1) : "なし";
+    selectedElement.textContent = selected ? (E.SIZE - selected.col) + "-" + (selected.row + 1) : "なし";
     refreshPiecePicker();
     renderSummary();
     renderHistory();
@@ -243,7 +243,7 @@
     } else {
       const result = E.placePiece(state, row, col, side, piece.id);
       messageElement.textContent = result.ok
-        ? side + "の" + selectedName + "を " + (col + 1) + "-" + (row + 1) + " に" +
+        ? side + "の" + selectedName + "を " + (E.SIZE - col) + "-" + (row + 1) + " に" +
           (state.board[row][col].length > 1 ? state.board[row][col].length + "段目として重ねて" : "") + "配置しました。" +
           (result.complete ? " 初期配置が完了し、移動モードに移ります。先手から開始します。" :
             (state.setupDone["先手"] && side === "後手" ? " 後手は続けて配置できます。" : " 次は" + result.nextSide + "の番です。"))
@@ -264,7 +264,7 @@
     if (!from) return;
     const result = E.movePiece(state, from.row, from.col, row, col, landingMode);
     if (result.ok) {
-      messageElement.textContent = result.piece.name + "を " + (col + 1) + "-" + (row + 1) + " へ移動しました。" +
+      messageElement.textContent = result.piece.name + "を " + (E.SIZE - col) + "-" + (row + 1) + " へ移動しました。" +
         (landingMode === "tsuke" ? " 敵駒の上にツケました。" :
           (result.captured.length ? " 敵駒" + result.captured.length + "枚を捕獲。" : ""));
       selected = null;
@@ -294,7 +294,7 @@
       }
       const result = E.deployPiece(state, row, col, state.turn, piece.id);
       if (result.ok) {
-        messageElement.textContent = result.piece.name + "を " + (col + 1) + "-" + (row + 1) + " に配置しました。";
+        messageElement.textContent = result.piece.name + "を " + (E.SIZE - col) + "-" + (row + 1) + " に配置しました。";
         selected = null;
         moveTargets = [];
         actionMode = "move";
@@ -392,7 +392,7 @@
           }
           messageElement.textContent = "AI（" + side + "）は" +
             (pressedFinish ? "「済」を押し、" : "") + applied.piece.name + "を " +
-            (action.col + 1) + "-" + (action.row + 1) + " に配置しました。" +
+            (E.SIZE - action.col) + "-" + (action.row + 1) + " に配置しました。" +
             (applied.complete ? " 初期配置が完了し、移動モードに移ります。" : " 次は" + state.setupTurn + "の配置です。");
           infoElement.textContent = "配置評価値 " + Math.round(result.score) +
             " ／ 追加配置の評価 " + Math.round(result.gain) +
@@ -438,14 +438,14 @@
       if (action.type === "deploy") {
         applied = E.deployPiece(state, action.row, action.col, state.turn, action.pieceId);
         if (applied.ok) {
-          messageElement.textContent = "AIは「新」を選択し、" + applied.piece.name + "を " + (action.col + 1) + "-" + (action.row + 1) + " に配置しました。";
+          messageElement.textContent = "AIは「新」を選択し、" + applied.piece.name + "を " + (E.SIZE - action.col) + "-" + (action.row + 1) + " に配置しました。";
         }
       } else {
         applied = E.movePiece(state, action.from.row, action.from.col, action.to.row, action.to.col, action.landingMode);
         if (applied.ok) {
           messageElement.textContent = "AIは" + applied.piece.name + "を " +
-            (action.from.col + 1) + "-" + (action.from.row + 1) + " から " +
-            (action.to.col + 1) + "-" + (action.to.row + 1) + " へ" +
+            (E.SIZE - action.from.col) + "-" + (action.from.row + 1) + " から " +
+            (E.SIZE - action.to.col) + "-" + (action.to.row + 1) + " へ" +
             (action.landingMode === "tsuke" ? "ツケました。" :
               (applied.captured.length ? "移動し、敵駒" + applied.captured.length + "枚を捕獲しました。" : "移動しました。"));
         }
