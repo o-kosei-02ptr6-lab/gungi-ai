@@ -56,7 +56,7 @@
       const result=await S.findBestMove(state,{maxDepth:3,timeMs:180,maxNodes:2500,maxDeployCandidates:3,...searchOptions});
       nodes+=result.nodes||0;
       if(!result.bestMove){
-        state.phase="finished";state.winner=isCandidate?other(side):side;break;
+        state.phase="finished";state.winner=other(side);break;
       }
       const a=result.bestMove;
       const applied=a.type==="deploy"
