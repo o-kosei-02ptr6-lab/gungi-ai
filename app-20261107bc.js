@@ -549,5 +549,57 @@
       }
     });
   }
+  const exportTrainingButton = document.getElementById("export-training");
+  const copyTrainingButton = document.getElementById("copy-training");
+  const importTrainingButton = document.getElementById("import-training");
+  const transferTextarea = document.getElementById("training-transfer-data");
+  const transferStatus = document.getElementById("transfer-status");
+  if (exportTrainingButton && window.GungiTraining) {
+    exportTrainingButton.addEventListener("click", () => {
+      try {
+        transferTextarea.value = JSON.stringify(window.GungiTraining.exportData(), null, 2);
+        transferStatus.textContent = "書き出しました。データをコピーして引き継ぎ先へ送ってください。";
+      } catch (error) {
+        transferStatus.textContent = "書き出しに失敗しました：" + (error.message || String(error));
+      }
+    });
+  }
+  if (copyTrainingButton && transferTextarea) {
+    copyTrainingButton.addEventListener("click", async () => {
+      if (!transferTextarea.value.trim()) {
+        transferStatus.textContent = "先に「引き継ぎデータを書き出す」を押してください。";
+        return;
+      }
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(transferTextarea.value);
+          transferStatus.textContent = "引き継ぎデータをコピーしました。";
+        } else {
+          transferTextarea.focus();
+          transferTextarea.select();
+          transferStatus.textContent = "自動コピーに対応していません。選択された文字列をコピーしてください。";
+        }
+      } catch (_) {
+        transferTextarea.focus();
+        transferTextarea.select();
+        transferStatus.textContent = "自動コピーできませんでした。選択された文字列をコピーしてください。";
+      }
+    });
+  }
+  if (importTrainingButton && window.GungiTraining) {
+    importTrainingButton.addEventListener("click", () => {
+      try {
+        if (!transferTextarea.value.trim()) throw new Error("引き継ぎデータを貼り付けてください。");
+        const result = window.GungiTraining.importData(transferTextarea.value.trim());
+        transferStatus.textContent = "読み込み完了。学習済み " + result.games + "局分の情報と評価関数の重みをこの端末に保存しました。";
+        const trainingStatus = document.getElementById("training-status");
+        if (trainingStatus) trainingStatus.textContent = "別の端末から学習結果を引き継ぎました。";
+        const trainingInfo = document.getElementById("training-info");
+        if (trainingInfo) trainingInfo.textContent = "評価関数の重みを更新しました。";
+      } catch (error) {
+        transferStatus.textContent = "読み込みできませんでした：" + (error.message || String(error));
+      }
+    });
+  }
   render();
 })();
