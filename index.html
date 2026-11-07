@@ -42,7 +42,7 @@
     <section class="panel"><h2>駒の残数</h2><div id="inventory-summary" class="inventory-summary"></div></section>
     <section class="panel training-panel">
       <h2>AIの自己対局学習</h2>
-      <p>「自己対局学習を実行」を押すと、停止ボタンを押すまで学習AIと保存済み最良AIを先手・後手交互に対戦させ、勝敗をTD(λ)学習に反映します。停止要求後は現在の対局を終えて停止し、各局終了時に評価関数の重みを保存します。学習は別の盤面で行うため、現在の対局には影響しません。学習結果はこのブラウザに保存されます。</p>
+      <p>「自己対局学習を実行」を押すと、停止ボタンを押すまで学習AIと保存済み最良AIを先手・後手交互に対戦させ、勝敗をTD(λ)学習に反映します。停止要求後は現在の対局を終えて停止し、各局終了時に評価関数の重みを保存します。規定手数で決着しない場合は、固定評価基準で勝敗を判定して学習します。学習は別の盤面で行うため、現在の対局には影響しません。学習結果はこのブラウザに保存されます。</p>
       <button id="train-ai" class="mode-toggle" type="button">自己対局学習を実行</button>
       <p id="training-status" role="status">まだ学習していません。</p>
       <p id="training-info">「自己対局学習を実行」を押すと開始します。</p>
@@ -69,6 +69,6 @@
     </section>
   </main>
   <footer>Gungi AI · 開発用プロトタイプ</footer>
-  <script src="engine-20261107bb.js?v=20261107bb"></script><script src="evaluation-20261107be.js?v=20261107eval2"></script><script src="search-20261107bd.js?v=20261107strong1"></script><script src="training-20261107a.js?v=20261107champtrain1"></script><script src="tournament-20261107a.js?v=20261107adjudicate1"></script><script src="app-20261107bc.js?v=20261107champtrain1"></script>
+  <script src="engine-20261107bb.js?v=20261107bb"></script><script src="evaluation-20261107be.js?v=20261107eval2"></script><script src="search-20261107bd.js?v=20261107strong1"></script><script src="training-20261107a.js?v=20261107referee1"></script><script src="tournament-20261107a.js?v=20261107adjudicate1"></script><script src="app-20261107bc.js?v=20261107referee1"></script>
 </body>
 </html>
