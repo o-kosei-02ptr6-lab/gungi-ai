@@ -484,7 +484,7 @@
     for (const piece of pieces) {
       for (let row = 0; row < E.SIZE; row += 1) {
         for (let col = 0; col < E.SIZE; col += 1) {
-          if (!hasPlacedAnyPiece && piece.name === "帥" && col !== (side === "先手" ? E.SIZE - 1 : 0)) continue;
+          if (!hasPlacedAnyPiece && piece.name === "帥" && row !== (side === "先手" ? E.SIZE - 1 : 0)) continue;
           if (!E.canPlacePiece(state, row, col, piece)) continue;
           const stack = state.board[row][col];
           actions.push({
