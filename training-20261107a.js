@@ -4,6 +4,43 @@
   const E=window.GungiEngine,AI=window.GungiAI,S=window.GungiSearch;
   if(!E||!AI||!S) throw new Error("Engine, evaluator and search must load before training.");
   const STORAGE_KEY="gungi-ai-learned-weights-v1";
+  const CHAMPION_KEY="gungi-ai-champion-weights-v1";
+  const STATS_KEY="gungi-ai-tournament-stats-v2";
+  const BACKUP_KEY="gungi-ai-previous-backup-v1";
+  function readStored(key){try{return JSON.parse(localStorage.getItem(key)||"null");}catch(_){return null;}}
+  function currentSnapshot(){
+    return {format:"gungi-ai-full-backup",version:1,createdAt:new Date().toISOString(),
+      learned:readStored(STORAGE_KEY),champion:readStored(CHAMPION_KEY),tournament:readStored(STATS_KEY)};
+  }
+  function createBackup(){
+    try{localStorage.setItem(BACKUP_KEY,JSON.stringify(currentSnapshot()));return true;}catch(_){return false;}
+  }
+  function validWeights(weights){
+    return !!weights&&FEATURES.every(key=>typeof weights[key]==="number"&&Number.isFinite(weights[key])&&weights[key]>=.25&&weights[key]<=2.5);
+  }
+  function restoreSnapshot(snapshot){
+    if(!snapshot||snapshot.format!=="gungi-ai-full-backup"||snapshot.version!==1)
+      throw new Error("バックアップの形式またはバージョンが違います。");
+    if(snapshot.learned&&(!snapshot.learned.weights||!validWeights(snapshot.learned.weights)))
+      throw new Error("学習AIの重みが不正です。");
+    if(snapshot.champion&&(!snapshot.champion.weights||!validWeights(snapshot.champion.weights)))
+      throw new Error("最良AIの重みが不正です。");
+    if(snapshot.tournament&&(typeof snapshot.tournament!=="object"||!Number.isFinite(Number(snapshot.tournament.games))))
+      throw new Error("検証記録が不正です。");
+    createBackup();
+    for(const [key,value] of [[STORAGE_KEY,snapshot.learned],[CHAMPION_KEY,snapshot.champion],[STATS_KEY,snapshot.tournament]]){
+      if(value==null)localStorage.removeItem(key);else localStorage.setItem(key,JSON.stringify(value));
+    }
+    const active=snapshot.learned&&snapshot.learned.weights?snapshot.learned.weights:
+      snapshot.champion&&snapshot.champion.weights?snapshot.champion.weights:Object.fromEntries(FEATURES.map(key=>[key,1]));
+    AI.setWeights(active);
+    return {games:snapshot.learned&&Number(snapshot.learned.games)||0,hasChampion:!!snapshot.champion,hasTournament:!!snapshot.tournament};
+  }
+  function restorePreviousBackup(){
+    const snapshot=readStored(BACKUP_KEY);
+    if(!snapshot)throw new Error("復元できるバックアップがありません。");
+    return restoreSnapshot(snapshot);
+  }
   const FEATURES=["material","hand","position","activity","mobility","threats","exposure","kingSafety"];
   const random=list=>list[Math.floor(Math.random()*list.length)];
   function snapshotFeatures(state){
@@ -62,6 +99,7 @@
     return AI.getWeights();
   }
   function saveWeights(weights,games){
+    createBackup();
     try{localStorage.setItem(STORAGE_KEY,JSON.stringify({weights,games,updatedAt:new Date().toISOString()}));}catch(_){}
   }
   function championWeights(){
@@ -226,32 +264,20 @@
   }
   function otherSide(side){return side==="先手"?"後手":"先手";}
   function exportData(){
-    let saved=null;
-    try{saved=JSON.parse(localStorage.getItem(STORAGE_KEY)||"null");}catch(_){}
-    return {
-      format:"gungi-ai-training-transfer",
-      version:1,
-      exportedAt:new Date().toISOString(),
-      weights:AI.getWeights(),
-      games:saved&&Number.isFinite(saved.games)?saved.games:0,
-      learnedAt:saved&&saved.updatedAt?saved.updatedAt:null
-    };
+    const snapshot=currentSnapshot();
+    return {...snapshot,exportedAt:new Date().toISOString()};
   }
   function importData(input){
     const data=typeof input==="string"?JSON.parse(input):input;
+    if(data&&data.format==="gungi-ai-full-backup")return restoreSnapshot(data);
     if(!data||data.format!=="gungi-ai-training-transfer"||data.version!==1)
       throw new Error("引き継ぎデータの形式またはバージョンが違います。");
-    if(!data.weights||typeof data.weights!=="object")
-      throw new Error("評価関数の重みが見つかりません。");
-    for(const key of FEATURES){
-      const value=data.weights[key];
-      if(typeof value!=="number"||!Number.isFinite(value)||value<0.25||value>2.5)
-        throw new Error("重み「"+key+"」の値が不正です。");
-    }
+    if(!validWeights(data.weights))throw new Error("評価関数の重みが不正です。");
+    createBackup();
     AI.setWeights(data.weights);
-    saveWeights(AI.getWeights(),Math.max(0,Number(data.games)||0));
+    try{localStorage.setItem(STORAGE_KEY,JSON.stringify({weights:AI.getWeights(),games:Math.max(0,Number(data.games)||0),updatedAt:new Date().toISOString()}));}catch(_){}
     return {weights:AI.getWeights(),games:Math.max(0,Number(data.games)||0)};
   }
-  window.GungiTraining=Object.freeze({train,trainSequential,trainParallel,loadWeights,saveWeights,makeStartPosition,exportData,importData});
+  window.GungiTraining=Object.freeze({train,trainSequential,trainParallel,loadWeights,saveWeights,makeStartPosition,exportData,importData,createBackup,restorePreviousBackup});
   loadWeights();
 })();
