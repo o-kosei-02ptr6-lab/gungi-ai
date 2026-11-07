@@ -613,7 +613,7 @@
       compareButton.disabled = false;
       compareButton.textContent = "検証を停止";
       status.textContent = "統計的に有効な結論が出るまで、基準AIとの比較を自動で続けます。";
-      info.textContent = "同じ初期配置で先手・後手を入れ替えた対局を繰り返します。比較開始時点の学習AIと最良AIの重みを固定し、同じ初期配置で先手・後手を入れ替えて比較します。最低40局から90%信頼区間を確認し、最大200局まで検証します。現在の盤面には影響しません。";
+      info.textContent = "同じ初期配置で先手・後手を入れ替えて比較します。引き分けは共通の評価関数で最終局面の優劣を測り、候補AI側に有利なら0.5点より上、不利なら下としてペア判定に反映します。最低40局から90%信頼区間を確認し、最大200局まで検証します。";
       try {
         const result = await window.GungiTournament.compare({
           pairs: 2, maxPlies: 144, maxDepth: 2, timeMs: 60, maxNodes: 700, maxDeployCandidates: 2,
@@ -623,8 +623,8 @@
               status.textContent = "累計" + (p.totalGames||0) + "局・第" + p.pair + "組の第" + p.game +
                 "局を対戦中… " + p.plies + "手 ／ " + p.nodes.toLocaleString() + "局面";
             } else if (p.phase === "pairDone") {
-              status.textContent = "累計" + p.totalGames + "局。ペア勝率 " + ((p.pairedRate||0)*100).toFixed(1) +
-                "% ／ 90%信頼区間 " + (p.lowerBound*100).toFixed(1) + "〜" + (p.upperBound*100).toFixed(1) + "%。検証を継続中…";
+              status.textContent = "累計" + p.totalGames + "局。引き分け最終局面の平均評価 " + (p.averageDrawEval>=0?"+":"") + Math.round(p.averageDrawEval||0) +
+                " ／ ペア勝率 " + ((p.pairedRate||0)*100).toFixed(1) + "%・90%信頼区間 " + (p.lowerBound*100).toFixed(1) + "〜" + (p.upperBound*100).toFixed(1) + "%。検証中…";
             } else if (p.phase === "continuing") {
               status.textContent = "累計" + p.totalGames + "局。先後入替ペアで統計的な結論が出るまで検証を続けています…";
             }
@@ -646,7 +646,8 @@
             result.totalCandidateWins + "勝 ／ 最良AI " + result.totalChampionWins +
             "勝 ／ 引き分け " + result.totalDraws + "局。先後入替ペア " + (result.pairWins||0) + "勝・" +
             (result.pairLosses||0) + "敗・" + (result.pairDraws||0) + "分。ペア勝率 " +
-            ((result.pairedRate||0)*100).toFixed(1) + "%、90%信頼区間 " + lower + "〜" + (result.upperBound*100).toFixed(1) + "%。 " +
+            ((result.pairedRate||0)*100).toFixed(1) + "%、90%信頼区間 " + lower + "〜" + (result.upperBound*100).toFixed(1) + "%。引き分け局面の平均評価：" +
+            (result.averageDrawEval>=0?"+":"") + Math.round(result.averageDrawEval||0) + "（候補AI視点・" + (result.evaluatedDraws||0) + "局）。 " +
             (result.promoted ? "統計的に改善が確認されたため、新しい評価関数を最良AIとして保存しました。" :
               result.rejected ? "統計的に改善が確認できなかったため、最良AIの評価関数に戻しました。" :
               result.inconclusive ? "最大200局ではペア比較で優劣を断定できませんでした。評価関数は変更せず、結果を保存しました。" :
