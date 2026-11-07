@@ -33,9 +33,11 @@
   function readStats(candidate){
     try{
       const saved=JSON.parse(localStorage.getItem(STATS_KEY)||"null");
-      if(saved&&saved.fingerprint===fingerprint(candidate))return saved;
+      if(saved&&saved.fingerprint===fingerprint(candidate)&&
+      Number.isFinite(saved.pairWins)&&Number.isFinite(saved.pairLosses)&&Number.isFinite(saved.pairDraws))return saved;
     }catch(_){}
-    return {fingerprint:fingerprint(candidate),games:0,candidateWins:0,championWins:0,draws:0,adjudicated:0,pairs:0,nodes:0,plies:0};
+    // 旧方式の個別局ベース統計はペア比較の統計と混ぜない。
+    return {fingerprint:fingerprint(candidate),games:0,candidateWins:0,championWins:0,draws:0,adjudicated:0,pairs:0,pairWins:0,pairLosses:0,pairDraws:0,nodes:0,plies:0};
   }
   function saveStats(stats){T.createBackup();try{localStorage.setItem(STATS_KEY,JSON.stringify(stats));}catch(_){}}
   function wilsonBounds(rate,n){
@@ -66,16 +68,9 @@
       if(applied.gameOver)break;
       if(plies%2===1)await new Promise(resolve=>setTimeout(resolve,0));
     }
-    let adjudicated=false,adjudicationScore=null;
-    if(state.phase!=="finished"){
-      // Use a fixed referee evaluator so neither competing weight set judges itself.
-      AI.setWeights(INITIAL);
-      adjudicationScore=AI.evaluate(state,"先手");
-      adjudicated=true;
-      const margin=250;
-      if(adjudicationScore>margin)state.winner="先手";
-      else if(adjudicationScore< -margin)state.winner="後手";
-    }
+    // 規定手数までに帥を取れなかった対局は引き分け。
+    // 固定評価関数による勝敗の後付けは行わない。
+    const adjudicated=false,adjudicationScore=null;
     return {
       winner:state.winner,plies:Math.min(plies+1,settings.maxPlies),nodes,
       draw:!state.winner,adjudicated,adjudicationScore
@@ -119,14 +114,23 @@
             else{totals.championWins++;run.championWins++;}
           }
           totals.pairs++;
+          // 同一初期配置で先後を入れ替えた2局を1組として比較する。
+          // 2局の候補AI得点が1点超なら組勝ち、1点未満なら組負け、
+          // ちょうど1点なら組引き分け。統計上の独立単位は「組」とする。
+          const pairCandidateScore =
+            (first.draw ? 0.5 : first.winner === "後手" ? 1 : 0) +
+            (second.draw ? 0.5 : second.winner === "先手" ? 1 : 0);
+          if(pairCandidateScore>1)totals.pairWins++;
+          else if(pairCandidateScore<1)totals.pairLosses++;
+          else totals.pairDraws++;
           saveStats(totals);
-          const score=totals.candidateWins+totals.draws*.5;
-          const scoreRate=score/totals.games;
-          const bounds=wilsonBounds(scoreRate,totals.games);
-          if(totals.games>=40&&bounds.lower>.5){
+          const decisivePairs=totals.pairWins+totals.pairLosses;
+          const pairedRate=decisivePairs?totals.pairWins/decisivePairs:0.5;
+          const bounds=wilsonBounds(pairedRate,decisivePairs);
+          if(totals.pairs>=20&&decisivePairs>=20&&bounds.lower>.5){
             saveChampion(candidate);champion=candidate;promoted=true;
             try{localStorage.removeItem(STATS_KEY);}catch(_){}
-          }else if(totals.games>=40&&bounds.upper<.5){
+          }else if(totals.pairs>=20&&decisivePairs>=20&&bounds.upper<.5){
             AI.setWeights(champion);
             const saved=T.exportData();
             T.saveWeights(champion,saved.games||0);
@@ -137,25 +141,32 @@
             phase:"pairDone",pair:totals.pairs,pairs:pairsPerBatch,...run,
             totalGames:totals.games,totalCandidateWins:totals.candidateWins,
             totalChampionWins:totals.championWins,totalDraws:totals.draws,
-            scoreRate,lowerBound:bounds.lower,upperBound:bounds.upper,
+            scoreRate: (totals.candidateWins+totals.draws*.5)/totals.games,
+            pairedRate,pairedLowerBound:bounds.lower,pairedUpperBound:bounds.upper,
+            pairWins:totals.pairWins,pairLosses:totals.pairLosses,pairDraws:totals.pairDraws,
             promoted,rejected
           });
           if(promoted||rejected)break;
         }
         if(!stopped&&!promoted&&!rejected&&options.onProgress){
-          const score=totals.candidateWins+totals.draws*.5;
-          const bounds=wilsonBounds(score/totals.games,totals.games);
-          options.onProgress({phase:"continuing",totalGames:totals.games,scoreRate:score/totals.games,lowerBound:bounds.lower,upperBound:bounds.upper});
+          const decisivePairs=totals.pairWins+totals.pairLosses;
+          const pairedRate=decisivePairs?totals.pairWins/decisivePairs:0.5;
+          const bounds=wilsonBounds(pairedRate,decisivePairs);
+          options.onProgress({phase:"continuing",totalGames:totals.games,scoreRate:(totals.candidateWins+totals.draws*.5)/totals.games,pairedRate,lowerBound:bounds.lower,upperBound:bounds.upper});
         }
       }
       const score=totals.candidateWins+totals.draws*.5;
       const scoreRate=totals.games?score/totals.games:0;
-      const bounds=wilsonBounds(scoreRate,totals.games);
+      const decisivePairs=totals.pairWins+totals.pairLosses;
+      const pairedRate=decisivePairs?totals.pairWins/decisivePairs:0.5;
+      const bounds=wilsonBounds(pairedRate,decisivePairs);
       const inconclusive=!promoted&&!rejected&&!stopped&&totals.games>=200;
       return {
         ...run,totalGames:totals.games,totalCandidateWins:totals.candidateWins,
         totalChampionWins:totals.championWins,totalDraws:totals.draws,
-        totalAdjudicated:totals.adjudicated,scoreRate,lowerBound:bounds.lower,upperBound:bounds.upper,
+        totalAdjudicated:totals.adjudicated,scoreRate,pairedRate,
+        pairWins:totals.pairWins,pairLosses:totals.pairLosses,pairDraws:totals.pairDraws,
+        lowerBound:bounds.lower,upperBound:bounds.upper,
         promoted,rejected,stopped,inconclusive,candidateWeights:candidate,championWeights:champion,settings
       };
     } finally {if(!promoted&&!rejected)AI.setWeights(original);}
