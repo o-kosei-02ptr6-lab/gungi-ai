@@ -55,7 +55,7 @@
     const squares=[];
     for(let row=0;row<E.SIZE;row++)for(let col=0;col<E.SIZE;col++){
       // 帥は必ず単独の1段目に配置する。2・3段目になる候補は除外。
-      if(piece.name==="帥" && state.board[row][col].length!==0)continue;
+      if(piece.name==="帥" && (E.SIZE-col===2 || E.SIZE-col===3))continue;
       if(E.canPlacePiece(state,row,col,piece))squares.push({row,col});
     }
     if(!squares.length)throw new Error(side+"の配置可能なマスがありません。");
