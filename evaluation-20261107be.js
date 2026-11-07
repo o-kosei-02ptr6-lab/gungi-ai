@@ -93,10 +93,11 @@
       }
     }
 
-    // Reserve pieces retain strategic flexibility, but are discounted until deployed.
+    // Reserve pieces retain strategic flexibility. Slightly increase their value
+    // so the evaluator does not rush to deploy every useful piece.
     const reserve = state.hands && state.hands[side] ? state.hands[side] : [];
     for (const piece of reserve) {
-      hand += (PIECE_VALUES[piece.name] || 0) * 0.76;
+      hand += (PIECE_VALUES[piece.name] || 0) * 0.82;
       handPieces += 1;
     }
 
@@ -162,6 +163,26 @@
       exposure -= Math.min(360, item.value * 0.18 *
         (1 + Math.min(2, item.attackers - 1) * 0.3));
     }
+
+    // Deep penetration into the opponent's back three ranks creates increasing
+    // pressure on the enemy Marshal. Give the strongest bonus to top pieces
+    // that have advanced all the way to the far rank, especially near the Marshal.
+    let marshalPressure = 0;
+    for (let row = 0; row < E.SIZE; row += 1) {
+      for (let col = 0; col < E.SIZE; col += 1) {
+        const stack = state.board[row][col];
+        if (!stack.length || stack[stack.length - 1].side !== side) continue;
+        const advance = advancement(row, side);
+        if (advance < 6) continue;
+        const base = advance === 6 ? 14 : advance === 7 ? 25 : 40;
+        const distance = enemyMarshal
+          ? Math.abs(row - enemyMarshal.row) + Math.abs(col - enemyMarshal.col)
+          : 8;
+        const proximity = distance <= 2 ? 1.8 : distance <= 4 ? 1.35 : 1;
+        marshalPressure += base * proximity;
+      }
+    }
+    threats += Math.min(180, marshalPressure);
 
     const ownTargets = new Map();
     for (const move of moveList) {
