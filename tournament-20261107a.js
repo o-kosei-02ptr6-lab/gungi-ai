@@ -92,9 +92,19 @@
     // 規定手数までに帥を取れなかった対局は引き分け。
     // 固定評価関数による勝敗の後付けは行わない。
     const adjudicated=false,adjudicationScore=null;
+    let candidateFinalScore=null;
+    if(!state.winner){
+      const activeWeights=AI.getWeights();
+      try{
+        // 引き分けの優劣は候補・最良AIどちらにも偏らない共通の基準重みで測る。
+        AI.setWeights(INITIAL);
+        const firstPerspectiveScore=AI.evaluate(state,"先手");
+        candidateFinalScore=candidateSide==="先手"?firstPerspectiveScore:-firstPerspectiveScore;
+      }finally{AI.setWeights(activeWeights);}
+    }
     return {
       winner:state.winner,plies:Math.min(plies+1,settings.maxPlies),nodes,
-      draw:!state.winner,adjudicated,adjudicationScore,
+      draw:!state.winner,adjudicated,adjudicationScore,candidateFinalScore,
       finalState:{board:state.board,hands:state.hands,turn:state.turn,phase:state.phase,winner:state.winner,moveNumber:state.moveNumber}
     };
   }
@@ -113,8 +123,10 @@
       return {alreadyChampion:true,games:0,scoreRate:1,championWeights:champion,candidateWeights:candidate};
     }
     const totals=readStats(candidate);
+    totals.drawEvalSum=Number(totals.drawEvalSum)||0;
+    totals.evaluatedDraws=Number(totals.evaluatedDraws)||0;
     totals.adjudicated=Number(totals.adjudicated)||0;
-    const run={candidateWins:0,championWins:0,draws:0,games:0,nodes:0,plies:0,adjudicated:0};
+    const run={candidateWins:0,championWins:0,draws:0,games:0,nodes:0,plies:0,adjudicated:0,drawEvalSum:0,evaluatedDraws:0};
     let promoted=false,rejected=false,stopped=false;
     try{
       // Use a 90% confidence interval and a bounded sample for a faster, honest verdict.
@@ -126,13 +138,13 @@
           const first=await playOne(start,"後手",candidate,champion,settings,p=>options.onProgress&&options.onProgress({...p,pair:pairNumber,game:1,totalGames:totals.games}));
           const second=await playOne(start,"先手",candidate,champion,settings,p=>options.onProgress&&options.onProgress({...p,pair:pairNumber,game:2,totalGames:totals.games}));
           for(const [result,candidateSide,gameNumber] of [[first,"後手",1],[second,"先手",2]]){
-            saveGameRecord({id:Date.now().toString(36)+"-"+totals.games, pair:pairNumber, game:gameNumber, candidateSide, winner:result.winner||null, draw:!!result.draw, plies:result.plies, savedAt:new Date().toISOString(), finalState:result.finalState});
+            saveGameRecord({id:Date.now().toString(36)+"-"+totals.games, pair:pairNumber, game:gameNumber, candidateSide, winner:result.winner||null, draw:!!result.draw, candidateFinalScore:result.candidateFinalScore, plies:result.plies, savedAt:new Date().toISOString(), finalState:result.finalState});
             const candidateWon=!result.draw&&result.winner===candidateSide;
             const championWon=!result.draw&&!candidateWon;
             totals.games++;totals.nodes+=result.nodes;totals.plies+=result.plies;
             run.games++;run.nodes+=result.nodes;run.plies+=result.plies;
             if(result.adjudicated){totals.adjudicated++;run.adjudicated++;}
-            if(result.draw){totals.draws++;run.draws++;}
+            if(result.draw){totals.draws++;run.draws++;if(Number.isFinite(result.candidateFinalScore)){totals.drawEvalSum+=result.candidateFinalScore;totals.evaluatedDraws++;run.drawEvalSum+=result.candidateFinalScore;run.evaluatedDraws++;}}
             else if(candidateWon){totals.candidateWins++;run.candidateWins++;}
             else{totals.championWins++;run.championWins++;}
           }
@@ -140,9 +152,12 @@
           // 同一初期配置で先後を入れ替えた2局を1組として比較する。
           // 2局の候補AI得点が1点超なら組勝ち、1点未満なら組負け、
           // ちょうど1点なら組引き分け。統計上の独立単位は「組」とする。
+          const drawPoint = result => result.draw && Number.isFinite(result.candidateFinalScore)
+            ? 0.5 + Math.max(-0.2,Math.min(0.2,Math.tanh(result.candidateFinalScore/1200)*0.2))
+            : 0.5;
           const pairCandidateScore =
-            (first.draw ? 0.5 : first.winner === "後手" ? 1 : 0) +
-            (second.draw ? 0.5 : second.winner === "先手" ? 1 : 0);
+            (first.draw ? drawPoint(first) : first.winner === "後手" ? 1 : 0) +
+            (second.draw ? drawPoint(second) : second.winner === "先手" ? 1 : 0);
           if(pairCandidateScore>1)totals.pairWins++;
           else if(pairCandidateScore<1)totals.pairLosses++;
           else totals.pairDraws++;
@@ -167,6 +182,7 @@
             scoreRate: (totals.candidateWins+totals.draws*.5)/totals.games,
             pairedRate,pairedLowerBound:bounds.lower,pairedUpperBound:bounds.upper,
             pairWins:totals.pairWins,pairLosses:totals.pairLosses,pairDraws:totals.pairDraws,
+            averageDrawEval:totals.evaluatedDraws?totals.drawEvalSum/totals.evaluatedDraws:0,evaluatedDraws:totals.evaluatedDraws,
             promoted,rejected
           });
           if(promoted||rejected)break;
@@ -189,6 +205,7 @@
         totalChampionWins:totals.championWins,totalDraws:totals.draws,
         totalAdjudicated:totals.adjudicated,scoreRate,pairedRate,
         pairWins:totals.pairWins,pairLosses:totals.pairLosses,pairDraws:totals.pairDraws,
+        averageDrawEval:totals.evaluatedDraws?totals.drawEvalSum/totals.evaluatedDraws:0,evaluatedDraws:totals.evaluatedDraws,
         lowerBound:bounds.lower,upperBound:bounds.upper,
         promoted,rejected,stopped,inconclusive,candidateWeights:candidate,championWeights:champion,settings
       };
