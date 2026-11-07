@@ -322,7 +322,7 @@
     if (pendingMove) finishMove(pendingMove.to.row, pendingMove.to.col, "tsuke");
   });
   aiButton.addEventListener("click", async () => {
-    if (aiThinking) return;
+    if (aiThinking || trainingRunning || tournamentRunning) return;
     if (!window.GungiSearch) {
       messageElement.textContent = "探索エンジンを読み込めませんでした。ページを再読み込みしてください。";
       return;
@@ -516,7 +516,7 @@
   const trainButton = document.getElementById("train-ai");
   if (trainButton && window.GungiTraining) {
     trainButton.addEventListener("click", async () => {
-      if (trainingRunning || aiThinking) return;
+      if (trainingRunning || aiThinking || tournamentRunning) return;
       trainingRunning = true;
       trainButton.disabled = true;
       trainButton.textContent = "学習中…";
