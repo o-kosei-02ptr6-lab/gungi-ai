@@ -569,10 +569,12 @@
             trainingStatus.textContent = p.phase === "parallel"
               ? "2局を同時に対局中…（完了 " + p.completedGames + "局）"
               : "第" + p.game + "局の結果を評価関数へ反映・保存中…";
-            trainingInfo.textContent = "累計探索局面 " + p.nodes.toLocaleString() + " ／ " +
+            if (p.phase === "learning") refreshTournamentGames();
+            trainingInfo.textContent = "累計探索局面 " + p.nodes.toLocaleString() + " ／ "
               (p.phase === "learning" ? "TD目標 " + Number(p.target).toFixed(3) + " ／ 学習AI " + p.candidateWins + "勝・最良AI " + p.championWins + "勝・規定手数引き分け " + p.draws + "局" : "学習データ収集中");
           }
         });
+        refreshTournamentGames();
         trainingStatus.textContent = trainingStopRequested
           ? "学習を停止しました。学習済みの重みは保存されています。"
           : "学習処理が終了しました。学習済みの重みは保存されています。";
