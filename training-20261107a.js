@@ -83,7 +83,7 @@
     loadWeights();
     let candidate=AI.getWeights();
     const champion=championWeights();
-    let completed=0,decisive=0,candidateWins=0,championWins=0,draws=0,nodes=0,sampleCount=0,totalTdError=0,tdUpdates=0;
+    let completed=0,decisive=0,candidateWins=0,championWins=0,draws=0,adjudicatedGames=0,nodes=0,sampleCount=0,totalTdError=0,tdUpdates=0;
     for(let game=0;continuous||game<games;game++){
       if(options.shouldStop&&options.shouldStop())break;
       const state=makeStartPosition(),candidateSide=game%2===0?"先手":"後手",trajectory=[];
@@ -107,8 +107,20 @@
         if(options.onProgress)options.onProgress({game:game+1,games,ply:plies+1,maxPlies,nodes,phase:"selfplay",candidateSide,opponent:"保存済み最良AI"});
         if(plies%4===3)await new Promise(resolve=>setTimeout(resolve,0));
       }
+      // Adjudicate unfinished games with fixed baseline weights. This keeps
+      // the result independent of the candidate/champion evaluator being trained.
+      let adjudicated=false,adjudicationScore=null;
+      if(state.phase!=="finished"){
+        AI.setWeights(Object.fromEntries(FEATURES.map(key=>[key,1])));
+        adjudicationScore=AI.evaluate(state,candidateSide);
+        adjudicated=true;
+        const margin=250;
+        if(adjudicationScore>margin){state.phase="finished";state.winner=candidateSide;}
+        else if(adjudicationScore< -margin){state.phase="finished";state.winner=otherSide(candidateSide);}
+      }
       const finalTarget=state.phase==="finished"
         ?(state.winner===candidateSide?1:-1):0;
+      if(adjudicated)adjudicatedGames++;
       if(state.phase==="finished"){
         decisive++;
         if(state.winner===candidateSide)candidateWins++;else championWins++;
@@ -125,13 +137,14 @@
       saveWeights(candidate,previousGames+completed);
       if(options.onProgress)options.onProgress({
         game:game+1,games,ply:plies,nodes,phase:"learning",target:finalTarget,
+        adjudicated,adjudicationScore,adjudicatedGames,
         meanTdError:tdUpdates?totalTdError/tdUpdates:0,candidateWins,championWins,draws
       });
       if(options.shouldStop&&options.shouldStop())break;
     }
     AI.setWeights(candidate);
     saveWeights(candidate,previousGames+completed);
-    return {games:completed,decisive,candidateWins,championWins,draws,firstWins:candidateWins,
+    return {games:completed,decisive,candidateWins,championWins,draws,adjudicatedGames,firstWins:candidateWins,
       samples:sampleCount,nodes,tdUpdates,meanTdError:tdUpdates?totalTdError/tdUpdates:0,weights:candidate};
   }
   function otherSide(side){return side==="先手"?"後手":"先手";}
