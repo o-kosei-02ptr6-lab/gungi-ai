@@ -122,10 +122,10 @@
           const score=totals.candidateWins+totals.draws*.5;
           const scoreRate=score/totals.games;
           const bounds=wilsonBounds(scoreRate,totals.games);
-          if(totals.games>=20&&bounds.lower>.5){
+          if(totals.games>=40&&bounds.lower>.5){
             saveChampion(candidate);champion=candidate;promoted=true;
             try{localStorage.removeItem(STATS_KEY);}catch(_){}
-          }else if(totals.games>=20&&bounds.upper<.5){
+          }else if(totals.games>=40&&bounds.upper<.5){
             AI.setWeights(champion);
             const saved=T.exportData();
             T.saveWeights(champion,saved.games||0);
