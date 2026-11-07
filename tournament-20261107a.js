@@ -150,7 +150,7 @@
       const score=totals.candidateWins+totals.draws*.5;
       const scoreRate=totals.games?score/totals.games:0;
       const bounds=wilsonBounds(scoreRate,totals.games);
-      const inconclusive=!promoted&&!rejected&&!stopped&&totals.games>=40;
+      const inconclusive=!promoted&&!rejected&&!stopped&&totals.games>=200;
       return {
         ...run,totalGames:totals.games,totalCandidateWins:totals.candidateWins,
         totalChampionWins:totals.championWins,totalDraws:totals.draws,
