@@ -573,15 +573,22 @@
             }
           }
         });
-        const rate = (result.scoreRate * 100).toFixed(1);
-        status.textContent = "比較完了。学習AIの得点率：" + rate + "%";
-        info.textContent = "学習AI " + result.candidateWins + "勝 ／ 基準AI " + result.baselineWins +
-          "勝 ／ 引き分け " + result.draws + "局（計" + result.games + "局） ／ " +
-          result.plies + "手 ／ 探索 " + result.nodes.toLocaleString() + "局面。 " +
-          (result.scoreRate > 0.5 ? "今回の短期テストでは学習AIが上回りました。" :
-            result.scoreRate < 0.5 ? "今回の短期テストでは基準AIが上回りました。" :
-              "今回の短期テストでは互角でした。") +
-          " 4局だけでは統計的な強さの証明にはなりません。";
+        if (result.alreadyChampion) {
+          status.textContent = "現在の評価関数は、保存済みの最良AIと同じです。";
+          info.textContent = "新しい学習結果ができたら、改めて比較できます。";
+        } else {
+          const rate = (result.scoreRate * 100).toFixed(1);
+          const lower = (result.lowerBound * 100).toFixed(1);
+          status.textContent = "累計 " + result.totalGames + "局。学習AIの得点率：" + rate + "%";
+          info.textContent = "今回：" + result.candidateWins + "勝 ／ 最良AI " + result.championWins +
+            "勝 ／ 引き分け " + result.draws + "局（" + result.games + "局）。累計：" +
+            result.totalCandidateWins + "勝 ／ 最良AI " + result.totalChampionWins +
+            "勝 ／ 引き分け " + result.totalDraws + "局。95%信頼下限の目安 " + lower + "%。 " +
+            (result.promoted ? "基準を満たしたため、新しい評価関数を最良AIとして保存しました。" :
+              result.rejected ? "十分な対局数で改善を確認できなかったため、最良AIの評価関数に戻しました。" :
+              "まだ採用判定に必要な対局数・信頼度に達していません。結果は次回以降に累積します。") +
+            " 採用には40局以上かつ95%信頼下限が50%を超えることが必要です。";
+        }
       } catch (error) {
         status.textContent = "比較中にエラーが発生しました。";
         info.textContent = error && error.message ? error.message : String(error);
