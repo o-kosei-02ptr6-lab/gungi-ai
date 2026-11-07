@@ -53,11 +53,16 @@
     const piece=count===0?hand.find(p=>p.name==="帥"):random(hand);
     if(!piece)throw new Error(side+"の配置可能な駒がありません。");
     const squares=[];
-    for(let row=0;row<E.SIZE;row++)for(let col=0;col<E.SIZE;col++)
+    for(let row=0;row<E.SIZE;row++)for(let col=0;col<E.SIZE;col++){
+      // 帥は必ず単独の1段目に配置する。2・3段目になる候補は除外。
+      if(piece.name==="帥" && state.board[row][col].length!==0)continue;
       if(E.canPlacePiece(state,row,col,piece))squares.push({row,col});
+    }
     if(!squares.length)throw new Error(side+"の配置可能なマスがありません。");
     const at=random(squares),result=E.placePiece(state,at.row,at.col,side,piece.id);
     if(!result.ok)throw new Error("自己対局の初期配置に失敗: "+result.reason);
+    if(piece.name==="帥" && state.board[at.row][at.col].length!==1)
+      throw new Error("帥を1段目に配置できませんでした。");
   }
   function makeStartPosition(){
     const state=E.createGameState();
