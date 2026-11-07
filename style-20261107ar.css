@@ -1,0 +1,147 @@
+:root{color-scheme:dark;--bg:#151923;--panel:#202735;--text:#f3f5f8;--muted:#aab4c4;--wood:#d8b77b;--wood-dark:#9d7745;--accent:#9eafff}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN",sans-serif}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:18px max(16px,calc((100vw - 760px)/2));border-bottom:1px solid #303949}.eyebrow{margin:0 0 4px;color:var(--muted);font-size:10px;letter-spacing:.18em}h1{margin:0;font-size:25px}.status{color:#d8c18f;font-size:12px;border:1px solid #756444;padding:6px 9px;border-radius:20px}
+main{width:min(100% - 24px,680px);margin:18px auto 36px;display:grid;gap:14px}.panel{background:var(--panel);border:1px solid #303b4d;border-radius:14px;padding:16px}h2{margin:0 0 9px;font-size:16px}p{color:var(--muted);line-height:1.65;font-size:13px;margin:0}
+.setup-controls{display:grid;grid-template-columns:1fr;gap:9px}.setup-controls label,.piece-heading{font-size:13px;color:var(--muted)}select{width:100%;padding:11px;border:1px solid #596780;border-radius:9px;background:#303c51;color:var(--text);font-size:15px}.piece-heading{display:flex;justify-content:space-between;gap:8px;align-items:center}.piece-heading strong{color:var(--text)}#inventory-count{color:var(--accent);font-size:12px}
+.piece-picker{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.piece-choice{margin:0!important;min-width:0;padding:11px 3px!important;border:1px solid #596780!important;border-radius:8px!important;background:#303c51!important;color:var(--text)!important;font-size:13px!important}.piece-choice.active{border:2px solid var(--accent)!important;background:#394866!important;color:white!important}.piece-choice:disabled{opacity:.35;text-decoration:line-through}#message{padding:9px;background:#18202d;border-radius:8px}
+.board-wrap{padding:10px;background:#292b2e;border-radius:12px}.board-coordinates{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));width:100%;aspect-ratio:1;border:2px solid var(--wood-dark);background:var(--wood);gap:1px}.square{min-width:0;border:0;padding:0;position:relative;background:var(--wood);color:#332719;display:grid;place-items:center;font-size:clamp(9px,3vw,17px);cursor:pointer;touch-action:manipulation}.square.selected{outline:3px solid #667fff;outline-offset:-3px;background:#f0d59f}.square .coord{position:absolute;top:2px;left:3px;font-size:8px;opacity:.55}.stack-label{max-width:100%;overflow-wrap:anywhere;text-align:center;padding:7px 1px 1px}.square.first-side{background:#f0d59f}.square.second-side{background:#b8c7e0}
+.control-heading{display:flex;justify-content:space-between;align-items:center;gap:12px}.control-heading h2{margin:0}#selected{color:var(--accent)}button:not(.square):not(.piece-choice){margin:8px 6px 0 0;border:1px solid #596780;background:#303c51;color:var(--text);border-radius:9px;padding:10px 14px;font-size:13px}
+.inventory-summary{display:grid;gap:12px}.inventory-side strong{font-size:13px}.inventory-side p{margin-top:4px;font-size:12px;line-height:1.8}.roadmap{margin:8px 0 0;padding-left:22px;color:var(--muted);line-height:2;font-size:13px}.roadmap .active{color:#d8c18f}.roadmap .done{color:#8fc7a0}footer{text-align:center;color:#778397;font-size:11px;padding:12px 0 26px}@media(min-width:600px){main{margin-top:26px;gap:18px}.board-wrap{padding:16px}.piece-picker{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.square.legal-target{background:#9bd39f!important;outline:3px solid #327b48;outline-offset:-3px}.square.legal-target::after{content:'●';font-size:clamp(12px,4vw,22px);color:#286b3b;opacity:.85}
+
+.mode-toggle{display:block!important;width:100%;padding:16px!important;margin:0!important;border:2px solid #9eafff!important;border-radius:12px!important;background:#394866!important;color:#fff!important;font-size:16px!important;font-weight:700!important;min-height:54px}
+
+.mode-toggle[hidden]{display:none!important}
+
+/* Individual piece faces reveal each layer's side, including covered pieces. */
+.stack-label{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;width:100%;padding:10px 1px 1px;z-index:1}
+.stack-piece{display:block;max-width:100%;min-width:72%;padding:1px 3px;border-radius:4px;font-size:clamp(8px,2.5vw,14px);line-height:1.25;font-weight:700;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:clip}
+.stack-piece.piece-white{background:#fff;color:#20242b;border:1px solid #b9c1cc;box-shadow:0 1px 2px #0003}
+.stack-piece.piece-black{background:#20242b;color:#fff;border:1px solid #0d1118;box-shadow:0 1px 2px #0005}
+.square.first-side,.square.second-side{background:var(--wood)}
+.square.selected{background:var(--wood)!important}
+
+/* Gungi koma: round, raised discs; lower layers remain visible as colored rims. */
+.square{overflow:visible;z-index:0}
+.square:has(.stack-label){z-index:1}
+.stack-label{position:absolute;inset:0;display:block;width:100%;height:100%;padding:0;pointer-events:none;overflow:visible}
+.stack-piece{position:absolute;left:50%;top:50%;display:grid;place-items:center;width:74%;aspect-ratio:1;border-radius:50%;padding:0;min-width:0;max-width:none;line-height:1;font-size:clamp(10px,3.1vw,19px);font-weight:800;white-space:nowrap;overflow:visible;text-overflow:clip;box-sizing:border-box}
+.stack-piece.piece-white{background:radial-gradient(circle at 35% 28%,#fff 0%,#fff 62%,#e4e7ec 100%);color:#111;border:5px solid #c9cbd0;box-shadow:0 4px 7px #0005,inset 0 1px 2px #fff}
+.stack-piece.piece-black{background:radial-gradient(circle at 35% 28%,#252525 0%,#050505 70%);color:#fff;border:5px solid #55565a;box-shadow:0 4px 7px #0007,inset 0 1px 2px #777}
+.stack-piece:not(:last-child){text-shadow:none}
+.square.selected{z-index:3}
+.square.legal-target{z-index:2}
+@media(min-width:600px){.stack-piece{font-size:clamp(12px,2vw,20px)}}
+
+/* Final token geometry: every layer is a true circle; only the top layer has a glyph. */
+.square .stack-label{position:absolute;inset:0;width:100%;height:100%;padding:0;margin:0;display:block;overflow:visible;pointer-events:none}
+.square .stack-piece{position:absolute;left:50%;top:calc(50% + var(--layer-offset, 0%));transform:translate(-50%,-50%);display:flex;align-items:center;justify-content:center;width:76%;height:76%;min-width:0;max-width:none;aspect-ratio:1/1;box-sizing:border-box;border-radius:50%;padding:0;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:clip}
+.square .stack-piece.piece-white{background:radial-gradient(circle at 35% 28%,#fff 0%,#fff 65%,#e5e7eb 100%);color:#111;border:5px solid #c8cbd1;box-shadow:0 4px 7px #0005,inset 0 1px 2px #fff}
+.square .stack-piece.piece-black{background:radial-gradient(circle at 35% 28%,#252525 0%,#050505 72%);color:#fff;border:5px solid #55565a;box-shadow:0 4px 7px #0007,inset 0 1px 2px #777}
+.square .stack-piece:not(:last-child){font-size:0!important}
+.square .stack-piece:last-child{font-size:clamp(11px,3.2vw,20px);font-weight:800}
+
+/* Keep the 9x9 board geometry fixed regardless of piece labels or stacks. */
+.board-coordinates{
+  display:grid;
+  grid-template-columns:repeat(9,minmax(0,1fr));
+  grid-template-rows:repeat(9,minmax(0,1fr));
+  grid-auto-rows:minmax(0,1fr);
+  aspect-ratio:1 / 1;
+  width:100%;
+  height:auto;
+  min-width:0;
+  min-height:0;
+  box-sizing:border-box;
+}
+.square{
+  width:100%;
+  height:100%;
+  min-width:0;
+  min-height:0;
+  box-sizing:border-box;
+  overflow:visible;
+}
+.square .stack-label{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  min-width:0;
+  min-height:0;
+}
+.square .stack-piece{
+  width:76%;
+  height:76%;
+  border-width:2px!important;
+  box-sizing:border-box;
+}
+
+/* Explicitly center layer one and stack higher layers upward. */
+.square .stack-piece{position:absolute!important;left:50%!important;transform:translate(-50%,-50%)!important;width:76%!important;height:76%!important;border-width:2px!important;border-radius:50%!important;box-sizing:border-box!important;}
+
+/* Compact, overlapping stack: layer 1 centered; layers 2 and 3 rise gently. */
+.square .stack-piece{transform:translate(-50%,-50%)!important;border-radius:50%!important;}
+
+/* Stack spacing is controlled by the renderer; preserve circular styling. */
+
+
+/* Board checker pattern: even row+column is pale, odd is warm brown. */
+.square.parity-light,
+.square.first-side.parity-light,
+.square.second-side.parity-light {
+  background: #ead8b5;
+}
+ .square.parity-brown,
+.square.first-side.parity-brown,
+.square.second-side.parity-brown {
+  background: #c9a66e;
+}
+.square.selected {
+  background: #f0d59f!important;
+}
+
+
+/* Temporary check alert shown over the board, facing the checked player. */
+.board-wrap{position:relative}
+#check-overlay{
+  position:absolute;
+  left:50%;
+  top:50%;
+  z-index:20;
+  transform:translate(-50%,-50%);
+  pointer-events:none;
+  color:#fff;
+  background:rgba(18,22,30,.88);
+  border:2px solid #d8c18f;
+  border-radius:14px;
+  padding:14px 24px;
+  font-size:clamp(30px,9vw,54px);
+  line-height:1.2;
+  font-weight:900;
+  letter-spacing:.12em;
+  text-shadow:0 2px 5px #000;
+  box-shadow:0 5px 18px #0008;
+}
+#check-overlay[hidden]{display:none}
+
+/* Fade the check alert out during its final half-second. */
+#check-overlay{opacity:1;transition:opacity .5s ease;}
+#check-overlay.is-fading{opacity:0;}
+
+
+/* Finished game state */
+#status{white-space:nowrap}
+
+
+/* Move history */
+.history-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.history-heading h2{margin:0}
+#history-count{font-size:12px;color:var(--accent)}
+.move-history{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:7px;max-height:360px;overflow-y:auto}
+.history-entry{display:grid;gap:3px;padding:10px 11px;border:1px solid #3a4659;border-radius:9px;background:#18202d}
+.history-entry strong{font-size:12px;color:#d8c18f}
+.history-entry span{font-size:13px;line-height:1.5;color:var(--text);overflow-wrap:anywhere}
+.history-place strong{color:#9eafff}
+.history-deploy strong{color:#8fc7a0}
+.history-empty{padding:12px;color:var(--muted);font-size:13px;line-height:1.6;background:#18202d;border-radius:9px}
