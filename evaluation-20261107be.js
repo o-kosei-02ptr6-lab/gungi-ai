@@ -265,10 +265,20 @@
       }
       kingSafety -= Math.min(126, threatenedAdjacent * 18);
 
-      // 味方の護衛が少ない帥は包囲・詰みの危険が高い。
-      // 周囲8マスの味方が4枚未満なら不足分を減点し、完全に孤立していれば追加減点。
-      kingSafety -= Math.max(0, 4 - nearbyFriends) * 12;
-      if (nearbyFriends === 0) kingSafety -= 40;
+      // 帥の位置に応じて護衛の必要枚数を変える。
+      // 中央(盤内)：3枚、辺(隅以外の外周)：2枚、隅：0枚。
+      // 隅では味方が0枚の場合に限り、孤立ペナルティを適用する。
+      const onTopOrBottomEdge = marshal.row === 0 || marshal.row === E.SIZE - 1;
+      const onLeftOrRightEdge = marshal.col === 0 || marshal.col === E.SIZE - 1;
+      const isCorner = onTopOrBottomEdge && onLeftOrRightEdge;
+      const isEdge = onTopOrBottomEdge || onLeftOrRightEdge;
+      const requiredGuards = isCorner ? 0 : isEdge ? 2 : 3;
+      if (isCorner) {
+        if (nearbyFriends === 0) kingSafety -= 40;
+      } else if (nearbyFriends < requiredGuards) {
+        kingSafety -= (requiredGuards - nearbyFriends) * 12;
+        if (nearbyFriends === 0) kingSafety -= 40;
+      }
 
       // 帥を実際に動かした局面を作り、相手が次の手で帥を取れない移動先だけを
       // 安全な逃げ道として数える。単なる移動可能マスは逃げ道に含めない。
