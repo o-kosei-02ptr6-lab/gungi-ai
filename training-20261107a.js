@@ -47,7 +47,7 @@
       const currentValue=valueOf(current,weights);
       const terminal=i===trajectory.length-1;
       const nextValue=terminal?finalTarget:valueOf(trajectory[i+1],weights);
-      const delta=nextValue-gamma*0-currentValue;
+      const delta=(terminal?finalTarget:gamma*nextValue)-currentValue;
       for(const key of FEATURES){
         trace[key]=gamma*lambda*trace[key]+(current[key]||0)/1800;
         const gradient=1-currentValue*currentValue;
