@@ -157,20 +157,21 @@
     return result && result.ok ? next : null;
   }
 
-  // 帥手中は、着手後に自分の帥がなお捕獲可能な手を除外する。
+  // 着手後に自分の帥が相手の捕獲可能範囲へ入る手を除外する。
+  // すでに帥手を受けている場合だけでなく、遮蔽物を動かして
+  // 相手の射線・移動範囲を帥まで通してしまう手も候補にしない。
   // 移動・捕獲・ツケ・「新」による合い駒を同じ基準で検査する。
   function getSearchActions(state, side, maxDeployCandidates) {
     const actions = generateActions(state, side, maxDeployCandidates);
-    if (!E.isInCheck(state, side)) return actions;
-    const evasions = [];
+    const safeActions = [];
     for (const action of actions) {
       const child = applyAction(state, action);
       if (child && (child.phase === "finished" || !E.isInCheck(child, side))) {
-        evasions.push(action);
+        safeActions.push(action);
       }
     }
-    // 完全に防げない局面でも探索を続け、最も粘れる手を選べるようにする。
-    return evasions.length ? evasions : actions;
+    // 安全な手が一つもない局面では、探索を続けて最も粘れる手を選ぶ。
+    return safeActions.length ? safeActions : actions;
   }
 
   function orderActions(state, actions, ttMove) {
