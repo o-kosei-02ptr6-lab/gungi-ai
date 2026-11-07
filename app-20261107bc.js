@@ -613,13 +613,14 @@
             : result.inconclusive ? "最大200局を検証しました。現時点では優劣を判定できません。"
             : "検証完了。累計" + result.totalGames + "局。学習AIの得点率：" + rate + "%";
           info.textContent = "今回：" + result.candidateWins + "勝 ／ 最良AI " + result.championWins +
-            "勝 ／ 引き分け " + result.draws + "局（" + result.games + "局、評価判定 " + result.adjudicated + "局）。累計：" +
+            "勝 ／ 引き分け " + result.draws + "局（" + result.games + "局）。累計：" +
             result.totalCandidateWins + "勝 ／ 最良AI " + result.totalChampionWins +
-            "勝 ／ 引き分け " + result.totalDraws + "局。評価判定 " + result.totalAdjudicated +
-            "局。90%信頼区間 " + lower + "〜" + (result.upperBound*100).toFixed(1) + "%。 " +
+            "勝 ／ 引き分け " + result.totalDraws + "局。先後入替ペア " + (result.pairWins||0) + "勝・" +
+            (result.pairLosses||0) + "敗・" + (result.pairDraws||0) + "分。ペア勝率 " +
+            ((result.pairedRate||0)*100).toFixed(1) + "%、90%信頼区間 " + lower + "〜" + (result.upperBound*100).toFixed(1) + "%。 " +
             (result.promoted ? "統計的に改善が確認されたため、新しい評価関数を最良AIとして保存しました。" :
               result.rejected ? "統計的に改善が確認できなかったため、最良AIの評価関数に戻しました。" :
-              result.inconclusive ? "200局では優劣を断定できる差が確認できませんでした。評価関数は変更せず、結果を保存しました。" :
+              result.inconclusive ? "最大200局ではペア比較で優劣を断定できませんでした。評価関数は変更せず、結果を保存しました。" :
               "途中停止しました。累積データは保存されているため、次回は続きから検証できます。");
         }
       } catch (error) {
