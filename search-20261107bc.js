@@ -173,6 +173,24 @@
     }).sort((a,b) => b.score - a.score).map(item => item.action);
   }
 
+  // 静止探索用：通常探索の末端でも、実際に駒を取る手だけを追加で読む。
+  // 「取り合いの途中」で評価を止める水平線効果を軽減する。
+  function generateCaptureActions(state, side) {
+    const actions = [];
+    for (const move of E.generateLegalMoves(state, side)) {
+      const target = state.board[move.to.row][move.to.col];
+      if (!target.length || target[target.length - 1].side === side) continue;
+      actions.push({
+        type: "move",
+        from: move.from,
+        to: move.to,
+        landingMode: "capture",
+        pieceId: move.piece.id
+      });
+    }
+    return actions;
+  }
+
   function findBestMove(state, options = {}) {
     return new Promise((resolve, reject) => {
       (async () => {
@@ -187,7 +205,7 @@
         const started = now();
         const deadline = started + timeMs;
         const table = new Map();
-        const stats = { nodes: 0, cutoffs: 0, ttHits: 0 };
+        const stats = { nodes: 0, qnodes: 0, cutoffs: 0, ttHits: 0 };
         const checkStop = () => {
           if (stats.nodes >= maxNodes || now() >= deadline) throw new SearchAbort();
         };
@@ -200,13 +218,39 @@
           table.set(key, entry);
         }
 
+        function quiescence(position, alpha, beta, ply, qply) {
+          stats.nodes += 1;
+          stats.qnodes += 1;
+          if ((stats.nodes & 127) === 0) checkStop();
+          if (position.phase === "finished") {
+            return position.winner === position.turn ? MATE - ply : -MATE + ply;
+          }
+
+          const standPat = AI.evaluate(position, position.turn);
+          if (qply >= 5) return standPat;
+          if (standPat >= beta) return standPat;
+          if (standPat > alpha) alpha = standPat;
+
+          const captures = generateCaptureActions(position, position.turn);
+          const ordered = orderActions(position, captures, null);
+          for (const action of ordered) {
+            checkStop();
+            const child = applyAction(position, action);
+            if (!child) continue;
+            const score = -quiescence(child, -beta, -alpha, ply + 1, qply + 1);
+            if (score >= beta) return score;
+            if (score > alpha) alpha = score;
+          }
+          return alpha;
+        }
+
         function negamax(position, depth, alpha, beta, ply) {
           stats.nodes += 1;
           if ((stats.nodes & 127) === 0) checkStop();
           if (position.phase === "finished") {
             return position.winner === position.turn ? MATE - ply : -MATE + ply;
           }
-          if (depth <= 0) return AI.evaluate(position, position.turn);
+          if (depth <= 0) return quiescence(position, alpha, beta, ply, 0);
 
           const key = positionKey(position);
           const originalAlpha = alpha;
@@ -295,6 +339,7 @@
           score: result.score,
           depth: result.depth,
           nodes: stats.nodes,
+          quiescenceNodes: stats.qnodes,
           cutoffs: stats.cutoffs,
           transpositionHits: stats.ttHits,
           elapsedMs: Math.round(now() - started)
