@@ -45,7 +45,7 @@
     return state;
   }
   async function play(message){
-    const {candidateWeights,championWeights,candidateSide,maxPlies=144,searchOptions={}}=message;
+    const {candidateWeights,championWeights,candidateSide,maxPlies=108,searchOptions={}}=message;
     const state=makeStartPosition(),trajectory=[];
     let nodes=0,plies=0;
     for(;plies<maxPlies&&state.phase==="move";plies++){
