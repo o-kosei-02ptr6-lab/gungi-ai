@@ -197,7 +197,7 @@
   }
 
   function createWorker(){
-    return new Worker("./training-worker-20261107a.js?v=20261108marshal1");
+    return new Worker("./training-worker-20261107a.js?v=20261108marshalcols1");
   }
   async function trainParallel(options={}){
     const continuous=options.continuous===true;
