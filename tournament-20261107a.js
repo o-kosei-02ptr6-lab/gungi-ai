@@ -8,8 +8,25 @@
   const STATS_KEY="gungi-ai-tournament-stats-v2";
   const GAMES_KEY="gungi-ai-tournament-games-v1";
   const MAX_SAVED_GAMES=40;
-  function saveGameRecord(record){if(!record||!record.winner||record.draw)return;try{const records=JSON.parse(localStorage.getItem(GAMES_KEY)||"[]");const next=Array.isArray(records)?records.filter(item=>item&&item.winner&&!item.draw):[];next.push(record);localStorage.setItem(GAMES_KEY,JSON.stringify(next.slice(-MAX_SAVED_GAMES)));}catch(_){}}
-  function listGameRecords(){try{const records=JSON.parse(localStorage.getItem(GAMES_KEY)||"[]");const wins=Array.isArray(records)?records.filter(item=>item&&item.winner&&!item.draw):[];return wins;}catch(_){return [];}}
+  function saveGameRecord(record){
+    if(!record||(!record.winner&&!record.draw)||!record.finalState)return;
+    try{
+      const stored=JSON.parse(localStorage.getItem(GAMES_KEY)||"[]");
+      const records=Array.isArray(stored)?stored.filter(item=>item&&item.finalState&&(item.winner||item.draw)):[];
+      records.push(record);
+      while(records.length>MAX_SAVED_GAMES){
+        const oldestDraw=records.findIndex(item=>item.draw===true||!item.winner);
+        records.splice(oldestDraw>=0?oldestDraw:0,1);
+      }
+      localStorage.setItem(GAMES_KEY,JSON.stringify(records));
+    }catch(_){}
+  }
+  function listGameRecords(){
+    try{
+      const records=JSON.parse(localStorage.getItem(GAMES_KEY)||"[]");
+      return Array.isArray(records)?records.filter(item=>item&&item.finalState&&(item.winner||item.draw)):[];
+    }catch(_){return [];}
+  }
   const other=side=>side==="先手"?"後手":"先手";
   const clone=S.cloneState;
   const featureKeys=Object.keys(INITIAL);
