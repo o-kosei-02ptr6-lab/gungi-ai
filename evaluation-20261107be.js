@@ -277,6 +277,7 @@
       for (const move of marshalMoves) {
         const nextState = {
           ...state,
+          turn: side,
           board: state.board.map(line => line.map(stack => stack.slice())),
           hands: state.hands,
           history: Array.isArray(state.history) ? state.history.slice() : []
