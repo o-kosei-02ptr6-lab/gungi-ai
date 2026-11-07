@@ -595,10 +595,10 @@
               status.textContent = "累計" + (p.totalGames||0) + "局・第" + p.pair + "組の第" + p.game +
                 "局を対戦中… " + p.plies + "手 ／ " + p.nodes.toLocaleString() + "局面";
             } else if (p.phase === "pairDone") {
-              status.textContent = "累計" + p.totalGames + "局。得点率 " + (p.scoreRate*100).toFixed(1) +
+              status.textContent = "累計" + p.totalGames + "局。ペア勝率 " + ((p.pairedRate||0)*100).toFixed(1) +
                 "% ／ 90%信頼区間 " + (p.lowerBound*100).toFixed(1) + "〜" + (p.upperBound*100).toFixed(1) + "%。検証を継続中…";
             } else if (p.phase === "continuing") {
-              status.textContent = "累計" + p.totalGames + "局。統計的な結論が出るまで検証を続けています…";
+              status.textContent = "累計" + p.totalGames + "局。先後入替ペアで統計的な結論が出るまで検証を続けています…";
             }
           }
         });
