@@ -54,7 +54,7 @@
       const a=result.bestMove;
       const applied=a.type==="deploy"
         ?E.deployPiece(state,a.row,a.col,side,a.pieceId)
-        :E.movePiece(state,a.from.row,a.from.col,a.to.row,a.to.col,side,a.landingMode);
+        :E.movePiece(state,a.from.row,a.from.col,a.to.row,a.to.col,a.landingMode);
       if(!applied||!applied.ok)throw new Error("学習対局の着手に失敗しました: "+(applied&&applied.reason||"不明なエラー"));
     }
     let adjudicated=false,adjudicationScore=null;
