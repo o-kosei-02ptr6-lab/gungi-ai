@@ -285,20 +285,35 @@
           }
 
           const inCheck = E.isInCheck(position, position.turn);
-          const standPat = AI.evaluate(position, position.turn);
-          if (qply >= 10) return inCheck ? standPat - 20000 : standPat;
-          if (qply >= 5 && !inCheck) return standPat;
+          const standPat = inCheck ? -INF : AI.evaluate(position, position.turn);
           if (!inCheck) {
             if (standPat >= beta) return standPat;
             if (standPat > alpha) alpha = standPat;
+            if (qply >= 5) return standPat;
           }
 
-          // 帥手中は静止探索でも全応手を読む。通常局面では捕獲手だけを読む。
+          // 帥手中は静止評価で打ち切らず、合法な全応手を調べる。
+          // 応手がなければ、その場で詰みとして扱う。
           const tactical = inCheck
             ? getSearchActions(position, position.turn, maxDeployCandidates)
             : generateCaptureActions(position, position.turn);
           const ordered = orderActions(position, tactical, null, ply, killers, historyScores);
           if (inCheck && !ordered.length) return -MATE + ply;
+          // 長い連続王手では探索資源を守りつつ、少なくとも王手回避手を
+          // 1手実行してから評価する。王手中の静止評価による誤判定を防ぐ。
+          if (inCheck && qply >= 10) {
+            let bestEvasion = -INF;
+            for (const action of ordered) {
+              checkStop();
+              const child = applyAction(position, action);
+              if (!child) continue;
+              const score = child.phase === "finished"
+                ? (child.winner === position.turn ? MATE - ply - 1 : -MATE + ply + 1)
+                : -AI.evaluate(child, child.turn);
+              if (score > bestEvasion) bestEvasion = score;
+            }
+            return bestEvasion === -INF ? -MATE + ply : bestEvasion;
+          }
           for (const action of ordered) {
             checkStop();
             const child = applyAction(position, action);
@@ -316,7 +331,12 @@
           if (position.phase === "finished") {
             return position.winner === position.turn ? MATE - ply : -MATE + ply;
           }
-          if (depth <= 0) return quiescence(position, alpha, beta, ply, 0);
+          // 深さ0でも帥手中なら通常の1手探索を延長し、全ての回避手を読む。
+          // これにより「評価値は高いが次の手で帥を取られる」手を避ける。
+          if (depth <= 0) {
+            if (!E.isInCheck(position, position.turn)) return quiescence(position, alpha, beta, ply, 0);
+            depth = 1;
+          }
 
           const key = positionKey(position);
           const originalAlpha = alpha;
