@@ -523,7 +523,7 @@
         trainingStopRequested = true;
         trainButton.disabled = true;
         trainButton.textContent = "停止中…";
-        trainingStatus.textContent = "停止要求を受け付けました。現在の対局を終えてから停止します。";
+        trainingStatus.textContent = "停止要求を受け付けました。実行中の2局が終了してから停止します。";
         return;
       }
       if (aiThinking || tournamentRunning) return;
@@ -532,16 +532,17 @@
       trainButton.disabled = false;
       trainButton.textContent = "学習を停止";
       trainingStatus.textContent = "自己対局学習を開始しました。停止ボタンを押すまで繰り返します。";
-      trainingInfo.textContent = "学習AIと保存済み最良AIを交互に先手・後手を入れ替えて対戦させ、各局終了時に重みを保存します。";
+      trainingInfo.textContent = "独立したWorkerで2局を同時に進め、両局の結果を集約してから評価関数を更新します。";
       let result = null;
       try {
         result = await window.GungiTraining.train({
           continuous: true,
           maxPlies: 48,
+          parallelGames: 2,
           shouldStop: () => trainingStopRequested,
           onProgress: p => {
-            trainingStatus.textContent = p.phase === "selfplay"
-              ? "第" + p.game + "局：自己対局 " + p.ply + "/" + p.maxPlies + "手（停止ボタンで終了）"
+            trainingStatus.textContent = p.phase === "parallel"
+              ? "2局を同時に対局中…（完了 " + p.completedGames + "局）"
               : "第" + p.game + "局の結果を評価関数へ反映・保存中…";
             trainingInfo.textContent = "累計探索局面 " + p.nodes.toLocaleString() + " ／ " +
               (p.phase === "learning" ? "TD目標 " + Number(p.target).toFixed(3) + " ／ 学習AI " + p.candidateWins + "勝・最良AI " + p.championWins + "勝・固定判定 " + (p.adjudicatedGames||0) + "局" : "学習データ収集中");
