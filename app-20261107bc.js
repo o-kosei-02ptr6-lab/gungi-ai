@@ -588,7 +588,7 @@
       info.textContent = "同じ初期配置で先手・後手を入れ替えた対局を繰り返します。40局以上で95%信頼区間が50%を上回れば採用、下回れば不採用です。現在の盤面には影響しません。";
       try {
         const result = await window.GungiTournament.compare({
-          pairs: 2, maxPlies: 72, maxDepth: 2, timeMs: 110, maxNodes: 1100, maxDeployCandidates: 3,
+          pairs: 2, maxPlies: 36, maxDepth: 2, timeMs: 60, maxNodes: 700, maxDeployCandidates: 2,
           shouldStop: () => !tournamentRunning,
           onProgress: p => {
             if (p.phase === "game") {
