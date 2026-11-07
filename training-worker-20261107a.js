@@ -62,7 +62,8 @@
     const finalTarget=state.phase==="finished"?(state.winner===candidateSide?1:-1):0;
     const oriented=candidateSide==="先手"?trajectory:trajectory.map(f=>Object.fromEntries(FEATURES.map(k=>[k,-f[k]])));
     return {candidateSide,trajectory:oriented,finalTarget,winner:state.winner||null,draw:state.phase!=="finished",
-      plies,nodes,adjudicated,adjudicationScore};
+      plies,nodes,adjudicated,adjudicationScore,
+      finalState:{board:state.board,hands:state.hands,turn:state.turn,phase:state.phase,winner:state.winner,moveNumber:state.moveNumber}};
   }
   self.onmessage=async event=>{
     const {id,...message}=event.data||{};
