@@ -537,7 +537,7 @@
       try {
         result = await window.GungiTraining.train({
           continuous: true,
-          maxPlies: 48,
+          maxPlies: 72,
           parallelGames: 2,
           shouldStop: () => trainingStopRequested,
           onProgress: p => {
@@ -545,7 +545,7 @@
               ? "2局を同時に対局中…（完了 " + p.completedGames + "局）"
               : "第" + p.game + "局の結果を評価関数へ反映・保存中…";
             trainingInfo.textContent = "累計探索局面 " + p.nodes.toLocaleString() + " ／ " +
-              (p.phase === "learning" ? "TD目標 " + Number(p.target).toFixed(3) + " ／ 学習AI " + p.candidateWins + "勝・最良AI " + p.championWins + "勝・固定判定 " + (p.adjudicatedGames||0) + "局" : "学習データ収集中");
+              (p.phase === "learning" ? "TD目標 " + Number(p.target).toFixed(3) + " ／ 学習AI " + p.candidateWins + "勝・最良AI " + p.championWins + "勝・規定手数引き分け " + p.draws + "局" : "学習データ収集中");
           }
         });
         trainingStatus.textContent = trainingStopRequested
