@@ -65,13 +65,15 @@
     try{localStorage.setItem(STORAGE_KEY,JSON.stringify({weights,games,updatedAt:new Date().toISOString()}));}catch(_){}
   }
   async function train(options={}){
+    const continuous=options.continuous===true;
     const games=Math.max(1,Math.min(4,Number(options.games)||2));
     const maxPlies=Math.max(20,Math.min(80,Number(options.maxPlies)||48));
     let previousGames=0;
     try{const previous=JSON.parse(localStorage.getItem(STORAGE_KEY)||"null");previousGames=previous&&Number.isFinite(previous.games)?previous.games:0;}catch(_){}
     loadWeights();
     let completed=0,decisive=0,firstWins=0,nodes=0,sampleCount=0,totalTdError=0,tdUpdates=0;
-    for(let game=0;game<games;game++){
+    for(let game=0;continuous||game<games;game++){
+      if(options.shouldStop&&options.shouldStop())break;
       const state=makeStartPosition(),trajectory=[];
       for(let ply=0;ply<maxPlies&&state.phase==="move";ply++){
         trajectory.push(snapshotFeatures(state));
@@ -98,10 +100,12 @@
         totalTdError+=learned.meanTdError;tdUpdates+=learned.updates;
       }
       completed++;
+      saveWeights(AI.getWeights(),previousGames+completed);
       if(options.onProgress)options.onProgress({
         game:game+1,games,ply:state.moveNumber-1,maxPlies,nodes,phase:"learning",
         target:finalTarget,meanTdError:tdUpdates?totalTdError/tdUpdates:0
       });
+      if(options.shouldStop&&options.shouldStop())break;
     }
     const weights=AI.getWeights();saveWeights(weights,previousGames+completed);
     return {games:completed,decisive,firstWins,samples:sampleCount,nodes,tdUpdates,
