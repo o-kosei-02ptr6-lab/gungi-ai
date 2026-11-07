@@ -131,7 +131,7 @@
         const isCandidate=side===candidateSide;
         if(isCandidate)trajectory.push(snapshotFeatures(state));
         AI.setWeights(isCandidate?candidate:champion);
-        const result=await S.findBestMove(state,{maxDepth:2,timeMs:130,maxNodes:1400,maxDeployCandidates:3});
+        const result=await S.findBestMove(state,{maxDepth:3,timeMs:180,maxNodes:2500,maxDeployCandidates:3});
         nodes+=result.nodes||0;
         if(!result.bestMove){
           state.phase="finished";state.winner=isCandidate?otherSide(side):side;
