@@ -64,6 +64,16 @@
   function saveWeights(weights,games){
     try{localStorage.setItem(STORAGE_KEY,JSON.stringify({weights,games,updatedAt:new Date().toISOString()}));}catch(_){}
   }
+  function championWeights(){
+    const keys=FEATURES;
+    const fallback=Object.fromEntries(keys.map(key=>[key,1]));
+    try{
+      const saved=JSON.parse(localStorage.getItem("gungi-ai-champion-weights-v1")||"null");
+      if(saved&&saved.weights&&keys.every(key=>Number.isFinite(saved.weights[key])&&saved.weights[key]>=.25&&saved.weights[key]<=2.5))
+        return Object.fromEntries(keys.map(key=>[key,saved.weights[key]]));
+    }catch(_){}
+    return fallback;
+  }
   async function train(options={}){
     const continuous=options.continuous===true;
     const games=Math.max(1,Math.min(4,Number(options.games)||2));
@@ -71,46 +81,60 @@
     let previousGames=0;
     try{const previous=JSON.parse(localStorage.getItem(STORAGE_KEY)||"null");previousGames=previous&&Number.isFinite(previous.games)?previous.games:0;}catch(_){}
     loadWeights();
-    let completed=0,decisive=0,firstWins=0,nodes=0,sampleCount=0,totalTdError=0,tdUpdates=0;
+    let candidate=AI.getWeights();
+    const champion=championWeights();
+    let completed=0,decisive=0,candidateWins=0,championWins=0,draws=0,nodes=0,sampleCount=0,totalTdError=0,tdUpdates=0;
     for(let game=0;continuous||game<games;game++){
       if(options.shouldStop&&options.shouldStop())break;
-      const state=makeStartPosition(),trajectory=[];
-      for(let ply=0;ply<maxPlies&&state.phase==="move";ply++){
-        trajectory.push(snapshotFeatures(state));
+      const state=makeStartPosition(),candidateSide=game%2===0?"先手":"後手",trajectory=[];
+      let plies=0;
+      for(;plies<maxPlies&&state.phase==="move";plies++){
+        const side=state.turn;
+        const isCandidate=side===candidateSide;
+        if(isCandidate)trajectory.push(snapshotFeatures(state));
+        AI.setWeights(isCandidate?candidate:champion);
         const result=await S.findBestMove(state,{maxDepth:2,timeMs:130,maxNodes:1400,maxDeployCandidates:3});
         nodes+=result.nodes||0;
-        if(!result.bestMove)break;
+        if(!result.bestMove){
+          state.phase="finished";state.winner=isCandidate?otherSide(side):side;
+          break;
+        }
         const action=result.bestMove;
         const applied=action.type==="deploy"
-          ?E.deployPiece(state,action.row,action.col,state.turn,action.pieceId)
+          ?E.deployPiece(state,action.row,action.col,side,action.pieceId)
           :E.movePiece(state,action.from.row,action.from.col,action.to.row,action.to.col,action.landingMode);
-        if(!applied||!applied.ok)break;
-        if(options.onProgress)options.onProgress({game:game+1,games,ply:ply+1,maxPlies,nodes,phase:"selfplay"});
-        if(ply%4===3)await new Promise(resolve=>setTimeout(resolve,0));
+        if(!applied||!applied.ok)throw new Error("学習対局の着手に失敗しました: "+(applied&&applied.reason||"不明なエラー"));
+        if(options.onProgress)options.onProgress({game:game+1,games,ply:plies+1,maxPlies,nodes,phase:"selfplay",candidateSide,opponent:"保存済み最良AI"});
+        if(plies%4===3)await new Promise(resolve=>setTimeout(resolve,0));
       }
-      // The target is always expressed from 先手's perspective.
       const finalTarget=state.phase==="finished"
-        ?(state.winner==="先手"?1:-1)
-        :valueOf(snapshotFeatures(state),AI.getWeights());
-      if(state.phase==="finished"){decisive++;if(state.winner==="先手")firstWins++;}
+        ?(state.winner===candidateSide?1:-1):0;
+      if(state.phase==="finished"){
+        decisive++;
+        if(state.winner===candidateSide)candidateWins++;else championWins++;
+      }else draws++;
       sampleCount+=trajectory.length;
+      AI.setWeights(candidate);
       if(trajectory.length){
-        const learned=trainTrajectory(trajectory,finalTarget,AI.getWeights());
-        AI.setWeights(learned.weights);
+        const oriented= candidateSide==="先手" ? trajectory : trajectory.map(features=>Object.fromEntries(FEATURES.map(key=>[key,-features[key]])));
+        const learned=trainTrajectory(oriented,finalTarget,candidate);
+        candidate=learned.weights;AI.setWeights(candidate);
         totalTdError+=learned.meanTdError;tdUpdates+=learned.updates;
       }
       completed++;
-      saveWeights(AI.getWeights(),previousGames+completed);
+      saveWeights(candidate,previousGames+completed);
       if(options.onProgress)options.onProgress({
-        game:game+1,games,ply:state.moveNumber-1,maxPlies,nodes,phase:"learning",
-        target:finalTarget,meanTdError:tdUpdates?totalTdError/tdUpdates:0
+        game:game+1,games,ply,nodes,phase:"learning",target:finalTarget,
+        meanTdError:tdUpdates?totalTdError/tdUpdates:0,candidateWins,championWins,draws
       });
       if(options.shouldStop&&options.shouldStop())break;
     }
-    const weights=AI.getWeights();saveWeights(weights,previousGames+completed);
-    return {games:completed,decisive,firstWins,samples:sampleCount,nodes,tdUpdates,
-      meanTdError:tdUpdates?totalTdError/tdUpdates:0,weights};
+    AI.setWeights(candidate);
+    saveWeights(candidate,previousGames+completed);
+    return {games:completed,decisive,candidateWins,championWins,draws,firstWins:candidateWins,
+      samples:sampleCount,nodes,tdUpdates,meanTdError:tdUpdates?totalTdError/tdUpdates:0,weights:candidate};
   }
+  function otherSide(side){return side==="先手"?"後手":"先手";}
   function exportData(){
     let saved=null;
     try{saved=JSON.parse(localStorage.getItem(STORAGE_KEY)||"null");}catch(_){}
