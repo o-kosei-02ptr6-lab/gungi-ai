@@ -9,7 +9,8 @@
   const CHAMPION_KEY="gungi-ai-champion-weights-v1";
   const STATS_KEY="gungi-ai-tournament-stats-v2";
   const GAMES_KEY="gungi-ai-tournament-games-v1";
-  const MAX_SAVED_GAMES=40;
+  const RECENT_RECORD_LIMIT=30;
+  const OLDER_DECISIVE_LIMIT=10;
   function saveGameRecord(record){
     if(!record||(!record.winner&&!record.draw)||!record.finalState)return {ok:false,error:"対局結果または最終盤面がありません。"};
     try{
@@ -17,7 +18,9 @@
       const records=Array.isArray(stored)?stored.filter(item=>item&&item.finalState&&(item.winner||item.draw===true)):[];
       records.forEach(item=>{delete item.history;});
       const finalOnly={...record};delete finalOnly.history;records.push(finalOnly);
-      while(records.length>MAX_SAVED_GAMES){const drawIndex=records.findIndex(item=>item.draw===true||!item.winner);records.splice(drawIndex>=0?drawIndex:0,1);}
+      const ordered=records.sort((a,b)=>String(b.savedAt||"").localeCompare(String(a.savedAt||"")));
+      const kept=[...ordered.slice(0,RECENT_RECORD_LIMIT),...ordered.slice(RECENT_RECORD_LIMIT).filter(item=>item.winner&&!item.draw).slice(0,OLDER_DECISIVE_LIMIT)];
+      records.length=0;records.push(...kept);
       localStorage.setItem(GAMES_KEY,JSON.stringify(records));
       const checkedRecords=JSON.parse(localStorage.getItem(GAMES_KEY)||"[]");
       if(!Array.isArray(checkedRecords)||!checkedRecords.some(item=>item&&item.id===record.id&&item.finalState))
