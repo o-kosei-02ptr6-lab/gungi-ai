@@ -122,7 +122,8 @@
         state.phase="finished";state.winner=null;endReason="no-legal-action";break;
       }
       const a=result.bestMove;
-      const movingPiece=a.type==="move"?state.board[a.from.row][a.from.col].slice(-1)[0]:null;\n      const deployingPiece=a.type==="deploy"?state.hands[side].find(piece=>piece.id===a.pieceId):null;
+      const movingPiece=a.type==="move"?state.board[a.from.row][a.from.col].slice(-1)[0]:null;
+      const deployingPiece=a.type==="deploy"?state.hands[side].find(piece=>piece.id===a.pieceId):null;
       const applied=a.type==="deploy"
         ?E.deployPiece(state,a.row,a.col,side,a.pieceId)
         :E.movePiece(state,a.from.row,a.from.col,a.to.row,a.to.col,a.landingMode);
