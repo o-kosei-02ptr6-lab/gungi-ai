@@ -254,8 +254,10 @@
     if(detail){const handCount=side=>Object.keys(E.PIECE_COUNTS).map(name=>name+" "+(chosen.finalState.hands[side]||[]).filter(piece=>piece.name===name).length).join("・");detail.textContent=gameLabel(chosen)+"。学習AI："+chosen.candidateSide+"／結果："+(chosen.draw?"引き分け":chosen.winner+"の勝利")+"／"+chosen.plies+"手。最終手番："+chosen.finalState.turn+".\n先手の持ち駒："+handCount("先手")+"\n後手の持ち駒："+handCount("後手");}
     // Replay is intentionally independent of the record selector: it always shows
     // the newest saved game, while the selector above only inspects final positions.
-    const latest=records[0];
     const latestKifu=window.GungiTraining&&window.GungiTraining.getLatestGameKifu?window.GungiTraining.getLatestGameKifu():null;
+    // Parallel games can share the same millisecond timestamp. Match the
+    // latest kifu by its unique id instead of assuming records[0] is newest.
+    const latest=(latestKifu&&records.find(record=>record.id===latestKifu.id))||records[0];
     const latestHistory=latestKifu&&latestKifu.id===latest.id&&Array.isArray(latestKifu.history)?latestKifu.history:[];
     savedReplayFrames=latestHistory.length?buildSavedReplay(latestHistory):[];
     savedReplayIndex=0;
