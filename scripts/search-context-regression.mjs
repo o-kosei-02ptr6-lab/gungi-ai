@@ -66,7 +66,23 @@ assert.equal(search.getHistoricalRetreatPenalty({board:marshalBoard,history:prog
   type:"move",pieceId:"marshal-progress",from:{row:5,col:4},to:{row:6,col:4},landingMode:"capture"
 }),0,"Marshal escapes must not be discouraged by retreat history");
 
+// The search API must expose real completed-depth and cost metrics for each move.
+const telemetryBoard=empty();
+telemetryBoard[8][4].push({id:"first-marshal",name:"帥",side:"先手"});
+telemetryBoard[0][4].push({id:"second-marshal",name:"帥",side:"後手"});
+const telemetryState={...base,board:telemetryBoard,phase:"move",winner:null,moveNumber:1};
+const progress=[];
+const telemetry=await search.findBestMove(telemetryState,{
+  maxDepth:1,timeMs:300,maxNodes:5000,maxDeployCandidates:0,
+  onProgress:item=>progress.push(item)
+});
+assert.ok(telemetry.bestMove,"telemetry smoke position should produce a legal move");
+for(const key of ["depth","nodes","quiescenceNodes","cutoffs","transpositionHits","elapsedMs"])
+  assert.ok(Number.isFinite(telemetry[key]),"search result should expose "+key);
+assert.ok(progress.length>0,"iterative-deepening progress should be observable");
+assert.equal(progress.at(-1).depth,telemetry.depth);
+
 console.log(JSON.stringify({
   success:true,
-  tests:["history-sensitive TT key","cycle-length-independent repetition cost","repeat-count escalation","historical retreat diagnostic","Marshal escape exemption"]
+  tests:["history-sensitive TT key","cycle-length-independent repetition cost","repeat-count escalation","historical retreat diagnostic","Marshal escape exemption","per-search depth and cost telemetry"]
 },null,2));
