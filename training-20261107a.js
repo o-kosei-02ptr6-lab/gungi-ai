@@ -187,7 +187,8 @@
   const GAME_RECORDS_KEY="gungi-ai-tournament-games-v1";
   const LATEST_KIFU_KEY="gungi-ai-latest-kifu-v1";
   const LATEST_KIFUS_KEY="gungi-ai-latest-kifus-v1";
-  const MAX_SAVED_GAMES=40;
+  const RECENT_RECORD_LIMIT=30;
+  const OLDER_DECISIVE_LIMIT=10;
   function getLatestGameKifus(){
     try{const list=JSON.parse(localStorage.getItem(LATEST_KIFUS_KEY)||"null");if(Array.isArray(list))return list.filter(item=>item&&Array.isArray(item.history)).slice(0,2);const old=JSON.parse(localStorage.getItem(LATEST_KIFU_KEY)||"null");return old&&Array.isArray(old.history)?[old]:[];}catch(_){return [];}
   }
@@ -219,16 +220,15 @@
       records.forEach(item=>{delete item.history;});
       const finalOnly={...record};delete finalOnly.history;
       records.push(finalOnly);
-      while(records.length>MAX_SAVED_GAMES){
-        const oldestDraw=records.findIndex(item=>item.draw===true||!item.winner);
-        records.splice(oldestDraw>=0?oldestDraw:0,1);
-      }
+      const ordered=records.sort((a,b)=>String(b.savedAt||"").localeCompare(String(a.savedAt||"")));
+      const kept=[...ordered.slice(0,RECENT_RECORD_LIMIT),...ordered.slice(RECENT_RECORD_LIMIT).filter(item=>item.winner&&!item.draw).slice(0,OLDER_DECISIVE_LIMIT)];
+      records.length=0;records.push(...kept);
       localStorage.setItem(GAME_RECORDS_KEY,JSON.stringify(records));
       const checked=JSON.parse(localStorage.getItem(GAME_RECORDS_KEY)||"[]");
       if(!checked.some(item=>item.id===record.id&&item.finalState))return {ok:false,error:"最終局面の保存確認に失敗しました。"};
       const kifu={id:record.id,savedAt:record.savedAt||new Date().toISOString(),source:record.source||"自己学習",history:Array.isArray(record.history)?record.history.map(entry=>({...entry})):[]};
       if(!storeLatestGameKifu(kifu))return {ok:false,error:"棋譜の保存確認に失敗しました。"};
-      return {ok:true,id:record.id,historyLength:verified.history.length};
+      return {ok:true,id:record.id,historyLength:check[0].history.length};
     }catch(error){return {ok:false,error:"端末の保存容量または保存領域の問題です: "+(error&&error.message||error)};}
   }
   function createWorker(){
