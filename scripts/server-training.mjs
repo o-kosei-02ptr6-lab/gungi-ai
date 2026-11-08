@@ -129,7 +129,7 @@ const previous = readCheckpoint();
 let checkpoint = previous || {
   format: "gungi-server-training-checkpoint", version: 1, games: 0,
   weights: { ...BASELINE },
-  totals: { candidateWins: 0, championWins: 0, draws: 0, nodes: 0, plies: 0, tdUpdates: 0, mateUpdates: 0, tdErrorSum: 0 }
+  totals: { candidateWins: 0, championWins: 0, draws: 0, nodes: 0, plies: 0, tdUpdates: 0, mateUpdates: 0, tdErrorSum: 0, tdErrorGames: 0 }
 };
 const championWeights = { ...BASELINE };
 const runResults = [];
@@ -161,6 +161,7 @@ for (let index = 0; index < gamesRequested; index++) {
   totals.tdUpdates = (totals.tdUpdates || 0) + (learned.updates || 0);
   totals.mateUpdates = (totals.mateUpdates || 0) + (mate.updates || 0);
   totals.tdErrorSum = (totals.tdErrorSum || 0) + (learned.meanTdError || 0);
+  totals.tdErrorGames = (totals.tdErrorGames || 0) + (learned.updates ? 1 : 0);
   const gameSummary = {
     game: checkpoint.games, candidateSide, winner: result.winner || null, draw: !!result.draw,
     plies: result.plies, nodes: result.nodes, finalTarget: result.finalTarget,
