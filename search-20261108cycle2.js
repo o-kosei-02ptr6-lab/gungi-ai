@@ -113,7 +113,8 @@
       ? [entry.piece && entry.piece.id, entry.from && entry.from.row, entry.from && entry.from.col,
          entry.to && entry.to.row, entry.to && entry.to.col, entry.landingMode].join(":")
       : entry.type).join("|");
-    return positionKey(state) + "|r" + priorPositionCount(state) + "|h" + recent;
+    const repetition = priorPositionInfo(state);
+    return positionKey(state) + "|r" + repetition.count + "|c" + repetition.cycleLength + "|h" + recent;
   }
 
   function deploymentPriority(state, side, piece, row, col) {
