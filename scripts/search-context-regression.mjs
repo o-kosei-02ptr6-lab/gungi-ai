@@ -90,6 +90,45 @@ assert.equal(
   "equivalent history context should produce the same transposition key"
 );
 
+
+const cycleBoard = Array.from({ length: 9 }, () => Array.from({ length: 9 }, () => []));
+cycleBoard[4][4].push({ id: "loop-piece", name: "兵", side: "先手" });
+const reverseState = {
+  board: cycleBoard,
+  hands: { "先手": [], "後手": [] },
+  turn: "先手",
+  history: [{
+    type: "move",
+    piece: { id: "loop-piece", name: "兵", side: "先手" },
+    from: { row: 4, col: 3 },
+    to: { row: 4, col: 4 },
+    landingMode: "capture",
+    positionKey: "not-the-current-position"
+  }]
+};
+const reversePenalty = search.getAntiLoopPenalty(reverseState, {
+  type: "move", pieceId: "loop-piece",
+  from: { row: 4, col: 4 }, to: { row: 4, col: 3 },
+  landingMode: "capture"
+});
+assert.ok(reversePenalty >= 9000, "immediate reverse moves should receive a strong penalty");
+
+const repeatedBoardKey = JSON.stringify({
+  board: cycleBoard.map(row => row.map(stack => stack.map(piece => piece.side + ":" + piece.name))),
+  hands: { "先手": {}, "後手": {} },
+  turn: "先手"
+});
+const repeatedState = {
+  board: cycleBoard,
+  hands: { "先手": [], "後手": [] },
+  turn: "先手",
+  history: [{ type: "move", positionKey: repeatedBoardKey }]
+};
+assert.ok(
+  search.getRepeatedPositionPenalty(repeatedState) >= 22000,
+  "short repeated positions should receive a decisive cycle penalty"
+);
+
 console.log(JSON.stringify({
   success: true,
   test: "history-sensitive transposition key",
