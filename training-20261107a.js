@@ -195,6 +195,7 @@
     try{
       const stored=JSON.parse(localStorage.getItem(GAME_RECORDS_KEY)||"[]");
       const records=Array.isArray(stored)?stored.filter(item=>item&&item.finalState&&(item.winner||item.draw===true)):[];
+      records.forEach(item=>{delete item.history;});
       const finalOnly={...record};delete finalOnly.history;
       records.push(finalOnly);
       while(records.length>MAX_SAVED_GAMES){
@@ -212,7 +213,7 @@
     }catch(error){return {ok:false,error:"端末の保存容量または保存領域の問題です: "+(error&&error.message||error)};}
   }
   function createWorker(){
-    return new Worker("./training-worker-20261107a.js?v=20261108trainingrecordfix2");
+    return new Worker("./training-worker-20261107a.js?v=20261108finalonlykifu1");
   }
   async function trainParallel(options={}){
     const continuous=options.continuous===true;
