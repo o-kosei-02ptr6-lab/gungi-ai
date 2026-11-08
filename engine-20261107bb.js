@@ -136,9 +136,10 @@
     if (index < 0) return { ok: false, reason: "その駒は持ち駒にありません。" };
     const piece = hand[index];
     if (!canDeployPiece(state, row, col, side, piece)) return { ok: false, reason: "このマスには駒を配置できません。" };
+    const positionKey = getPositionKey(state);
     hand.splice(index, 1);
     state.board[row][col].push(piece);
-    state.history.push({ type: "deploy", row, col, side, piece, layer: state.board[row][col].length });
+    state.history.push({ type: "deploy", positionKey, row, col, side, piece, layer: state.board[row][col].length });
     state.moveNumber += 1;
     state.turn = state.turn === "先手" ? "後手" : "先手";
     return { ok: true, piece };
