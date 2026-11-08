@@ -236,7 +236,7 @@
         if (r < 0 || r >= E.SIZE || c < 0 || c >= E.SIZE) continue;
         if (controlledSquares.has(r + "," + c)) ring.add(r + "," + c);
       }
-      threats += Math.min(72, ring.size * 9);
+      threats += Math.min(96, ring.size * 12);
     }
 
     // Reserve pieces retain strategic flexibility. Slightly increase their value
@@ -310,6 +310,25 @@
         (1 + Math.min(2, item.attackers - 1) * 0.3));
     }
 
+    // 敵帥の近くにいる攻撃駒を評価する。敵の次の手で捕獲される駒は
+    // 攻めの拠点として信頼しにくいため、圧力への寄与を大きく割り引く。
+    if (enemyMarshalForStack) {
+      let safeApproachPressure = 0;
+      for (let row = 0; row < E.SIZE; row += 1) {
+        for (let col = 0; col < E.SIZE; col += 1) {
+          const stack = state.board[row][col];
+          if (!stack.length || stack[stack.length - 1].side !== side ||
+              stack[stack.length - 1].name === "帥") continue;
+          const distance = Math.abs(row - enemyMarshalForStack.row) +
+            Math.abs(col - enemyMarshalForStack.col);
+          if (distance > 3) continue;
+          const base = distance === 1 ? 30 : distance === 2 ? 18 : 8;
+          safeApproachPressure += base * (enemyTargets.has(row + "," + col) ? 0.35 : 1);
+        }
+      }
+      mateNet += Math.min(96, safeApproachPressure);
+    }
+
     // 敵陣への進出度に応じた基本ボーナスに、敵帥とのマンハッタン距離倍率を掛ける。
     // 奥3列は各+20、4列目は+10、5列目は+5。
     // 距離2以内は×1.8、3〜4は×1.35、5以上は×1.0。
@@ -336,10 +355,10 @@
     if (enemyMarshalForStack) {
       if (E.isInCheck(state, enemy)) {
         const safeResponses = countSafeCheckResponses(state, enemy, enemyMoves);
-        mateNet += 260 + Math.max(0, 4 - Math.min(4, safeResponses)) * 90;
+        mateNet += 320 + Math.max(0, 4 - Math.min(4, safeResponses)) * 110;
       } else {
         const enemySafeEscapes = countSafeMarshalEscapes(state, enemy, enemyMoves, enemyMarshalForStack);
-        mateNet += [190, 110, 55, 20, 0][Math.min(4, enemySafeEscapes)];
+        mateNet += [250, 160, 90, 30, 0][Math.min(4, enemySafeEscapes)];
       }
     }
 
