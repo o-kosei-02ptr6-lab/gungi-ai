@@ -185,116 +185,32 @@
     return fallback;
   }
   const GAME_RECORDS_KEY="gungi-ai-tournament-games-v1";
+  const LATEST_KIFU_KEY="gungi-ai-latest-kifu-v1";
   const MAX_SAVED_GAMES=40;
+  function getLatestGameKifu(){
+    try{const item=JSON.parse(localStorage.getItem(LATEST_KIFU_KEY)||"null");return item&&Array.isArray(item.history)?item:null;}catch(_){return null;}
+  }
   function saveTrainingGameRecord(record){
     if(!record||(!record.winner&&!record.draw)||!record.finalState)return {ok:false,error:"対局結果または最終盤面がありません。"};
     try{
       const stored=JSON.parse(localStorage.getItem(GAME_RECORDS_KEY)||"[]");
       const records=Array.isArray(stored)?stored.filter(item=>item&&item.finalState&&(item.winner||item.draw===true)):[];
-      records.forEach(item=>{delete item.history;});
-      const latest={...record,history:Array.isArray(record.history)?record.history:[]};
-      records.push(latest);
+      const finalOnly={...record};delete finalOnly.history;
+      records.push(finalOnly);
       while(records.length>MAX_SAVED_GAMES){
         const oldestDraw=records.findIndex(item=>item.draw===true||!item.winner);
         records.splice(oldestDraw>=0?oldestDraw:0,1);
       }
-      // Quota recovery: keep the newest game and discard older records only if needed.
-      while(true){
-        try{
-          localStorage.setItem(GAME_RECORDS_KEY,JSON.stringify(records));
-          const check=JSON.parse(localStorage.getItem(GAME_RECORDS_KEY)||"[]");
-          const saved=check.find(item=>item.id===latest.id);
-          if(saved&&Array.isArray(saved.history)&&saved.history.length===latest.history.length)return {ok:true,id:latest.id,historyLength:saved.history.length};
-          return {ok:false,error:"保存後の棋譜確認に失敗しました。"};
-        }catch(error){
-          if(records.length<=1)return {ok:false,error:"端末の保存容量が不足しています: "+(error&&error.message||error)};
-          const oldestDraw=records.findIndex((item,index)=>index<records.length-1&&(item.draw===true||!item.winner));
-          const removeIndex=oldestDraw>=0?oldestDraw:0;
-          records.splice(removeIndex,1);
-        }
-      }
-    }catch(error){return {ok:false,error:"対局記録を保存できませんでした: "+(error&&error.message||error)};}
+      localStorage.setItem(GAME_RECORDS_KEY,JSON.stringify(records));
+      const checked=JSON.parse(localStorage.getItem(GAME_RECORDS_KEY)||"[]");
+      if(!checked.some(item=>item.id===record.id&&item.finalState))return {ok:false,error:"最終局面の保存確認に失敗しました。"};
+      const kifu={id:record.id,savedAt:record.savedAt||new Date().toISOString(),source:record.source||"自己学習",history:Array.isArray(record.history)?record.history.map(entry=>({...entry})):[]};
+      localStorage.setItem(LATEST_KIFU_KEY,JSON.stringify(kifu));
+      const verified=getLatestGameKifu();
+      if(!verified||verified.id!==record.id||verified.history.length!==kifu.history.length)return {ok:false,error:"棋譜の保存確認に失敗しました。"};
+      return {ok:true,id:record.id,historyLength:verified.history.length};
+    }catch(error){return {ok:false,error:"端末の保存容量または保存領域の問題です: "+(error&&error.message||error)};}
   }
-  async function trainSequential(options={}){
-    const continuous=options.continuous===true;
-    const games=Math.max(1,Math.min(4,Number(options.games)||2));
-    const maxPlies=Math.max(20,Math.min(108,Number(options.maxPlies)||108));
-    let previousGames=0;
-    try{const previous=JSON.parse(localStorage.getItem(STORAGE_KEY)||"null");previousGames=previous&&Number.isFinite(previous.games)?previous.games:0;}catch(_){}
-    loadWeights();
-    let candidate=AI.getWeights();
-    const champion=championWeights();
-    let completed=0,decisive=0,candidateWins=0,championWins=0,firstWins=0,secondWins=0,draws=0,adjudicatedGames=0,nodes=0,sampleCount=0,totalTdError=0,tdUpdates=0,totalMateUpdates=0;
-    for(let game=0;continuous||game<games;game++){
-      if(options.shouldStop&&options.shouldStop())break;
-      const state=makeStartPosition(),candidateSide=game%2===0?"先手":"後手",trajectory=[],mateSamples=[];
-      let plies=0;
-      for(;plies<maxPlies&&state.phase==="move";plies++){
-        const side=state.turn,isCandidate=side===candidateSide;
-        const positionFeatures=snapshotFeatures(state);
-        if(isCandidate)trajectory.push(positionFeatures);
-        AI.setWeights(isCandidate?candidate:champion);
-        const result=await S.findBestMove(state,{maxDepth:3,timeMs:180,maxNodes:2500,maxDeployCandidates:3});
-        nodes+=result.nodes||0;
-        const mateScore=isCandidate?result.score:-result.score;
-        if(Number.isFinite(mateScore)&&Math.abs(mateScore)>99900000)
-          mateSamples.push({features:positionFeatures,target:mateScore>0?1:-1,source:"search-proof",ply:plies});
-        if(!result.bestMove){
-          state.phase="finished";state.winner=otherSide(side);
-          break;
-        }
-        const action=result.bestMove;
-        const applied=action.type==="deploy"
-          ?E.deployPiece(state,action.row,action.col,side,action.pieceId)
-          :E.movePiece(state,action.from.row,action.from.col,action.to.row,action.to.col,action.landingMode);
-        if(!applied||!applied.ok)throw new Error("学習対局の着手に失敗しました: "+(applied&&applied.reason||"不明なエラー"));
-        if(state.phase!=="finished"&&E.isInCheck(state,state.turn))
-          mateSamples.push({features:snapshotFeatures(state),attackerSide:side,ply:plies+1,source:"played-check"});
-        if(options.onProgress)options.onProgress({game:game+1,games,ply:plies+1,maxPlies,nodes,phase:"selfplay",candidateSide,opponent:"保存済み最良AI"});
-        if(plies%4===3)await new Promise(resolve=>setTimeout(resolve,0));
-      }
-      // 規定手数までに帥を取れなかった対局は引き分けとして扱う。
-      // 盤面評価で勝者を作らず、実際の終局結果だけを学習ラベルにする。
-      const adjudicated=false;
-      const adjudicationScore=null;
-      const outcome=finalOutcome(state,candidateSide);
-      const finalTarget=outcome.target;
-      if(adjudicated)adjudicatedGames++;
-      const isDraw=state.phase!=="finished"||!state.winner;
-      saveTrainingGameRecord({id:"training-"+Date.now().toString(36)+"-"+game,pair:null,game:game+1,source:"自己学習",candidateSide,winner:state.winner||null,draw:isDraw,candidateFinalScore:outcome.candidateFinalScore,plies:Math.min(plies+1,maxPlies),savedAt:new Date().toISOString(),finalState:{board:state.board,hands:state.hands,turn:state.turn,phase:state.phase,winner:state.winner||null,moveNumber:state.moveNumber},history:state.history.map(entry=>({...entry}))});
-      if(!isDraw){
-        decisive++;
-        if(state.winner===candidateSide)candidateWins++;else championWins++;
-        if(state.winner==="先手")firstWins++;else secondWins++;
-      }else draws++;
-      sampleCount+=trajectory.length;
-      AI.setWeights(candidate);
-      if(trajectory.length){
-        const oriented=candidateSide==="先手"?trajectory:trajectory.map(features=>Object.fromEntries(FEATURES.map(key=>[key,-features[key]])));
-        const learned=trainTrajectory(oriented,finalTarget,candidate);
-        candidate=learned.weights;AI.setWeights(candidate);totalTdError+=learned.meanTdError;tdUpdates+=learned.updates;
-      }
-      const directSamples=mateSamples.filter(sample=>sample.source==="search-proof"||
-        (!!state.winner&&state.winner===sample.attackerSide&&plies+1-sample.ply<=8))
-        .map(sample=>({features:candidateSide==="先手"?sample.features:Object.fromEntries(FEATURES.map(key=>[key,-sample.features[key]])),
-          target:sample.source==="search-proof"?sample.target:(sample.attackerSide===candidateSide?1:-1)}));
-      const directLearned=trainMateSamples(directSamples,candidate);
-      candidate=directLearned.weights;AI.setWeights(candidate);totalMateUpdates+=directLearned.updates;
-      completed++;
-      saveWeights(candidate,previousGames+completed);
-      if(options.onProgress)options.onProgress({
-        game:game+1,games,ply:plies,nodes,phase:"learning",target:finalTarget,
-        adjudicated,adjudicationScore,adjudicatedGames,
-        meanTdError:tdUpdates?totalTdError/tdUpdates:0,mateUpdates:directLearned.updates,candidateWins,championWins,firstWins,secondWins,draws
-      });
-      if(options.shouldStop&&options.shouldStop())break;
-    }
-    AI.setWeights(candidate);
-    saveWeights(candidate,previousGames+completed);
-    return {games:completed,decisive,candidateWins,championWins,firstWins,secondWins,draws,adjudicatedGames,
-      samples:sampleCount,nodes,tdUpdates,mateUpdates:totalMateUpdates,meanTdError:tdUpdates?totalTdError/tdUpdates:0,weights:candidate};
-  }
-
   function createWorker(){
     return new Worker("./training-worker-20261107a.js?v=20261108trainingrecordfix2");
   }
@@ -388,6 +304,6 @@
     try{localStorage.setItem(STORAGE_KEY,JSON.stringify({weights:AI.getWeights(),games:Math.max(0,Number(data.games)||0),updatedAt:new Date().toISOString()}));}catch(_){}
     return {weights:AI.getWeights(),games:Math.max(0,Number(data.games)||0)};
   }
-  window.GungiTraining=Object.freeze({train,trainSequential,trainParallel,loadWeights,saveWeights,makeStartPosition,exportData,importData,createBackup,restorePreviousBackup});
+  window.GungiTraining=Object.freeze({train,trainSequential,trainParallel,loadWeights,saveWeights,makeStartPosition,exportData,importData,createBackup,restorePreviousBackup,getLatestGameKifu});
   loadWeights();
 })();
