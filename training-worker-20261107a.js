@@ -101,7 +101,7 @@
       const side=state.turn,isCandidate=side===candidateSide,positionFeatures=snapshotFeatures(state);
       if(isCandidate)trajectory.push(positionFeatures);
       AI.setWeights(isCandidate?candidateWeights:championWeights);
-      const result=await S.findBestMove(state,{maxDepth:3,timeMs:180,maxNodes:2500,maxDeployCandidates:3,...searchOptions});
+      const result=await S.findBestMove(state,{maxDepth:4,timeMs:450,maxNodes:8000,maxDeployCandidates:5,...searchOptions});
       nodes+=result.nodes||0;
       const mateScore=isCandidate?result.score:-result.score;
       if(Number.isFinite(mateScore)&&Math.abs(mateScore)>99900000)
