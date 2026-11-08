@@ -243,7 +243,7 @@
   }
 
   function createWorker(){
-    return new Worker("./training-worker-20261107a.js?v=20261108drawlearning");
+    return new Worker("./training-worker-20261107a.js?v=20261108matedirect1");
   }
   async function trainParallel(options={}){
     const continuous=options.continuous===true;
