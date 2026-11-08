@@ -521,70 +521,68 @@
   async function findBestSetupPlacement(state, options = {}) {
     if (!state || state.phase !== "setup") throw new TypeError("初期配置中の局面を指定してください。");
     const side=state.setupTurn,enemy=other(side),started=now();
-    const timeMs=Math.max(100,Math.min(5000,Number(options.timeMs)||2400));
-    const deadline=started+timeMs;
+    const timeMs=Math.max(100,Math.min(5000,Number(options.timeMs)||2400)),deadline=started+timeMs;
     const maxNodes=Math.max(40,Math.min(6000,Number(options.maxNodes)||2800));
-    let nodes=0,best=null,bestScore=-INF,bestGain=-INF,completedDepth=0;
+    const rootLimit=Math.max(8,Math.min(80,Number(options.rootCandidateLimit)||36));
+    const replyLimit=Math.max(4,Math.min(32,Number(options.replyCandidateLimit)||14));
+    const rootBeamSize=Math.max(2,Math.min(16,Number(options.rootBeam)||10));
+    const replyBeamSize=Math.max(2,Math.min(10,Number(options.replyBeam)||6));
+    let nodes=0,best=null,bestScore=-INF,bestGain=-INF,completed=0;
     const baseScore=AI.evaluate(state,side);
-    const hasMarshal=s=>s.history.some(h=>h.type==="place"&&h.side===side&&h.piece.name==="帥");
-    function variants(position,actingSide){
+    function variants(position,actingSide,limit){
       const actions=generateSetupActions(position),hasPlaced=position.history.some(h=>h.type==="place"&&h.side===actingSide);
-      const mayFinish=hasPlaced&&!position.setupFinishPending&&position.hands[actingSide].some(p=>p.name==="帥")===false;
-      const canFinish=options.allowFinish!==false&&hasPlaced&&!position.setupFinishPending&&position.history.some(h=>h.type==="place"&&h.side===actingSide&&h.piece.name==="帥");
+      const canFinish=options.allowFinish!==false&&hasPlaced&&!position.setupFinishPending&&
+        position.history.some(h=>h.type==="place"&&h.side===actingSide&&h.piece.name==="帥");
       const out=[];
       for(const action of actions){
         const piece=position.hands[actingSide].find(p=>p.id===action.pieceId);if(!piece)continue;
         const finishOptions=canFinish?(position.hands[actingSide].length===1?[true]:[false,true]):[false];
         for(const finishFirst of finishOptions){
           const next=cloneState(position);
-          if(finishFirst){const f=E.finishSetup(next,actingSide);if(!f.ok)continue;}
+          if(finishFirst&&!E.finishSetup(next,actingSide).ok)continue;
           const placed=E.placePiece(next,action.row,action.col,actingSide,action.pieceId);
           if(!placed.ok||E.isInCheck(next,actingSide))continue;
           const priority=deploymentPriority(position,actingSide,piece,action.row,action.col)*0.08+
             (action.stacking?1.5*action.targetLayer:0);
-          out.push({action,finishFirst,next,priority,score:AI.evaluate(next,side)+priority});
+          out.push({action,finishFirst,next,priority,score:-INF});
         }
       }
-      return out;
+      out.sort((a,b)=>b.priority-a.priority);
+      return out.slice(0,limit);
     }
-    const root=variants(state,side);
+    const root=variants(state,side,rootLimit);
     if(!root.length)return {bestMove:null,score:baseScore,depth:0,nodes,elapsedMs:Math.round(now()-started),finishRecommended:false};
-    root.sort((a,b)=>b.score-a.score);
-    const rootBeam=root.slice(0,Math.min(14,root.length));
-    let evaluated=0;
-    for(const candidate of rootBeam){
+    const scoredRoot=[];
+    for(const candidate of root){
+      if(nodes>=maxNodes||now()>=deadline)break;
+      candidate.score=AI.evaluate(candidate.next,side)+candidate.priority;
+      nodes++;scoredRoot.push(candidate);
+    }
+    scoredRoot.sort((a,b)=>b.score-a.score);
+    for(const candidate of scoredRoot.slice(0,rootBeamSize)){
       if(nodes>=maxNodes||now()>=deadline)break;
       let score=candidate.score;
       const replyState=candidate.next;
-      if(replyState.phase==="setup"&&replyState.setupTurn===enemy){
-        const replies=variants(replyState,enemy);
-        replies.sort((a,b)=>a.score-b.score);
-        const replyBeam=replies.slice(0,Math.min(10,replies.length));
-        if(replyBeam.length){
-          let opponentBest=INF;
-          for(const reply of replyBeam){
-            if(nodes>=maxNodes||now()>=deadline)break;
-            nodes++;
-            const replyScore=reply.next.phase==="move"?AI.evaluate(reply.next,side):AI.evaluate(reply.next,side);
-            if(replyScore<opponentBest)opponentBest=replyScore;
-          }
-          if(opponentBest<INF)score=opponentBest;
+      if(replyState.phase==="setup"&&replyState.setupTurn===enemy&&nodes<maxNodes&&now()<deadline){
+        const replies=variants(replyState,enemy,replyLimit),scoredReplies=[];
+        for(const reply of replies){
+          if(nodes>=maxNodes||now()>=deadline)break;
+          reply.score=AI.evaluate(reply.next,side)+reply.priority;
+          nodes++;scoredReplies.push(reply);
         }
+        scoredReplies.sort((a,b)=>a.score-b.score);
+        if(scoredReplies.length)score=scoredReplies[0].score;
       }
-      nodes++;
-      evaluated++;
       if(score>bestScore){bestScore=score;bestGain=score-baseScore;best={...candidate.action,finishFirst:candidate.finishFirst};}
-      if(typeof options.onProgress==="function"&&evaluated%2===0)
+      completed++;
+      if(typeof options.onProgress==="function"&&completed%2===0)
         options.onProgress({nodes,score:bestScore,elapsedMs:Math.round(now()-started),depth:2});
-      if(evaluated%2===0)await new Promise(done=>setTimeout(done,0));
+      if(completed%2===0)await new Promise(done=>setTimeout(done,0));
     }
-    const deployedCount=state.history.filter(h=>h.type==="place"&&h.side===side).length;
-    const hasPlacedMarshal=hasMarshal(state);
-    const finishRecommended=!!best&&!!best.finishFirst;
-    return {bestMove:best,score:bestScore,gain:bestGain,finishRecommended,
-      deployedCount,depth:evaluated?2:1,nodes,candidateCount:root.length,
-      stackingCandidates:root.filter(x=>x.action.stacking).length,
-      elapsedMs:Math.round(now()-started)};
+    return {bestMove:best,score:bestScore,gain:bestGain,finishRecommended:!!(best&&best.finishFirst),
+      deployedCount:state.history.filter(h=>h.type==="place"&&h.side===side).length,
+      depth:completed?2:1,nodes,candidateCount:generateSetupActions(state).length,
+      stackingCandidates:root.filter(x=>x.action.stacking).length,elapsedMs:Math.round(now()-started)};
   }
 
   window.GungiSearch = Object.freeze({
