@@ -519,63 +519,72 @@
   }
 
   async function findBestSetupPlacement(state, options = {}) {
-    if (!state || state.phase !== "setup") {
-      throw new TypeError("初期配置中の局面を指定してください。");
-    }
-    const side = state.setupTurn;
-    const candidates = generateSetupActions(state);
-    const started = now();
-    const timeMs = Math.max(100, Math.min(5000, Number(options.timeMs) || 1400));
-    const deadline = started + timeMs;
-    const maxNodes = Math.max(20, Math.min(2000, Number(options.maxNodes) || 1200));
-    let nodes = 0;
-    let best = null;
-    let bestScore = -INF;
-    let bestGain = -INF;
-    const baseScore = AI.evaluate(state, side);
-    for (const action of candidates) {
-      const piece = (state.hands[side] || []).find(p => p.id === action.pieceId);
-      if (!piece) continue;
-      const next = cloneState(state);
-      const placed = E.placePiece(next, action.row, action.col, side, action.pieceId);
-      if (!placed.ok) continue;
-      nodes += 1;
-      const stackBonus = action.stacking ? 1.5 * action.targetLayer : 0;
-      const score = AI.evaluate(next, side) +
-        deploymentPriority(state, side, piece, action.row, action.col) * 0.08 +
-        stackBonus;
-      const gain = score - baseScore;
-      if (score > bestScore) {
-        bestScore = score;
-        bestGain = gain;
-        best = action;
-      }
-      if (nodes % 24 === 0) {
-        if (typeof options.onProgress === "function") {
-          options.onProgress({ nodes, score: bestScore, elapsedMs: Math.round(now() - started) });
+    if (!state || state.phase !== "setup") throw new TypeError("初期配置中の局面を指定してください。");
+    const side=state.setupTurn,enemy=other(side),started=now();
+    const timeMs=Math.max(100,Math.min(5000,Number(options.timeMs)||2400));
+    const deadline=started+timeMs;
+    const maxNodes=Math.max(40,Math.min(6000,Number(options.maxNodes)||2800));
+    let nodes=0,best=null,bestScore=-INF,bestGain=-INF,completedDepth=0;
+    const baseScore=AI.evaluate(state,side);
+    const hasMarshal=s=>s.history.some(h=>h.type==="place"&&h.side===side&&h.piece.name==="帥");
+    function variants(position,actingSide){
+      const actions=generateSetupActions(position),hasPlaced=position.history.some(h=>h.type==="place"&&h.side===actingSide);
+      const mayFinish=hasPlaced&&!position.setupFinishPending&&position.hands[actingSide].some(p=>p.name==="帥")===false;
+      const canFinish=hasPlaced&&!position.setupFinishPending&&position.history.some(h=>h.type==="place"&&h.side===actingSide&&h.piece.name==="帥");
+      const out=[];
+      for(const action of actions){
+        const piece=position.hands[actingSide].find(p=>p.id===action.pieceId);if(!piece)continue;
+        const finishOptions=canFinish?[false,true]:[false];
+        for(const finishFirst of finishOptions){
+          const next=cloneState(position);
+          if(finishFirst){const f=E.finishSetup(next,actingSide);if(!f.ok)continue;}
+          const placed=E.placePiece(next,action.row,action.col,actingSide,action.pieceId);
+          if(!placed.ok||E.isInCheck(next,actingSide))continue;
+          const priority=deploymentPriority(position,actingSide,piece,action.row,action.col)*0.08+
+            (action.stacking?1.5*action.targetLayer:0);
+          out.push({action,finishFirst,next,priority,score:AI.evaluate(next,side)+priority});
         }
-        await new Promise(done => setTimeout(done, 0));
-        if (now() >= deadline || nodes >= maxNodes) break;
       }
-      if (now() >= deadline || nodes >= maxNodes) break;
+      return out;
     }
-    const deployedCount = state.history.filter(entry =>
-      entry.type === "place" && entry.side === side
-    ).length;
-    const hasPlacedMarshal = state.history.some(entry =>
-      entry.type === "place" && entry.side === side && entry.piece.name === "帥"
-    );
-    // 帥を配置済みで、最善の追加配置による評価上昇が80未満なら「済」を選ぶ。
-    // 配置枚数による下限は設けず、残り1枚の場合も必ず最後の配置前に「済」を選ぶ。
-    const finishRecommended = !!best && !state.setupFinishPending && hasPlacedMarshal &&
-      ((state.hands[side] || []).length === 1 || bestGain < 80);
-    return {
-      bestMove: best, score: bestScore, gain: bestGain, finishRecommended,
-      deployedCount, depth: 1, nodes,
-      candidateCount: candidates.length,
-      stackingCandidates: candidates.filter(action => action.stacking).length,
-      elapsedMs: Math.round(now() - started)
-    };
+    const root=variants(state,side);
+    if(!root.length)return {bestMove:null,score:baseScore,depth:0,nodes,elapsedMs:Math.round(now()-started),finishRecommended:false};
+    root.sort((a,b)=>b.score-a.score);
+    const rootBeam=root.slice(0,Math.min(14,root.length));
+    let evaluated=0;
+    for(const candidate of rootBeam){
+      if(nodes>=maxNodes||now()>=deadline)break;
+      let score=candidate.score;
+      const replyState=candidate.next;
+      if(replyState.phase==="setup"&&replyState.setupTurn===enemy){
+        const replies=variants(replyState,enemy);
+        replies.sort((a,b)=>a.score-b.score);
+        const replyBeam=replies.slice(0,Math.min(10,replies.length));
+        if(replyBeam.length){
+          let opponentBest=INF;
+          for(const reply of replyBeam){
+            if(nodes>=maxNodes||now()>=deadline)break;
+            nodes++;
+            const replyScore=reply.next.phase==="move"?AI.evaluate(reply.next,side):AI.evaluate(reply.next,side);
+            if(replyScore<opponentBest)opponentBest=replyScore;
+          }
+          if(opponentBest<INF)score=opponentBest;
+        }
+      }
+      nodes++;
+      evaluated++;
+      if(score>bestScore){bestScore=score;bestGain=score-baseScore;best={...candidate.action,finishFirst:candidate.finishFirst};}
+      if(typeof options.onProgress==="function"&&evaluated%2===0)
+        options.onProgress({nodes,score:bestScore,elapsedMs:Math.round(now()-started),depth:2});
+      if(evaluated%2===0)await new Promise(done=>setTimeout(done,0));
+    }
+    const deployedCount=state.history.filter(h=>h.type==="place"&&h.side===side).length;
+    const hasPlacedMarshal=hasMarshal(state);
+    const finishRecommended=!!best&&!!best.finishFirst;
+    return {bestMove:best,score:bestScore,gain:bestGain,finishRecommended,
+      deployedCount,depth:evaluated?2:1,nodes,candidateCount:root.length,
+      stackingCandidates:root.filter(x=>x.action.stacking).length,
+      elapsedMs:Math.round(now()-started)};
   }
 
   window.GungiSearch = Object.freeze({
