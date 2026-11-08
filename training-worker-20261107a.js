@@ -5,7 +5,7 @@
   importScripts(
     "./engine-20261107bb.js?v=20261108antiLoop1",
     "./evaluation-20261107be.js?v=20261108fourImprovements1",
-    "./search-20261107bd.js?v=20261108fourImprovements1"
+    "./search-20261108cycle2.js?v=20261108cycle2"
   );
   const E=self.GungiEngine, AI=self.GungiAI, S=self.GungiSearch;
   const FEATURES=["material","hand","position","activity","mobility","threats","exposure","kingSafety","mateNet"];
@@ -101,7 +101,7 @@
   }
   async function play(message){
     const {candidateWeights,championWeights,candidateSide,maxPlies=108,searchOptions={},seed=1}=message;
-    const state=await makeStartPosition(seed),startKey=positionKey(state),trajectory=[],mateSamples=[],repetitionEvents=[];
+    const state=await makeStartPosition(seed),startKey=positionKey(state),trajectory=[],mateSamples=[],repetitionEvents=[],moveLog=[];
     const positionVisits=new Map([[startKey,{visits:1,lastPly:0}]]);
     let nodes=0,plies=0,captures=0,deployments=0,repeatedPositionVisits=0,
       threefoldPositionCount=0,maxPositionVisits=1,endReason="max-plies";
@@ -129,14 +129,16 @@
       if(a.type==="deploy")deployments++;
       if(applied.captured)captures+=applied.captured.length;
       if(applied.gameOver&&applied.winner===side)endReason="marshal-captured";
+      const latestHistoryEntry=state.history[state.history.length-1];
+      if(latestHistoryEntry&&latestHistoryEntry.type==="move")moveLog.push({...latestHistoryEntry});
       if(state.phase!=="finished"){
         const key=positionKey(state),previous=positionVisits.get(key),visits=(previous?previous.visits:0)+1;
         positionVisits.set(key,{visits,lastPly:plies+1});
         if(visits>1){
           repeatedPositionVisits++;
           repetitionEvents.push({ply:plies+1,previousPly:previous.lastPly,cycleLength:plies+1-previous.lastPly,visits,
-            move:state.history[state.history.length-1]||null,
-            cycleMoves:state.history.filter(entry=>entry.type==="move").slice(previous.lastPly,plies+1).slice(-24)});
+            move:moveLog[moveLog.length-1]||null,
+            cycleMoves:moveLog.slice(previous.lastPly,plies+1).slice(-24)});
         }
         if(visits===3)threefoldPositionCount++;
         maxPositionVisits=Math.max(maxPositionVisits,visits);
