@@ -189,6 +189,56 @@
       activity += Math.min(150, stackedTacticalActivity);
     }
 
+    // 全ての最上段駒について、敵帥へ近づき、かつ前進する合法手を評価する。
+    // 捕獲先は既存の threats と重複するため除外し、各駒の上位2手だけを加点する。
+    if (enemyMarshalForStack) {
+      let purposefulAdvance = 0;
+      const seenTopPieces = new Set();
+      for (let row = 0; row < E.SIZE; row += 1) {
+        for (let col = 0; col < E.SIZE; col += 1) {
+          const stack = state.board[row][col];
+          if (!stack.length || stack[stack.length - 1].side !== side) continue;
+          const top = stack[stack.length - 1];
+          if (seenTopPieces.has(top.id)) continue;
+          seenTopPieces.add(top.id);
+          const currentDistance = Math.abs(row - enemyMarshalForStack.row) + Math.abs(col - enemyMarshalForStack.col);
+          const gains = [];
+          for (const move of (movesByPiece.get(top.id) || [])) {
+            const target = state.board[move.to.row][move.to.col];
+            if (target.length && target[target.length - 1].side !== side) continue;
+            const nextDistance = Math.abs(move.to.row - enemyMarshalForStack.row) +
+              Math.abs(move.to.col - enemyMarshalForStack.col);
+            const distanceGain = Math.max(0, currentDistance - nextDistance);
+            const advanceGain = Math.max(0, advancement(move.to.row, side) - advancement(row, side));
+            if (distanceGain || advanceGain) gains.push(distanceGain * 3 + advanceGain * 2);
+          }
+          gains.sort((a, b) => b - a);
+          purposefulAdvance += Math.min(22, (gains[0] || 0) + (gains[1] || 0) * 0.35);
+        }
+      }
+      activity += Math.min(110, purposefulAdvance);
+    }
+
+    // 敵帥を次の一手で実際に捕獲できる合法手がある場合は、非常に大きく評価する。
+    // 単なる射程・隣接ではなく、軍儀エンジンの捕獲対象判定に帥が含まれるかで確認する。
+    if (enemyMarshalForStack) {
+      const marshalStack = state.board[enemyMarshalForStack.row][enemyMarshalForStack.col];
+      const marshalCapturable = capturablePieces(marshalStack, side)
+        .some(piece => piece.name === "帥" && piece.side === enemy);
+      if (marshalCapturable && moveList.some(move =>
+        move.to.row === enemyMarshalForStack.row && move.to.col === enemyMarshalForStack.col
+      )) mateNet += 25000;
+      // 敵帥の周囲8マスを複数の駒で制圧するほど、逃げ道を狭める攻めとして評価する。
+      const ring = new Set();
+      for (let dr = -1; dr <= 1; dr += 1) for (let dc = -1; dc <= 1; dc += 1) {
+        if (!dr && !dc) continue;
+        const r = enemyMarshalForStack.row + dr, c = enemyMarshalForStack.col + dc;
+        if (r < 0 || r >= E.SIZE || c < 0 || c >= E.SIZE) continue;
+        if (controlledSquares.has(r + "," + c)) ring.add(r + "," + c);
+      }
+      threats += Math.min(72, ring.size * 9);
+    }
+
     // Reserve pieces retain strategic flexibility. Slightly increase their value
     // so the evaluator does not rush to deploy every useful piece.
     const reserve = state.hands && state.hands[side] ? state.hands[side] : [];
