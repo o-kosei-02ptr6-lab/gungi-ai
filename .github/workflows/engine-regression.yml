@@ -1,0 +1,31 @@
+name: Engine regression tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "search-20261108cycle2.js"
+      - "scripts/search-context-regression.mjs"
+      - ".github/workflows/engine-regression.yml"
+  pull_request:
+    paths:
+      - "search-20261108cycle2.js"
+      - "scripts/search-context-regression.mjs"
+      - ".github/workflows/engine-regression.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Test history-sensitive transposition keys
+        run: node scripts/search-context-regression.mjs
