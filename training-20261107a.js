@@ -171,7 +171,7 @@
     loadWeights();
     let candidate=AI.getWeights();
     const champion=championWeights();
-    let completed=0,decisive=0,candidateWins=0,championWins=0,firstWins=0,secondWins=0,draws=0,adjudicatedGames=0,nodes=0,sampleCount=0,totalTdError=0,tdUpdates=0;
+    let completed=0,decisive=0,candidateWins=0,championWins=0,firstWins=0,secondWins=0,draws=0,adjudicatedGames=0,nodes=0,sampleCount=0,totalTdError=0,tdUpdates=0,totalMateUpdates=0;
     for(let game=0;continuous||game<games;game++){
       if(options.shouldStop&&options.shouldStop())break;
       const state=makeStartPosition(),candidateSide=game%2===0?"先手":"後手",trajectory=[],mateSamples=[];
@@ -226,7 +226,7 @@
         .map(sample=>({features:candidateSide==="先手"?sample.features:Object.fromEntries(FEATURES.map(key=>[key,-sample.features[key]])),
           target:sample.source==="search-proof"?sample.target:(sample.attackerSide===candidateSide?1:-1)}));
       const directLearned=trainMateSamples(directSamples,candidate);
-      candidate=directLearned.weights;AI.setWeights(candidate);
+      candidate=directLearned.weights;AI.setWeights(candidate);totalMateUpdates+=directLearned.updates;
       completed++;
       saveWeights(candidate,previousGames+completed);
       if(options.onProgress)options.onProgress({
@@ -239,7 +239,7 @@
     AI.setWeights(candidate);
     saveWeights(candidate,previousGames+completed);
     return {games:completed,decisive,candidateWins,championWins,firstWins,secondWins,draws,adjudicatedGames,
-      samples:sampleCount,nodes,tdUpdates,meanTdError:tdUpdates?totalTdError/tdUpdates:0,weights:candidate};
+      samples:sampleCount,nodes,tdUpdates,mateUpdates:totalMateUpdates,meanTdError:tdUpdates?totalTdError/tdUpdates:0,weights:candidate};
   }
 
   function createWorker(){
@@ -302,7 +302,7 @@
           if(options.onProgress)options.onProgress({
             game:completed,games,ply:r.plies,nodes,phase:"learning",target:r.finalTarget,
             adjudicated:r.adjudicated,adjudicationScore:r.adjudicationScore,adjudicatedGames,
-            parallelGames:results.length,completedGames:completed,
+            parallelGames:results.length,completedGames:completed,mateUpdates:totalMateUpdates,
             meanTdError:tdUpdates?totalTdError/tdUpdates:0,candidateWins,championWins,firstWins,secondWins,draws
           });
         }
@@ -312,7 +312,7 @@
     }finally{for(const worker of workers)worker.terminate();}
     AI.setWeights(candidate);saveWeights(candidate,previousGames+completed);
     return {games:completed,decisive,candidateWins,championWins,firstWins,secondWins,draws,adjudicatedGames,
-      samples:sampleCount,nodes,tdUpdates,meanTdError:tdUpdates?totalTdError/tdUpdates:0,weights:candidate,parallelGames:parallel};
+      samples:sampleCount,nodes,tdUpdates,mateUpdates:totalMateUpdates,meanTdError:tdUpdates?totalTdError/tdUpdates:0,weights:candidate,parallelGames:parallel};
   }
   async function train(options={}){
     const requested=Math.max(1,Math.min(4,Number(options.parallelGames)||2));
