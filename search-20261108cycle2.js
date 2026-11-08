@@ -67,11 +67,12 @@
     const history = state.history || [];
     let count = 0;
     let lastIndex = -1;
-    // The final entry represents the current position, not a prior visit.
-    for (let i = 0; i < history.length - 1; i += 1) {
+    // Move/deploy records store the position immediately before that action.
+    // Scan all records: the latest record is also a valid prior position.
+    for (let i = 0; i < history.length; i += 1) {
       if (history[i].positionKey === key) { count += 1; lastIndex = i; }
     }
-    return { count, cycleLength: lastIndex >= 0 ? history.length - 1 - lastIndex : 0 };
+    return { count, cycleLength: lastIndex >= 0 ? history.length - lastIndex : 0 };
   }
   function priorPositionCount(state) {
     return priorPositionInfo(state).count;
@@ -334,13 +335,7 @@
         const maxTTEntries = Math.max(2000, Math.min(100000, Number(options.maxTTEntries) || 30000));
         const started = now();
         const deadline = started + timeMs;
-        // Establish a current-position baseline after setup and for older games.
         const root = cloneState(state);
-        const rootKey = repetitionKey(root);
-        const lastHistoryEntry = root.history[root.history.length - 1];
-        if (!lastHistoryEntry || lastHistoryEntry.positionKey !== rootKey) {
-          root.history.push({ type: "position", positionKey: rootKey });
-        }
         const table = new Map();
         const stats = { nodes: 0, qnodes: 0, cutoffs: 0, ttHits: 0 };
         // Killer moves and history scores improve ordering of quiet moves.
