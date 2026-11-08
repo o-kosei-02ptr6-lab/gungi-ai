@@ -38,9 +38,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .training-state
-          key: gungi-server-training-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: gungi-server-training-v2-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            gungi-server-training-${{ github.ref_name }}-
+            gungi-server-training-v2-${{ github.ref_name }}-
       - name: Run resumable multi-game self-play training
         env:
           GAME_COUNT: ${{ inputs.game_count }}
