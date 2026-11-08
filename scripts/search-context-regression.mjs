@@ -130,10 +130,61 @@ const threeCyclePenalty = search.getAntiLoopPenalty(threeCycleState, {
   from: { row: 4, col: 6 }, to: { row: 4, col: 4 },
   landingMode: "capture"
 });
+
 assert.ok(
   threeCyclePenalty >= 13000,
   "closing a three-square cycle should receive a strong penalty"
 );
+
+// 王手中でも、王手を放置して同じ駒を往復させる手には反復罰則を適用する。
+// 一方、帥自身が安全地帯へ逃げる逆戻りは罰則の対象にしない。
+const checkedBoard = Array.from({ length: 9 }, () => Array.from({ length: 9 }, () => []));
+checkedBoard[8][4].push({ id: "checked-marshal", name: "帥", side: "先手" });
+checkedBoard[6][4].push({ id: "checking-knight", name: "騎", side: "後手" });
+checkedBoard[4][4].push({ id: "looping-general", name: "少将", side: "先手" });
+const checkedLoopState = {
+  board: checkedBoard,
+  hands: { "先手": [], "後手": [] },
+  turn: "先手",
+  history: [{
+    type: "move",
+    piece: { id: "looping-general", name: "少将", side: "先手" },
+    from: { row: 4, col: 3 },
+    to: { row: 4, col: 4 },
+    landingMode: "capture",
+    positionKey: "old-position"
+  }]
+};
+assert.equal(context.window.GungiEngine.isInCheck(checkedLoopState, "先手"), true,
+  "the regression position must begin in check");
+const unresolvedCheckPenalty = search.getAntiLoopPenalty(checkedLoopState, {
+  type: "move", pieceId: "looping-general",
+  from: { row: 4, col: 4 }, to: { row: 4, col: 3 },
+  landingMode: "capture"
+});
+assert.ok(unresolvedCheckPenalty >= 9000,
+  "an oscillating move that leaves the Marshal in check should be penalized");
+
+const marshalEscapeState = {
+  board: checkedBoard.map(row => row.map(stack => stack.slice())),
+  hands: { "先手": [], "後手": [] },
+  turn: "先手",
+  history: [{
+    type: "move",
+    piece: { id: "checked-marshal", name: "帥", side: "先手" },
+    from: { row: 8, col: 3 },
+    to: { row: 8, col: 4 },
+    landingMode: "capture",
+    positionKey: "old-position"
+  }]
+};
+const marshalEscapePenalty = search.getAntiLoopPenalty(marshalEscapeState, {
+  type: "move", pieceId: "checked-marshal",
+  from: { row: 8, col: 4 }, to: { row: 8, col: 3 },
+  landingMode: "capture"
+});
+assert.equal(marshalEscapePenalty, 0,
+  "a reverse move that actually resolves check must not be penalized");
 
 const repeatedBoardKey = JSON.stringify({
   board: cycleBoard.map(row => row.map(stack => stack.map(piece => piece.side + ":" + piece.name))),
