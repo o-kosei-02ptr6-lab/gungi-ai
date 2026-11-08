@@ -15,7 +15,8 @@
     try{
       const stored=JSON.parse(localStorage.getItem(GAMES_KEY)||"[]");
       const records=Array.isArray(stored)?stored.filter(item=>item&&item.finalState&&(item.winner||item.draw)):[];
-      records.push(record);
+      records.forEach(item=>{delete item.history;});
+      records.push({...record,history:Array.isArray(record.history)?record.history:[]});
       while(records.length>MAX_SAVED_GAMES){
         const oldestDraw=records.findIndex(item=>item.draw===true||!item.winner);
         records.splice(oldestDraw>=0?oldestDraw:0,1);
@@ -109,7 +110,8 @@
     return {
       winner:state.winner,plies:Math.min(plies+1,settings.maxPlies),nodes,
       draw:!state.winner,adjudicated,adjudicationScore,candidateFinalScore,
-      finalState:{board:state.board,hands:state.hands,turn:state.turn,phase:state.phase,winner:state.winner,moveNumber:state.moveNumber}
+      finalState:{board:state.board,hands:state.hands,turn:state.turn,phase:state.phase,winner:state.winner,moveNumber:state.moveNumber},
+      history:state.history.map(entry=>({...entry}))
     };
   }
   async function compare(options={}){
@@ -142,7 +144,7 @@
           const first=await playOne(start,"後手",candidate,champion,settings,p=>options.onProgress&&options.onProgress({...p,pair:pairNumber,game:1,totalGames:totals.games}));
           const second=await playOne(start,"先手",candidate,champion,settings,p=>options.onProgress&&options.onProgress({...p,pair:pairNumber,game:2,totalGames:totals.games}));
           for(const [result,candidateSide,gameNumber] of [[first,"後手",1],[second,"先手",2]]){
-            saveGameRecord({id:Date.now().toString(36)+"-"+totals.games, pair:pairNumber, game:gameNumber, candidateSide, winner:result.winner||null, draw:!!result.draw, candidateFinalScore:result.candidateFinalScore, plies:result.plies, savedAt:new Date().toISOString(), finalState:result.finalState});
+            saveGameRecord({id:Date.now().toString(36)+"-"+totals.games, pair:pairNumber, game:gameNumber, candidateSide, winner:result.winner||null, draw:!!result.draw, candidateFinalScore:result.candidateFinalScore, plies:result.plies, savedAt:new Date().toISOString(), finalState:result.finalState, history:result.history});
             const candidateWon=!result.draw&&result.winner===candidateSide;
             const championWon=!result.draw&&!candidateWon;
             totals.games++;totals.nodes+=result.nodes;totals.plies+=result.plies;
