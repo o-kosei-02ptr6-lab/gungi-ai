@@ -266,7 +266,7 @@
           if(r.adjudicated)adjudicatedGames++;
           if(r.draw)draws++;
           else{decisive++;if(r.finalTarget>0)candidateWins++;else championWins++;if(r.winner==="先手")firstWins++;else secondWins++;}
-          saveTrainingGameRecord({id:"training-"+Date.now().toString(36)+"-"+completed,pair:null,game:completed+1,source:"自己学習",candidateSide:r.candidateSide,winner:r.winner||null,draw:!!r.draw,plies:r.plies,savedAt:new Date().toISOString(),finalState:r.finalState});
+          saveTrainingGameRecord({id:"training-"+Date.now().toString(36)+"-"+completed,pair:null,game:completed+1,source:"自己学習",candidateSide:r.candidateSide,winner:r.winner||null,draw:!!r.draw,candidateFinalScore:r.candidateFinalScore,plies:r.plies,savedAt:new Date().toISOString(),finalState:r.finalState});
           if(r.trajectory.length){
             const learned=trainTrajectory(r.trajectory,r.finalTarget,candidate);
             candidate=learned.weights;totalTdError+=learned.meanTdError;tdUpdates+=learned.updates;
