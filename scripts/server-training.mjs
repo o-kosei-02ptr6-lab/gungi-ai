@@ -168,7 +168,9 @@ for (let index = 0; index < gamesRequested; index++) {
   const gameSummary = {
     game: checkpoint.games, candidateSide, winner: result.winner || null, draw: !!result.draw,
     startKey: result.startKey,
-    plies: result.plies, nodes: result.nodes, finalTarget: result.finalTarget,
+    plies: result.plies, nodes: result.nodes, captures: result.captures || 0,
+    deployments: result.deployments || 0, uniquePositions: result.uniquePositions || 0,
+    repeatedPositionVisits: result.repeatedPositionVisits || 0, finalTarget: result.finalTarget,
     candidateFinalScore: result.candidateFinalScore, trajectorySamples: result.trajectory.length,
     mateSamples: (result.mateSamples || []).length, tdUpdates: learned.updates, mateUpdates: mate.updates,
     finalState: result.finalState
@@ -185,6 +187,13 @@ const summary = {
   runStartedAt, completedAt: new Date().toISOString(),
   resumed: !!previous, gamesThisRun: runResults.length, totalGames: checkpoint.games,
   maxPlies, results: runResults, uniqueStartPositions: new Set(runResults.map(x => x.startKey)).size,
+  uniqueFinalPositions: new Set(runResults.map(x => JSON.stringify(x.finalState.board))).size,
+  progress: {
+    capturesThisRun: runResults.reduce((sum, x) => sum + x.captures, 0),
+    deploymentsThisRun: runResults.reduce((sum, x) => sum + x.deployments, 0),
+    uniquePositionsThisRun: runResults.reduce((sum, x) => sum + x.uniquePositions, 0),
+    repeatedPositionVisitsThisRun: runResults.reduce((sum, x) => sum + x.repeatedPositionVisits, 0)
+  },
   drawMeanCandidateFinalScore: checkpoint.totals.drawEvaluationCount
     ? checkpoint.totals.drawEvaluationSum / checkpoint.totals.drawEvaluationCount : 0,
   totals: checkpoint.totals, weights: checkpoint.weights,
