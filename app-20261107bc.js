@@ -614,7 +614,7 @@
         trainingStopRequested = true;
         trainButton.disabled = true;
         trainButton.textContent = "停止中…";
-        trainingStatus.textContent = "停止要求を受け付けました。実行中の2局が終了してから停止します。";
+        trainingStatus.textContent = "停止要求を受け付けました。実行中の対局が終了してから停止します。";
         return;
       }
       if (aiThinking || tournamentRunning) return;
