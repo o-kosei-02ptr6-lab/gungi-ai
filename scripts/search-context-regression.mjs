@@ -111,7 +111,29 @@ const reversePenalty = search.getAntiLoopPenalty(reverseState, {
   from: { row: 4, col: 4 }, to: { row: 4, col: 3 },
   landingMode: "capture"
 });
+
 assert.ok(reversePenalty >= 9000, "immediate reverse moves should receive a strong penalty");
+
+const threeCycleBoard = Array.from({ length: 9 }, () => Array.from({ length: 9 }, () => []));
+threeCycleBoard[4][6].push({ id: "cycle-piece", name: "弓", side: "先手" });
+const threeCycleState = {
+  board: threeCycleBoard,
+  hands: { "先手": [], "後手": [] },
+  turn: "先手",
+  history: [
+    { type: "move", piece: { id: "cycle-piece" }, from: { row: 4, col: 4 }, to: { row: 4, col: 5 }, positionKey: "p1" },
+    { type: "move", piece: { id: "cycle-piece" }, from: { row: 4, col: 5 }, to: { row: 4, col: 6 }, positionKey: "p2" }
+  ]
+};
+const threeCyclePenalty = search.getAntiLoopPenalty(threeCycleState, {
+  type: "move", pieceId: "cycle-piece",
+  from: { row: 4, col: 6 }, to: { row: 4, col: 4 },
+  landingMode: "capture"
+});
+assert.ok(
+  threeCyclePenalty >= 13000,
+  "closing a three-square cycle should receive a strong penalty"
+);
 
 const repeatedBoardKey = JSON.stringify({
   board: cycleBoard.map(row => row.map(stack => stack.map(piece => piece.side + ":" + piece.name))),
