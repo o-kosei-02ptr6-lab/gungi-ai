@@ -21,8 +21,12 @@
       return {target:Math.tanh(candidateFinalScore/1200)*0.5,candidateFinalScore};
     }finally{AI.setWeights(activeWeights);}
   }
-  const random=list=>list[Math.floor(Math.random()*list.length)];
   const other=side=>side==="先手"?"後手":"先手";
+  function makeRng(seed){
+    let value=(Number(seed)||1)>>>0;
+    return ()=>{ value=(value+0x6D2B79F5)>>>0; let t=value; t=Math.imul(t^(t>>>15),t|1); t^=t+Math.imul(t^(t>>>7),t|61); return ((t^(t>>>14))>>>0)/4294967296; };
+  }
+  function random(list,rng){return list[Math.floor(rng()*list.length)];}
   function snapshotFeatures(state){
     const b=AI.evaluateBreakdown(state),v={};
     for(const k of FEATURES)v[k]=(b["先手"][k]||0)-(b["後手"][k]||0);
@@ -37,28 +41,56 @@
       setupDone:{...state.setupDone}
     };
   }
-  async function randomPlacement(state,side){
+  function randomPlacement(state,side,rng){
     if(state.setupTurn!==side)throw new Error("配置順が一致しません。");
-    const result=await S.findBestSetupPlacement(state,{timeMs:260,maxNodes:180,rootCandidateLimit:14,replyCandidateLimit:7,rootBeam:5,replyBeam:3,allowFinish:false});
-    if(!result.bestMove)throw new Error(side+"の配置可能なマスがありません。");
-    if(result.finishRecommended){
-      const finish=E.finishSetup(state,side);
-      if(!finish.ok)throw new Error("自己学習AIの「済」に失敗: "+finish.reason);
+    const hand=state.hands[side],count=state.history.filter(x=>x.type==="place"&&x.side===side).length;
+    const preferred=count===0?[hand.find(p=>p.name==="帥")].filter(Boolean):[random(hand,rng)];
+    const orderedPieces=preferred.concat(hand.filter(p=>!preferred.some(q=>q.id===p.id)));
+    const enemy=other(side);
+    let safeOwn=[],safeBoth=[],legalFallback=[];
+    for(const piece of orderedPieces){
+      if(!piece)continue;
+      const squares=[];
+      for(let row=0;row<E.SIZE;row++)for(let col=0;col<E.SIZE;col++){
+        if(piece.name==="帥"&&row!==(side==="先手"?E.SIZE-1:0))continue;
+        if(E.canPlacePiece(state,row,col,piece))squares.push({row,col});
+      }
+      const ownSafeForPiece=[];
+      for(const at of squares){
+        const next=cloneSetupState(state);
+        const result=E.placePiece(next,at.row,at.col,side,piece.id);
+        if(!result.ok)continue;
+        const candidate={piece,at};
+        legalFallback.push(candidate);
+        if(E.isInCheck(next,side))continue;
+        ownSafeForPiece.push(candidate);
+        if(!E.isInCheck(next,enemy))safeBoth.push(candidate);
+      }
+      if(ownSafeForPiece.length){safeOwn=ownSafeForPiece;break;}
     }
-    const action=result.bestMove,placed=E.placePiece(state,action.row,action.col,side,action.pieceId);
-    if(!placed.ok)throw new Error("自己学習AIの配置に失敗: "+placed.reason);
+    const choices=safeBoth.length?safeBoth:(safeOwn.length?safeOwn:legalFallback);
+    if(!choices.length)throw new Error(side+"の配置可能なマスがありません。");
+    const chosen=random(choices,rng);
+    const result=E.placePiece(state,chosen.at.row,chosen.at.col,side,chosen.piece.id);
+    if(!result.ok)throw new Error("自己学習の初期配置に失敗: "+result.reason);
+    if(chosen.piece.name==="帥"&&(state.board[chosen.at.row][chosen.at.col].length!==1||
+      chosen.at.row!==(side==="先手"?E.SIZE-1:0)))throw new Error("帥の配置規則に違反しました。");
     if(E.isInCheck(state,side))throw new Error("自己学習AIが帥手を受ける配置を選びました。");
-    if(action.pieceName==="帥"&&(state.board[action.row][action.col].length!==1||
-      action.row!==(side==="先手"?E.SIZE-1:0)))throw new Error("帥の配置規則に違反しました。");
   }
-  async function makeStartPosition(){
+  function positionKey(state){
+    const board=state.board.map(row=>row.map(stack=>stack.map(p=>p.side+":"+p.name).join(",")).join("/")).join("|");
+    const hands=["先手","後手"].map(side=>state.hands[side].map(p=>p.name).sort().join(",")).join("|");
+    return board+"#"+hands;
+  }
+  async function makeStartPosition(seed){
+    const rng=makeRng(seed);
     for(let attempt=0;attempt<20;attempt++){
       const state=E.createGameState();
-      for(let i=0;i<12;i++){await randomPlacement(state,"先手");await randomPlacement(state,"後手");}
+      for(let i=0;i<12;i++){randomPlacement(state,"先手",rng);randomPlacement(state,"後手",rng);}
       for(const side of ["先手","後手"]){
         const finish=E.finishSetup(state,side);
         if(!finish.ok)throw new Error("自己対局の「済」に失敗: "+finish.reason);
-        await randomPlacement(state,side);
+        randomPlacement(state,side,rng);
       }
       if(state.phase!=="move")throw new Error("初期配置を完了できませんでした。");
       if(!E.isInCheck(state,"先手")&&!E.isInCheck(state,"後手"))return state;
@@ -66,8 +98,8 @@
     throw new Error("帥手を防げる初期配置を生成できませんでした。");
   }
   async function play(message){
-    const {candidateWeights,championWeights,candidateSide,maxPlies=108,searchOptions={}}=message;
-    const state=await makeStartPosition(),trajectory=[],mateSamples=[];
+    const {candidateWeights,championWeights,candidateSide,maxPlies=108,searchOptions={},seed=1}=message;
+    const state=await makeStartPosition(seed),startKey=positionKey(state),trajectory=[],mateSamples=[];
     let nodes=0,plies=0;
     for(;plies<maxPlies&&state.phase==="move";plies++){
       const side=state.turn,isCandidate=side===candidateSide,positionFeatures=snapshotFeatures(state);
@@ -99,7 +131,7 @@
       .map(sample=>({features:candidateSide==="先手"?sample.features:Object.fromEntries(FEATURES.map(k=>[k,-sample.features[k]])),
         target:sample.source==="search-proof"?sample.target:(sample.attackerSide===candidateSide?1:-1)}));
     const oriented=candidateSide==="先手"?trajectory:trajectory.map(f=>Object.fromEntries(FEATURES.map(k=>[k,-f[k]])));
-    return {candidateSide,trajectory:oriented,mateSamples:directSamples,finalTarget,candidateFinalScore:outcome.candidateFinalScore,winner:state.winner||null,draw:state.phase!=="finished"||!state.winner,
+    return {candidateSide,startKey,trajectory:oriented,mateSamples:directSamples,finalTarget,candidateFinalScore:outcome.candidateFinalScore,winner:state.winner||null,draw:state.phase!=="finished"||!state.winner,
       plies,nodes,adjudicated,adjudicationScore,
       finalState:{board:state.board,hands:state.hands,turn:state.turn,phase:state.phase,winner:state.winner,moveNumber:state.moveNumber},history:state.history.map(entry=>({...entry}))};
   }
