@@ -71,7 +71,7 @@ function valueOf(features, weights) {
 function trainTrajectory(trajectory, finalTarget, initial) {
   const weights = { ...initial };
   const trace = Object.fromEntries(FEATURES.map(key => [key, 0]));
-  const alpha = 0.0025, gamma = 0.985, lambda = 0.72;
+  const alpha = 0.0025, gamma = 0.985, lambda = 0.72, regularization = 0.06;
   let absoluteError = 0, updates = 0;
   for (let i = 0; i < trajectory.length; i++) {
     const current = trajectory[i];
@@ -82,7 +82,8 @@ function trainTrajectory(trajectory, finalTarget, initial) {
     for (const key of FEATURES) {
       trace[key] = gamma * lambda * trace[key] + (current[key] || 0) / 1800;
       const gradient = 1 - currentValue * currentValue;
-      weights[key] = Math.max(0.25, Math.min(2.5, weights[key] + alpha * delta * gradient * trace[key]));
+      const update = delta * gradient * trace[key] - regularization * (weights[key] - 1);
+      weights[key] = Math.max(0.25, Math.min(2.5, weights[key] + alpha * update));
     }
     absoluteError += Math.abs(delta);
     updates++;
@@ -175,7 +176,9 @@ for (let index = 0; index < gamesRequested; index++) {
     lastMoves: (result.history || []).slice(-8),
     plies: result.plies, nodes: result.nodes, captures: result.captures || 0,
     deployments: result.deployments || 0, uniquePositions: result.uniquePositions || 0,
-    repeatedPositionVisits: result.repeatedPositionVisits || 0, finalTarget: result.finalTarget,
+    repeatedPositionVisits: result.repeatedPositionVisits || 0,
+    threefoldPositionCount: result.threefoldPositionCount || 0,
+    maxPositionVisits: result.maxPositionVisits || 1, finalTarget: result.finalTarget,
     candidateFinalScore: result.candidateFinalScore, trajectorySamples: result.trajectory.length,
     mateSamples: (result.mateSamples || []).length, tdUpdates: learned.updates, mateUpdates: mate.updates,
     finalState: result.finalState
@@ -197,7 +200,15 @@ const summary = {
     capturesThisRun: runResults.reduce((sum, x) => sum + x.captures, 0),
     deploymentsThisRun: runResults.reduce((sum, x) => sum + x.deployments, 0),
     uniquePositionsThisRun: runResults.reduce((sum, x) => sum + x.uniquePositions, 0),
-    repeatedPositionVisitsThisRun: runResults.reduce((sum, x) => sum + x.repeatedPositionVisits, 0)
+    repeatedPositionVisitsThisRun: runResults.reduce((sum, x) => sum + x.repeatedPositionVisits, 0),
+    threefoldPositionCountThisRun: runResults.reduce((sum, x) => sum + (x.threefoldPositionCount || 0), 0),
+    maxPositionVisitsThisRun: Math.max(1, ...runResults.map(x => x.maxPositionVisits || 1))
+  },
+  weightDiagnostics: {
+    min: Math.min(...Object.values(checkpoint.weights)),
+    max: Math.max(...Object.values(checkpoint.weights)),
+    mean: Object.values(checkpoint.weights).reduce((sum, value) => sum + value, 0) / Object.keys(checkpoint.weights).length,
+    distanceFromBaselineL1: Object.values(checkpoint.weights).reduce((sum, value) => sum + Math.abs(value - 1), 0)
   },
   drawMeanCandidateFinalScore: checkpoint.totals.drawEvaluationCount
     ? checkpoint.totals.drawEvaluationSum / checkpoint.totals.drawEvaluationCount : 0,
