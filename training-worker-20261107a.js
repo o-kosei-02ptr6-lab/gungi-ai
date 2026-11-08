@@ -18,7 +18,9 @@
       AI.setWeights(BASELINE_WEIGHTS);
       const firstScore=AI.evaluate(state,"先手");
       const candidateFinalScore=candidateSide==="先手"?firstScore:-firstScore;
-      return {target:Math.tanh(candidateFinalScore/1200)*0.5,candidateFinalScore};
+      const correction=Math.max(-0.2,Math.min(0.2,Math.tanh(candidateFinalScore/1200)*0.2));
+      // 引き分けの基準点0.3に、最終局面の優劣を±0.2で反映する。
+      return {target:0.3+correction,candidateFinalScore};
     }finally{AI.setWeights(activeWeights);}
   }
   const other=side=>side==="先手"?"後手":"先手";
@@ -100,13 +102,14 @@
   async function play(message){
     const {candidateWeights,championWeights,candidateSide,maxPlies=108,searchOptions={},seed=1}=message;
     const state=await makeStartPosition(seed),startKey=positionKey(state),trajectory=[],mateSamples=[];
-    let nodes=0,plies=0;
+    const seenPositions=new Set([startKey]);
+    let nodes=0,plies=0,captures=0,deployments=0,repeatedPositionVisits=0;
     for(;plies<maxPlies&&state.phase==="move";plies++){
       const side=state.turn,isCandidate=side===candidateSide,positionFeatures=snapshotFeatures(state);
       trajectory.push(isCandidate?positionFeatures:Object.fromEntries(FEATURES.map(k=>[k,-positionFeatures[k]])));
       AI.setWeights(isCandidate?candidateWeights:championWeights);
       const urgent=E.isInCheck(state,side);
-      const result=await S.findBestMove(state,{maxDepth:urgent?4:3,timeMs:urgent?420:220,maxNodes:urgent?7000:3200,maxDeployCandidates:5,...searchOptions});
+      const result=await S.findBestMove(state,{maxDepth:4,timeMs:urgent?650:360,maxNodes:urgent?9000:5200,maxDeployCandidates:6,...searchOptions});
       nodes+=result.nodes||0;
       const mateScore=isCandidate?result.score:-result.score;
       if(Number.isFinite(mateScore)&&Math.abs(mateScore)>99900000)
@@ -119,6 +122,13 @@
         ?E.deployPiece(state,a.row,a.col,side,a.pieceId)
         :E.movePiece(state,a.from.row,a.from.col,a.to.row,a.to.col,a.landingMode);
       if(!applied||!applied.ok)throw new Error("学習対局の着手に失敗しました: "+(applied&&applied.reason||"不明なエラー"));
+      if(a.type==="deploy")deployments++;
+      if(applied.captured)captures+=applied.captured.length;
+      if(state.phase!=="finished"){
+        const key=positionKey(state);
+        if(seenPositions.has(key))repeatedPositionVisits++;
+        seenPositions.add(key);
+      }
       if(state.phase!=="finished"&&E.isInCheck(state,state.turn))
         mateSamples.push({features:snapshotFeatures(state),attackerSide:side,ply:plies+1,source:"played-check"});
     }
@@ -132,7 +142,7 @@
         target:sample.source==="search-proof"?sample.target:(sample.attackerSide===candidateSide?1:-1)}));
     const oriented=candidateSide==="先手"?trajectory:trajectory.map(f=>Object.fromEntries(FEATURES.map(k=>[k,-f[k]])));
     return {candidateSide,startKey,trajectory:oriented,mateSamples:directSamples,finalTarget,candidateFinalScore:outcome.candidateFinalScore,winner:state.winner||null,draw:state.phase!=="finished"||!state.winner,
-      plies,nodes,adjudicated,adjudicationScore,
+      plies,nodes,captures,deployments,uniquePositions:seenPositions.size,repeatedPositionVisits,adjudicated,adjudicationScore,
       finalState:{board:state.board,hands:state.hands,turn:state.turn,phase:state.phase,winner:state.winner,moveNumber:state.moveNumber},history:state.history.map(entry=>({...entry}))};
   }
   self.onmessage=async event=>{
