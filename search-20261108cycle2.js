@@ -111,7 +111,7 @@
     return Math.min(20000, cyclePenalty + Math.max(0, info.count - 1) * 2500);
   }
   function searchContextKey(state) {
-    const recent = state.history.slice(-10).map(entry => entry.type === "move"
+    const recent = state.history.slice(-16).map(entry => entry.type === "move"
       ? [entry.piece && entry.piece.id, entry.from && entry.from.row, entry.from && entry.from.col,
          entry.to && entry.to.row, entry.to && entry.to.col, entry.landingMode].join(":")
       : entry.type).join("|");
@@ -687,6 +687,8 @@
     findBestSetupPlacement,
     generateSetupActions,
     generateActions: (state, options = {}) => generateActions(state, state.turn, options.maxDeployCandidates || 12),
+    // Exposed for deterministic regression tests of history-sensitive TT keys.
+    getSearchContextKey: searchContextKey,
     cloneState
   });
 })();
