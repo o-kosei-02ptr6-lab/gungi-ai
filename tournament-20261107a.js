@@ -4,6 +4,8 @@
   const E=window.GungiEngine,AI=window.GungiAI,S=window.GungiSearch,T=window.GungiTraining;
   if(!E||!AI||!S||!T) throw new Error("Engine, evaluator, search and training must load before tournament.");
   const INITIAL=Object.freeze({material:1,hand:1,position:1,activity:1,mobility:1,threats:1,exposure:1,kingSafety:1,mateNet:1});
+  // 引き分け局面の共通評価では、帥の安全・詰み筋を最優先する。
+  const DRAW_EVAL_WEIGHTS=Object.freeze({...INITIAL,kingSafety:2.5,mateNet:2.5});
   const CHAMPION_KEY="gungi-ai-champion-weights-v1";
   const STATS_KEY="gungi-ai-tournament-stats-v2";
   const GAMES_KEY="gungi-ai-tournament-games-v1";
@@ -97,8 +99,9 @@
     if(!state.winner){
       const activeWeights=AI.getWeights();
       try{
-        // 引き分けの優劣は候補・最良AIどちらにも偏らない共通の基準重みで測る。
-        AI.setWeights(INITIAL);
+        // 引き分けの優劣は候補・最良AIどちらにも偏らない共通基準で測る。
+        // 帥の安全性と詰み筋だけを通常の2.5倍にし、その他の項目は基準値のままにする。
+        AI.setWeights(DRAW_EVAL_WEIGHTS);
         const firstPerspectiveScore=AI.evaluate(state,"先手");
         candidateFinalScore=candidateSide==="先手"?firstPerspectiveScore:-firstPerspectiveScore;
       }finally{AI.setWeights(activeWeights);}
