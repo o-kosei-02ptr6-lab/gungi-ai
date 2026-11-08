@@ -19,10 +19,15 @@
       const finalOnly={...record};delete finalOnly.history;records.push(finalOnly);
       while(records.length>MAX_SAVED_GAMES){const drawIndex=records.findIndex(item=>item.draw===true||!item.winner);records.splice(drawIndex>=0?drawIndex:0,1);}
       localStorage.setItem(GAMES_KEY,JSON.stringify(records));
+      const checkedRecords=JSON.parse(localStorage.getItem(GAMES_KEY)||"[]");
+      if(!Array.isArray(checkedRecords)||!checkedRecords.some(item=>item&&item.id===record.id&&item.finalState))
+        return {ok:false,error:"最終局面の保存確認に失敗しました。"};
       const kifu={id:record.id,savedAt:record.savedAt||new Date().toISOString(),source:"実力検証",history:Array.isArray(record.history)?record.history.map(entry=>({...entry})):[]};
       localStorage.setItem("gungi-ai-latest-kifu-v1",JSON.stringify(kifu));
       const verify=JSON.parse(localStorage.getItem("gungi-ai-latest-kifu-v1")||"null");
-      return verify&&verify.id===record.id&&verify.history.length===kifu.history.length?{ok:true}:{ok:false,error:"棋譜の保存確認に失敗しました。"};
+      return verify&&verify.id===record.id&&Array.isArray(verify.history)&&verify.history.length===kifu.history.length
+        ?{ok:true,id:record.id,historyLength:verify.history.length}
+        :{ok:false,error:"棋譜の保存確認に失敗しました。"};
     }catch(error){return {ok:false,error:"対局記録または棋譜を保存できません: "+(error&&error.message||error)};}
   }
   function listGameRecords(){
@@ -134,7 +139,7 @@
     totals.evaluatedDraws=Number(totals.evaluatedDraws)||0;
     totals.adjudicated=Number(totals.adjudicated)||0;
     const run={candidateWins:0,championWins:0,draws:0,games:0,nodes:0,plies:0,adjudicated:0,drawEvalSum:0,evaluatedDraws:0};
-    let promoted=false,rejected=false,stopped=false;
+    let promoted=false,rejected=false,stopped=false,savedGames=0,saveFailures=0,lastSaveError="";
     try{
       // Use a 90% confidence interval and a bounded sample for a faster, honest verdict.
       while(!promoted&&!rejected&&!stopped&&totals.games<200){
@@ -145,7 +150,9 @@
           const first=await playOne(start,"後手",candidate,champion,settings,p=>options.onProgress&&options.onProgress({...p,pair:pairNumber,game:1,totalGames:totals.games}));
           const second=await playOne(start,"先手",candidate,champion,settings,p=>options.onProgress&&options.onProgress({...p,pair:pairNumber,game:2,totalGames:totals.games}));
           for(const [result,candidateSide,gameNumber] of [[first,"後手",1],[second,"先手",2]]){
-            saveGameRecord({id:Date.now().toString(36)+"-"+totals.games, savedAt:new Date().toISOString(), pair:pairNumber, game:gameNumber, candidateSide, winner:result.winner||null, draw:!!result.draw, candidateFinalScore:result.candidateFinalScore, plies:result.plies, savedAt:new Date().toISOString(), finalState:result.finalState, history:result.history});
+            const recordId="verification-"+Date.now().toString(36)+"-"+(totals.games+1);
+            const saveResult=saveGameRecord({id:recordId,savedAt:new Date().toISOString(),source:"実力検証",pair:pairNumber,game:gameNumber,candidateSide,winner:result.winner||null,draw:!!result.draw,candidateFinalScore:result.candidateFinalScore,plies:result.plies,finalState:result.finalState,history:result.history});
+            if(saveResult.ok)savedGames++;else{saveFailures++;lastSaveError=saveResult.error||"保存に失敗しました。";}
             const candidateWon=!result.draw&&result.winner===candidateSide;
             const championWon=!result.draw&&!candidateWon;
             totals.games++;totals.nodes+=result.nodes;totals.plies+=result.plies;
@@ -192,7 +199,7 @@
             scoreRate: (totals.candidateWins+totals.draws*.5)/totals.games,
             pairedRate,pairedLowerBound:bounds.lower,pairedUpperBound:bounds.upper,
             pairWins:totals.pairWins,pairLosses:totals.pairLosses,pairDraws:totals.pairDraws,
-            averageDrawEval:totals.evaluatedDraws?totals.drawEvalSum/totals.evaluatedDraws:0,evaluatedDraws:totals.evaluatedDraws,
+            averageDrawEval:totals.evaluatedDraws?totals.drawEvalSum/totals.evaluatedDraws:0,evaluatedDraws:totals.evaluatedDraws,savedGames,saveFailures,lastSaveError,
             promoted,rejected
           });
           if(promoted||rejected)break;
