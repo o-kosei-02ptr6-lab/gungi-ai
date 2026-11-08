@@ -190,6 +190,21 @@
   function getLatestGameKifu(){
     try{const item=JSON.parse(localStorage.getItem(LATEST_KIFU_KEY)||"null");return item&&Array.isArray(item.history)?item:null;}catch(_){return null;}
   }
+  function migrateLegacyGameRecords(){
+    try{
+      const records=JSON.parse(localStorage.getItem(GAME_RECORDS_KEY)||"[]");
+      if(!Array.isArray(records))return;
+      const ordered=records.slice().sort((a,b)=>String(b&&b.savedAt||"").localeCompare(String(a&&a.savedAt||"")));
+      const existing=getLatestGameKifu();
+      if(!existing){
+        const legacy=ordered.find(item=>item&&Array.isArray(item.history)&&item.history.length);
+        if(legacy)localStorage.setItem(LATEST_KIFU_KEY,JSON.stringify({id:legacy.id,savedAt:legacy.savedAt||new Date().toISOString(),source:legacy.source||"過去の対局",history:legacy.history}));
+      }
+      let changed=false;
+      records.forEach(item=>{if(item&&Object.prototype.hasOwnProperty.call(item,"history")){delete item.history;changed=true;}});
+      if(changed)localStorage.setItem(GAME_RECORDS_KEY,JSON.stringify(records));
+    }catch(_){}
+  }
   function saveTrainingGameRecord(record){
     if(!record||(!record.winner&&!record.draw)||!record.finalState)return {ok:false,error:"対局結果または最終盤面がありません。"};
     try{
@@ -305,6 +320,7 @@
     try{localStorage.setItem(STORAGE_KEY,JSON.stringify({weights:AI.getWeights(),games:Math.max(0,Number(data.games)||0),updatedAt:new Date().toISOString()}));}catch(_){}
     return {weights:AI.getWeights(),games:Math.max(0,Number(data.games)||0)};
   }
+  migrateLegacyGameRecords();
   window.GungiTraining=Object.freeze({train,trainSequential,trainParallel,loadWeights,saveWeights,makeStartPosition,exportData,importData,createBackup,restorePreviousBackup,getLatestGameKifu});
   loadWeights();
 })();
