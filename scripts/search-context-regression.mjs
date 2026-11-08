@@ -135,6 +135,48 @@ assert.ok(
   threeCyclePenalty >= 13000,
   "closing a three-square cycle should receive a strong penalty"
 );
+ 
+const progressBoard = Array.from({ length: 9 }, () => Array.from({ length: 9 }, () => []));
+progressBoard[5][4].push({ id: "advancing-piece", name: "槍", side: "先手" });
+const progressState = {
+  board: progressBoard,
+  hands: { "先手": [], "後手": [] },
+  turn: "先手",
+  history: [{
+    type: "move",
+    piece: { id: "advancing-piece", name: "槍", side: "先手" },
+    from: { row: 7, col: 4 },
+    to: { row: 5, col: 4 },
+    positionKey: "older-position"
+  }]
+};
+const retreatPenalty = search.getHistoricalRetreatPenalty(progressState, {
+  type: "move", pieceId: "advancing-piece",
+  from: { row: 5, col: 4 }, to: { row: 6, col: 4 },
+  landingMode: "capture"
+});
+const advancePenalty = search.getHistoricalRetreatPenalty(progressState, {
+  type: "move", pieceId: "advancing-piece",
+  from: { row: 5, col: 4 }, to: { row: 4, col: 4 },
+  landingMode: "capture"
+});
+assert.equal(retreatPenalty, 40,
+  "moving behind a piece's historical furthest rank should receive a small progress penalty");
+assert.equal(advancePenalty, 0,
+  "moving beyond the historical furthest rank should not receive a retreat penalty");
+
+const marshalProgressBoard = Array.from({ length: 9 }, () => Array.from({ length: 9 }, () => []));
+marshalProgressBoard[5][4].push({ id: "marshal-progress", name: "帥", side: "先手" });
+const marshalProgressPenalty = search.getHistoricalRetreatPenalty({
+  board: marshalProgressBoard, history: progressState.history
+}, {
+  type: "move", pieceId: "marshal-progress",
+  from: { row: 5, col: 4 }, to: { row: 6, col: 4 },
+  landingMode: "capture"
+});
+assert.equal(marshalProgressPenalty, 0,
+  "Marshal escapes must not be discouraged by historical progress penalties");
+
 
 // 王手中でも、王手を放置して同じ駒を往復させる手には反復罰則を適用する。
 // 一方、帥自身が安全地帯へ逃げる逆戻りは罰則の対象にしない。
