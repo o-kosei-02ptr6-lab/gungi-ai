@@ -101,13 +101,14 @@
   }
   async function play(message){
     const {candidateWeights,championWeights,candidateSide,maxPlies=108,searchOptions={},seed=1}=message;
-    const state=await makeStartPosition(seed),startKey=positionKey(state),trajectory=[],mateSamples=[];
-    const positionVisits=new Map([[startKey,1]]);
+    const state=await makeStartPosition(seed),startKey=positionKey(state),trajectory=[],mateSamples=[],repetitionEvents=[];
+    const positionVisits=new Map([[startKey,{visits:1,lastPly:0}]]);
     let nodes=0,plies=0,captures=0,deployments=0,repeatedPositionVisits=0,
       threefoldPositionCount=0,maxPositionVisits=1,endReason="max-plies";
     for(;plies<maxPlies&&state.phase==="move";plies++){
       const side=state.turn,isCandidate=side===candidateSide,positionFeatures=snapshotFeatures(state);
-      trajectory.push(isCandidate?positionFeatures:Object.fromEntries(FEATURES.map(k=>[k,-positionFeatures[k]])));
+      // 全局面を常に学習AI側の視点に統一する。手番による反転は行わない。
+      trajectory.push(candidateSide==="先手"?positionFeatures:Object.fromEntries(FEATURES.map(k=>[k,-positionFeatures[k]])));
       AI.setWeights(isCandidate?candidateWeights:championWeights);
       const urgent=E.isInCheck(state,side);
       const result=await S.findBestMove(state,{maxDepth:4,timeMs:urgent?650:360,maxNodes:urgent?9000:5200,maxDeployCandidates:6,...searchOptions});
@@ -129,9 +130,14 @@
       if(applied.captured)captures+=applied.captured.length;
       if(applied.gameOver&&applied.winner===side)endReason="marshal-captured";
       if(state.phase!=="finished"){
-        const key=positionKey(state),visits=(positionVisits.get(key)||0)+1;
-        positionVisits.set(key,visits);
-        if(visits>1)repeatedPositionVisits++;
+        const key=positionKey(state),previous=positionVisits.get(key),visits=(previous?previous.visits:0)+1;
+        positionVisits.set(key,{visits,lastPly:plies+1});
+        if(visits>1){
+          repeatedPositionVisits++;
+          repetitionEvents.push({ply:plies+1,previousPly:previous.lastPly,cycleLength:plies+1-previous.lastPly,visits,
+            move:state.history[state.history.length-1]||null,
+            cycleMoves:state.history.slice(previous.lastPly+12,plies+1).filter(entry=>entry.type==="move").slice(-24)});
+        }
         if(visits===3)threefoldPositionCount++;
         maxPositionVisits=Math.max(maxPositionVisits,visits);
       }
@@ -146,8 +152,7 @@
       (!!state.winner&&state.winner===sample.attackerSide&&plies+1-sample.ply<=8))
       .map(sample=>({features:candidateSide==="先手"?sample.features:Object.fromEntries(FEATURES.map(k=>[k,-sample.features[k]])),
         target:sample.source==="search-proof"?sample.target:(sample.attackerSide===candidateSide?1:-1)}));
-    const oriented=candidateSide==="先手"?trajectory:trajectory.map(f=>Object.fromEntries(FEATURES.map(k=>[k,-f[k]])));
-    return {candidateSide,startKey,trajectory:oriented,mateSamples:directSamples,finalTarget,candidateFinalScore:outcome.candidateFinalScore,winner:state.winner||null,draw:state.phase!=="finished"||!state.winner,
+    return {candidateSide,startKey,trajectory,mateSamples:directSamples,repetitionEvents,finalTarget,candidateFinalScore:outcome.candidateFinalScore,winner:state.winner||null,draw:state.phase!=="finished"||!state.winner,
       plies,nodes,captures,deployments,uniquePositions:positionVisits.size,repeatedPositionVisits,
       threefoldPositionCount,maxPositionVisits,endReason,adjudicated,adjudicationScore,
       finalState:{board:state.board,hands:state.hands,turn:state.turn,phase:state.phase,winner:state.winner,moveNumber:state.moveNumber},history:state.history.map(entry=>({...entry}))};
