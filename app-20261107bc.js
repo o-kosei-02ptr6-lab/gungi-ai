@@ -759,9 +759,10 @@
           const rate = (result.scoreRate * 100).toFixed(1);
           const lower = (result.lowerBound * 100).toFixed(1);
           status.textContent = result.stopped
-            ? "検証を停止しました。累計" + result.totalGames + "局のデータを保存しています。"
+            ? "検証を停止しました。累計" + result.totalGames + "局を確認し、今回 " + (result.savedGames||0) + "局の最終盤面・棋譜を保存しました。"
             : result.inconclusive ? "最大200局を検証しました。現時点では優劣を判定できません。"
             : "検証完了。累計" + result.totalGames + "局。学習AIの得点率：" + rate + "%";
+          if (result.saveFailures) status.textContent += " 保存失敗 " + result.saveFailures + "局：" + (result.lastSaveError||"原因不明");
           info.textContent = "今回：" + result.candidateWins + "勝 ／ 最良AI " + result.championWins +
             "勝 ／ 引き分け " + result.draws + "局（" + result.games + "局）。累計：" +
             result.totalCandidateWins + "勝 ／ 最良AI " + result.totalChampionWins +
