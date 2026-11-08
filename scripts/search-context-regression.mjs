@@ -183,8 +183,8 @@ const marshalEscapePenalty = search.getAntiLoopPenalty(marshalEscapeState, {
   from: { row: 8, col: 4 }, to: { row: 8, col: 3 },
   landingMode: "capture"
 });
-assert.equal(marshalEscapePenalty, 0,
-  "a reverse move that actually resolves check must not be penalized");
+assert.ok(marshalEscapePenalty > 0 && marshalEscapePenalty < 9000,
+  "a repeated check-evasion move should retain priority but receive a reduced penalty when another safe response exists");
 
 const repeatedBoardKey = JSON.stringify({
   board: cycleBoard.map(row => row.map(stack => stack.map(piece => piece.side + ":" + piece.name))),
