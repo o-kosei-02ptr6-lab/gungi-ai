@@ -581,7 +581,7 @@
           : "学習処理が終了しました。学習済みの重みは保存されています。";
         trainingInfo.textContent = result.games + "局 ／ 決着 " + result.decisive + "局 ／ " +
           "学習AI " + result.candidateWins + "勝 ／ 最良AI " + result.championWins + "勝 ／ 先手 " + result.firstWins + "勝・後手 " + result.secondWins + "勝 ／ 引き分け " + result.draws + "局（固定判定 " + result.adjudicatedGames + "局） ／ 学習局面 " + result.samples +
-          " ／ TD更新 " + result.tdUpdates + "回 ／ 平均TD誤差 " + result.meanTdError.toFixed(4) +
+          " ／ TD更新 " + result.tdUpdates + "回 ／ 詰み筋の直接更新 " + (result.mateUpdates||0) + "回 ／ 平均TD誤差 " + result.meanTdError.toFixed(4) +
           " ／ 同時対局 " + (result.parallelGames||1) + "局 ／ 探索 " + result.nodes.toLocaleString() + "局面";
       } catch (error) {
         trainingStatus.textContent = "学習中にエラーが発生しました。";
