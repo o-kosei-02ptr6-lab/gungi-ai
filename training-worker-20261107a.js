@@ -5,7 +5,7 @@
   importScripts(
     "./engine-20261107bb.js?v=20261108cycle5",
     "./evaluation-20261107be.js?v=20261108conversion1",
-    "./search-20261108cycle2.js?v=20261108cycle13"
+    "./search-20261108cycle2.js?v=20261108cycle14"
   );
   const E=self.GungiEngine, AI=self.GungiAI, S=self.GungiSearch;
   const FEATURES=["material","hand","position","activity","mobility","threats","exposure","kingSafety","mateNet"];
@@ -99,9 +99,25 @@
     }
     throw new Error("帥手を防げる初期配置を生成できませんでした。");
   }
+  function aPieceForTelemetry(state,action){
+    if(!action)return null;
+    if(action.type==="move"){
+      const stack=state.board[action.from.row][action.from.col];
+      const piece=stack&&stack[stack.length-1];
+      return piece?{name:piece.name,id:piece.id}:null;
+    }
+    const piece=(state.hands[state.turn]||[]).find(item=>item.id===action.pieceId);
+    return piece?{name:piece.name,id:piece.id}:null;
+  }
+  function describeSearchAction(action,piece){
+    if(!action)return null;
+    return action.type==="move"
+      ?{type:"move",piece:piece?piece.name:null,from:{...action.from},to:{...action.to},landingMode:action.landingMode||"capture"}
+      :{type:"deploy",piece:piece?piece.name:null,to:{row:action.row,col:action.col}};
+  }
   async function play(message){
     const {candidateWeights,championWeights,candidateSide,maxPlies=108,searchOptions={},seed=1}=message;
-    const state=await makeStartPosition(seed),startKey=positionKey(state),trajectory=[],mateSamples=[],repetitionEvents=[],moveLog=[];
+    const state=await makeStartPosition(seed),startKey=positionKey(state),trajectory=[],mateSamples=[],repetitionEvents=[],moveLog=[],searchTelemetry=[];
     const positionVisits=new Map([[startKey,{visits:1,lastPly:0,lastActionIndex:0}]]);
     let nodes=0,plies=0,captures=0,deployments=0,repeatedPositionVisits=0,
       threefoldPositionCount=0,maxPositionVisits=1,endReason="max-plies";
@@ -111,8 +127,26 @@
       trajectory.push(candidateSide==="先手"?positionFeatures:Object.fromEntries(FEATURES.map(k=>[k,-positionFeatures[k]])));
       AI.setWeights(isCandidate?candidateWeights:championWeights);
       const urgent=E.isInCheck(state,side);
-      const result=await S.findBestMove(state,{maxDepth:5,timeMs:urgent?900:600,maxNodes:urgent?14000:9000,maxDeployCandidates:8,...searchOptions});
+      const iterations=[];
+      const result=await S.findBestMove(state,{
+        maxDepth:5,timeMs:urgent?900:600,maxNodes:urgent?14000:9000,maxDeployCandidates:8,
+        ...searchOptions,
+        onProgress:progress=>iterations.push({
+          depth:progress.depth,nodes:progress.nodes,elapsedMs:progress.elapsedMs,score:progress.score
+        })
+      });
       nodes+=result.nodes||0;
+      const selectedPiece=aPieceForTelemetry(state,result.bestMove);
+      searchTelemetry.push({
+        ply:plies+1,side,isCandidate,inCheck:urgent,
+        requestedDepth:Math.max(1,Math.min(8,Number(searchOptions.maxDepth)||5)),
+        completedDepth:Number.isFinite(result.depth)?result.depth:0,
+        nodes:result.nodes||0,quiescenceNodes:result.quiescenceNodes||0,
+        cutoffs:result.cutoffs||0,transpositionHits:result.transpositionHits||0,
+        elapsedMs:result.elapsedMs||0,score:Number.isFinite(result.score)?result.score:null,
+        selectedMove:describeSearchAction(result.bestMove,selectedPiece),
+        iterations
+      });
       const mateScore=isCandidate?result.score:-result.score;
       if(Number.isFinite(mateScore)&&Math.abs(mateScore)>99900000)
         mateSamples.push({features:positionFeatures,target:mateScore>0?1:-1,source:"search-proof",ply:plies});
@@ -156,7 +190,8 @@
           repeatedPositionVisits++;
           repetitionEvents.push({ply:plies+1,previousPly:previous.lastPly,cycleLength:plies+1-previous.lastPly,visits,
             move:moveLog[moveLog.length-1]||null,
-            cycleMoves:moveLog.slice(previous.lastActionIndex).slice(-24)});
+            cycleMoves:moveLog.slice(previous.lastActionIndex).slice(-24),
+            cycleSearches:searchTelemetry.filter(item=>item.ply>previous.lastPly&&item.ply<=plies+1)});
         }
         if(visits===3)threefoldPositionCount++;
         maxPositionVisits=Math.max(maxPositionVisits,visits);
@@ -172,7 +207,8 @@
       (!!state.winner&&state.winner===sample.attackerSide&&plies+1-sample.ply<=8))
       .map(sample=>({features:candidateSide==="先手"?sample.features:Object.fromEntries(FEATURES.map(k=>[k,-sample.features[k]])),
         target:sample.source==="search-proof"?sample.target:(sample.attackerSide===candidateSide?1:-1)}));
-    return {candidateSide,startKey,trajectory,mateSamples:directSamples,repetitionEvents,finalTarget,candidateFinalScore:outcome.candidateFinalScore,winner:state.winner||null,draw:state.phase!=="finished"||!state.winner,
+    return {candidateSide,startKey,trajectory,mateSamples:directSamples,repetitionEvents,searchTelemetry,
+      searchDepth:searchTelemetry.length?Math.max(...searchTelemetry.map(item=>item.completedDepth)):0,finalTarget,candidateFinalScore:outcome.candidateFinalScore,winner:state.winner||null,draw:state.phase!=="finished"||!state.winner,
       plies,nodes,captures,deployments,uniquePositions:positionVisits.size,repeatedPositionVisits,
       threefoldPositionCount,maxPositionVisits,endReason,adjudicated,adjudicationScore,
       finalState:{board:state.board,hands:state.hands,turn:state.turn,phase:state.phase,winner:state.winner,moveNumber:state.moveNumber},history:state.history.map(entry=>({...entry}))};
