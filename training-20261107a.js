@@ -42,6 +42,19 @@
     return restoreSnapshot(snapshot);
   }
   const FEATURES=["material","hand","position","activity","mobility","threats","exposure","kingSafety"];
+  const BASELINE_WEIGHTS=Object.freeze({material:1,hand:1,position:1,activity:1,mobility:1,threats:1,exposure:1,kingSafety:1});
+  function finalOutcome(state,candidateSide){
+    if(state.phase==="finished"&&state.winner)
+      return {target:state.winner===candidateSide?1:-1,candidateFinalScore:null};
+    const activeWeights=AI.getWeights();
+    try{
+      // 引き分けも共通の基準評価で優劣を測り、学習目標を一律0にしない。
+      AI.setWeights(BASELINE_WEIGHTS);
+      const firstScore=AI.evaluate(state,"先手");
+      const candidateFinalScore=candidateSide==="先手"?firstScore:-firstScore;
+      return {target:Math.tanh(candidateFinalScore/1200)*0.5,candidateFinalScore};
+    }finally{AI.setWeights(activeWeights);}
+  }
   const random=list=>list[Math.floor(Math.random()*list.length)];
   function snapshotFeatures(state){
     const b=AI.evaluateBreakdown(state),v={};
@@ -170,11 +183,11 @@
       // 盤面評価で勝者を作らず、実際の終局結果だけを学習ラベルにする。
       const adjudicated=false;
       const adjudicationScore=null;
-      const finalTarget=state.phase==="finished"
-        ?(state.winner===candidateSide?1:-1):0;
+      const outcome=finalOutcome(state,candidateSide);
+      const finalTarget=outcome.target;
       if(adjudicated)adjudicatedGames++;
       const isDraw=state.phase!=="finished"||!state.winner;
-      saveTrainingGameRecord({id:"training-"+Date.now().toString(36)+"-"+game,pair:null,game:game+1,source:"自己学習",candidateSide,winner:state.winner||null,draw:isDraw,plies:Math.min(plies+1,maxPlies),savedAt:new Date().toISOString(),finalState:{board:state.board,hands:state.hands,turn:state.turn,phase:state.phase,winner:state.winner||null,moveNumber:state.moveNumber}});
+      saveTrainingGameRecord({id:"training-"+Date.now().toString(36)+"-"+game,pair:null,game:game+1,source:"自己学習",candidateSide,winner:state.winner||null,draw:isDraw,candidateFinalScore:outcome.candidateFinalScore,plies:Math.min(plies+1,maxPlies),savedAt:new Date().toISOString(),finalState:{board:state.board,hands:state.hands,turn:state.turn,phase:state.phase,winner:state.winner||null,moveNumber:state.moveNumber}});
       if(!isDraw){
         decisive++;
         if(state.winner===candidateSide)candidateWins++;else championWins++;
@@ -204,7 +217,7 @@
   }
 
   function createWorker(){
-    return new Worker("./training-worker-20261107a.js?v=20261108max108");
+    return new Worker("./training-worker-20261107a.js?v=20261108drawlearning");
   }
   async function trainParallel(options={}){
     const continuous=options.continuous===true;
