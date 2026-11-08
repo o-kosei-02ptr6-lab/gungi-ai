@@ -69,12 +69,12 @@
   }
   function antiLoopPenalty(state, action) {
     if (!action || action.type !== "move") return 0;
-    const recent = state.history.slice(-10).filter(entry => entry.type === "move" &&
+    const recent = state.history.slice(-12).filter(entry => entry.type === "move" &&
       entry.piece && entry.piece.id === action.pieceId);
     if (recent.some(entry => entry.from && entry.to &&
       entry.from.row === action.to.row && entry.from.col === action.to.col &&
-      entry.to.row === action.from.row && entry.to.col === action.from.col)) return 100;
-    return Math.max(0, recent.length - 1) * 18;
+      entry.to.row === action.from.row && entry.to.col === action.from.col)) return 150;
+    return Math.max(0, recent.length - 1) * 24;
   }
   function searchContextKey(state) {
     const recent = state.history.slice(-8).map(entry => entry.type === "move"
@@ -200,8 +200,8 @@
     const safeActions = [];
     for (const action of actions) {
       const child = applyAction(state, action);
-      // 帥手中は、着手後に自分の帥手が解消される手だけを許す。
-      // 相手の帥を取って終局する手も、通常の終局勝ちとして許可する。
+      // 自分の帥を危険にさらさない手を先に並べる。
+      // ただし、ユーザー指定により帥手を解消しない合法手も候補から除外しない。
       if (child && (
         (child.phase === "finished" && child.winner === side) ||
         !E.isInCheck(child, side)
@@ -209,9 +209,11 @@
         safeActions.push(action);
       }
     }
-    // 帥手中に回避手がなければ、非回避手へフォールバックしない。
-    if (inCheck) return safeActions;
-    // 通常局面では従来どおり、自分の帥を危険にさらす手を除外する。
+    if (inCheck) {
+      const safeKeys = new Set(safeActions.map(actionKey));
+      return safeActions.concat(actions.filter(action => !safeKeys.has(actionKey(action))));
+    }
+    // 通常局面では自分の帥を危険にさらす手を除外する。
     return safeActions.length ? safeActions : actions;
   }
 
@@ -425,7 +427,8 @@
             let score;
             const quiet = isQuietAction(position, action) && !E.isInCheck(position, position.turn);
             const reduction = index >= 4 && depth >= 3 && quiet ? 1 + (index >= 10 && depth >= 5 ? 1 : 0) : 0;
-            const penalty = antiLoopPenalty(position, action);
+            // 同じ局面へ戻る複数駒の循環にも、駒単位の往復とは別に罰点を与える。
+            const penalty = antiLoopPenalty(position, action) + (priorPositionCount(child) > 0 ? 140 : 0);
             if (index === 0) {
               score = -negamax(child, depth - 1, -beta, -alpha, ply + 1) - penalty;
             } else {
@@ -472,11 +475,11 @@
             if (!child) continue;
             let score;
             if (index === 0) {
-              score = -negamax(child, depth - 1, -beta, -alpha, 1) - antiLoopPenalty(root, action);
+              score = -negamax(child, depth - 1, -beta, -alpha, 1) - antiLoopPenalty(root, action) - (priorPositionCount(child) > 0 ? 140 : 0);
             } else {
-              score = -negamax(child, depth - 1, -alpha - 1, -alpha, 1) - antiLoopPenalty(root, action);
+              score = -negamax(child, depth - 1, -alpha - 1, -alpha, 1) - antiLoopPenalty(root, action) - (priorPositionCount(child) > 0 ? 140 : 0);
               if (score > alpha && score < beta) {
-                score = -negamax(child, depth - 1, -beta, -alpha, 1) - antiLoopPenalty(root, action);
+                score = -negamax(child, depth - 1, -beta, -alpha, 1) - antiLoopPenalty(root, action) - (priorPositionCount(child) > 0 ? 140 : 0);
               }
             }
             if (score > bestScore) {
