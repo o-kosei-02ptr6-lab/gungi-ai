@@ -78,37 +78,41 @@
     return priorPositionInfo(state).count;
   }
   function antiLoopPenalty(state, action) {
-    if (!action || action.type !== "move") return 0;
+    if (!action || action.type !== "move" || E.isInCheck(state, state.turn)) return 0;
+    const destination = state.board[action.to.row][action.to.col];
+    // 捕獲や王手回避を往復抑制で妨げない。
+    if (action.landingMode === "capture" && destination.length &&
+        destination[destination.length - 1].side !== state.turn) return 0;
     const recent = state.history.slice(-16).filter(entry => entry.type === "move" &&
       entry.piece && entry.piece.id === action.pieceId && entry.from && entry.to);
     let penalty = 0;
-    // 同じ駒が直前の移動を逆向きに戻す手。4手周期の往復を特に強く抑える。
+    // 同じ駒の逆戻りは、複数駒で交互に往復する4手周期の主要因なので強く抑える。
     const reverse = recent.find(entry =>
       entry.from.row === action.to.row && entry.from.col === action.to.col &&
       entry.to.row === action.from.row && entry.to.col === action.from.col);
     if (reverse) {
+      const child = applyAction(state, action);
+      // 逆戻りによって新たな帥手を掛ける場合は、攻撃を優先する。
+      if (child && E.isInCheck(child, child.turn)) return 0;
       const distance = recent.length - 1 - recent.indexOf(reverse);
-      penalty = Math.max(penalty, distance <= 1 ? 3200 : 2200);
+      penalty = Math.max(penalty, distance <= 1 ? 9000 : 6500);
     }
-    // 同じ駒・同じ経路を短い間隔で繰り返す場合も段階的に減点する。
+    // 同じ駒・同じ経路を短い間隔で繰り返す場合も強く減点する。
     const sameRouteCount = recent.filter(entry =>
       entry.from.row === action.from.row && entry.from.col === action.from.col &&
       entry.to.row === action.to.row && entry.to.col === action.to.col).length;
-    penalty += Math.min(1400, sameRouteCount * 700);
-    penalty += Math.min(600, Math.max(0, recent.length - 1) * 100);
+    penalty += Math.min(3600, sameRouteCount * 1800);
+    penalty += Math.min(400, Math.max(0, recent.length - 1) * 65);
     return penalty;
   }
   function repeatedPositionPenalty(state) {
     const info = priorPositionInfo(state);
     if (!info.count) return 0;
-    // Short cycles are penalized most strongly, including cycles formed by
-    // multiple pieces alternating their moves rather than one piece reversing.
-    // 1回の再出現でも引き分けへ逃げる選択を強く抑え、短周期ほど重くする。
-    // 追加の再出現はさらに加算し、同じ循環を繰り返すほど打開手を優先させる。
-    const cyclePenalty = info.cycleLength <= 4 ? 10000
-      : info.cycleLength <= 8 ? 8000
-      : info.cycleLength <= 12 ? 6000 : 4000;
-    return Math.min(20000, cyclePenalty + Math.max(0, info.count - 1) * 2500);
+    // 複数駒が交互に動く短周期を、単独駒の逆戻りよりさらに強く抑える。
+    const cyclePenalty = info.cycleLength <= 4 ? 22000
+      : info.cycleLength <= 8 ? 17000
+      : info.cycleLength <= 12 ? 12000 : 8000;
+    return Math.min(36000, cyclePenalty + Math.max(0, info.count - 1) * 5000);
   }
   function searchContextKey(state) {
     const recent = state.history.slice(-16).map(entry => entry.type === "move"
@@ -689,6 +693,8 @@
     generateActions: (state, options = {}) => generateActions(state, state.turn, options.maxDeployCandidates || 12),
     // Exposed for deterministic regression tests of history-sensitive TT keys.
     getSearchContextKey: searchContextKey,
+    getAntiLoopPenalty: antiLoopPenalty,
+    getRepeatedPositionPenalty: repeatedPositionPenalty,
     cloneState
   });
 })();
