@@ -88,13 +88,13 @@
       entry.to.row === action.from.row && entry.to.col === action.from.col);
     if (reverse) {
       const distance = recent.length - 1 - recent.indexOf(reverse);
-      penalty = Math.max(penalty, distance <= 1 ? 1500 : 1150);
+      penalty = Math.max(penalty, distance <= 1 ? 3200 : 2200);
     }
     // 同じ駒・同じ経路を短い間隔で繰り返す場合も段階的に減点する。
     const sameRouteCount = recent.filter(entry =>
       entry.from.row === action.from.row && entry.from.col === action.from.col &&
       entry.to.row === action.to.row && entry.to.col === action.to.col).length;
-    penalty += Math.min(900, sameRouteCount * 450);
+    penalty += Math.min(1400, sameRouteCount * 700);
     penalty += Math.min(600, Math.max(0, recent.length - 1) * 100);
     return penalty;
   }
@@ -103,10 +103,12 @@
     if (!info.count) return 0;
     // Short cycles are penalized most strongly, including cycles formed by
     // multiple pieces alternating their moves rather than one piece reversing.
-    const cyclePenalty = info.cycleLength <= 4 ? 2600
-      : info.cycleLength <= 8 ? 1900
-      : info.cycleLength <= 12 ? 1300 : 800;
-    return Math.min(5000, cyclePenalty + Math.max(0, info.count - 1) * 650);
+    // 1回の再出現でも引き分けへ逃げる選択を強く抑え、短周期ほど重くする。
+    // 追加の再出現はさらに加算し、同じ循環を繰り返すほど打開手を優先させる。
+    const cyclePenalty = info.cycleLength <= 4 ? 10000
+      : info.cycleLength <= 8 ? 8000
+      : info.cycleLength <= 12 ? 6000 : 4000;
+    return Math.min(20000, cyclePenalty + Math.max(0, info.count - 1) * 2500);
   }
   function searchContextKey(state) {
     const recent = state.history.slice(-10).map(entry => entry.type === "move"
@@ -287,6 +289,8 @@
           }
         }
         if (attacker && attacker.name === "帥") score += 15;
+        // 往復・同一路線の反復は、探索順でも後回しにして浅い枝刈りを避ける。
+        score -= antiLoopPenalty(state, action) * 2;
       }
       return { action, score };
     }).sort((a,b) => b.score - a.score).map(item => item.action);
