@@ -77,6 +77,29 @@
   function priorPositionCount(state) {
     return priorPositionInfo(state).count;
   }
+  // 過去に到達した前進位置を基準に、同じ駒が意味なく後退する動きを軽く抑える。
+  // 静的な位置評価だけでは「一度進んだ駒を元へ戻す」履歴上の損失を捉えにくいため、
+  // 最高到達前進度からの後退幅が増える場合だけ小さなコストを付ける。
+  function historicalRetreatPenalty(state, action) {
+    if (!action || action.type !== "move") return 0;
+    const stack = state.board[action.from.row] && state.board[action.from.row][action.from.col];
+    const piece = stack && stack[stack.length - 1];
+    if (!piece || piece.id !== action.pieceId || piece.name === "帥") return 0;
+    const side = piece.side;
+    const advance = row => side === "先手" ? 8 - row : row;
+    const currentAdvance = advance(action.from.row);
+    let bestAdvance = currentAdvance;
+    for (const entry of (state.history || [])) {
+      if (entry.type !== "move" || !entry.piece || entry.piece.id !== piece.id) continue;
+      if (entry.from && Number.isFinite(entry.from.row)) bestAdvance = Math.max(bestAdvance, advance(entry.from.row));
+      if (entry.to && Number.isFinite(entry.to.row)) bestAdvance = Math.max(bestAdvance, advance(entry.to.row));
+    }
+    const nextAdvance = advance(action.to.row);
+    const oldRetreat = Math.max(0, bestAdvance - currentAdvance);
+    const nextRetreat = Math.max(0, bestAdvance - nextAdvance);
+    return Math.min(120, Math.max(0, nextRetreat - oldRetreat) * 40);
+  }
+
   function antiLoopPenalty(state, action) {
     if (!action || action.type !== "move") return 0;
     const wasInCheck = E.isInCheck(state, state.turn);
@@ -157,6 +180,9 @@
       entry.to.row === action.to.row && entry.to.col === action.to.col).length;
     // 王手回避・反撃王手は完全免除ではなく、反復部分だけを軽減する。
     if (penalty) penalty = Math.round(penalty * getLoopPenaltyScale());
+    // 過去の最高到達位置からさらに後退する手に、小さな進展後退コストを加える。
+    // 帥の逃げは除外し、王手回避・反撃は上の優先度スケールで保護する。
+    penalty += historicalRetreatPenalty(state, action);
     penalty += Math.min(3600, sameRouteCount * 1800);
     penalty += Math.min(400, Math.max(0, recent.length - 1) * 65);
     return penalty;
@@ -750,6 +776,7 @@
     // Exposed for deterministic regression tests of history-sensitive TT keys.
     getSearchContextKey: searchContextKey,
     getAntiLoopPenalty: antiLoopPenalty,
+    getHistoricalRetreatPenalty: historicalRetreatPenalty,
     getRepeatedPositionPenalty: repeatedPositionPenalty,
     cloneState
   });
