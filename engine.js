@@ -34,20 +34,6 @@
     const stack = getStack(state, row, col);
     return stack && stack.length ? stack[stack.length - 1] : null;
   }
-  // Stable position key for repetition detection across moves and deployments.
-  function repetitionPositionKey(state) {
-    const board = state.board.map(row => row.map(stack => stack.map(piece => piece.side + ":" + piece.name)));
-    const hands = {};
-    for (const side of ["先手", "後手"]) {
-      hands[side] = {};
-      for (const piece of state.hands[side] || []) hands[side][piece.name] = (hands[side][piece.name] || 0) + 1;
-    }
-    return JSON.stringify({ board, hands, turn: state.turn });
-  }
-  function stampRepetitionPosition(state) {
-    const latest = state.history[state.history.length - 1];
-    if (latest) latest.positionKey = repetitionPositionKey(state);
-  }
   function isMovablePiece(state, row, col, pieceId) {
     const stack = getStack(state, row, col);
     return !!(stack && stack.length && stack[stack.length - 1].id === String(pieceId));
@@ -117,7 +103,6 @@
     state.history.push({ type: "deploy", row, col, side, piece });
     state.moveNumber += 1;
     state.turn = state.turn === "先手" ? "後手" : "先手";
-    stampRepetitionPosition(state);
     return { ok: true, piece };
   }
 
@@ -282,7 +267,6 @@
     state.history.push({ type: "move", from:{row:fromRow,col:fromCol}, to:{row:toRow,col:toCol}, piece:movingPiece, captured, landingMode });
     state.moveNumber += 1;
     state.turn = state.turn === "先手" ? "後手" : "先手";
-    stampRepetitionPosition(state);
     return { ok: true, piece: movingPiece, captured };
   }
   function generateLegalMoves(state, side) {
