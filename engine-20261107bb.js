@@ -287,10 +287,11 @@
     }
     return JSON.stringify({ board, hands, turn: state.turn });
   }
-  function sameMoveAtPosition(entry, positionKey, fromRow, fromCol, toRow, toCol, landingMode) {
+  function sameMoveAtPosition(entry, positionKey, fromRow, fromCol, toRow, toCol) {
+    // 捕獲／ツケの選択を変えても、同じ局面から同じ座標へ動く手は同一手として数える。
     return entry.type === "move" && entry.positionKey === positionKey &&
       entry.from && entry.to && entry.from.row === fromRow && entry.from.col === fromCol &&
-      entry.to.row === toRow && entry.to.col === toCol && (entry.landingMode || "capture") === landingMode;
+      entry.to.row === toRow && entry.to.col === toCol;
   }
   function movePiece(state, fromRow, fromCol, toRow, toCol, landingMode = "capture") {
     const sourceStack = getStack(state, fromRow, fromCol);
@@ -303,7 +304,7 @@
       return { ok: false, reason: "その移動はできません。" };
     }
     const positionKey = getPositionKey(state);
-    const repeatedCount = state.history.reduce((count, entry) => count + (sameMoveAtPosition(entry, positionKey, fromRow, fromCol, toRow, toCol, landingMode) ? 1 : 0), 0);
+    const repeatedCount = state.history.reduce((count, entry) => count + (sameMoveAtPosition(entry, positionKey, fromRow, fromCol, toRow, toCol) ? 1 : 0), 0);
     if (repeatedCount >= 2) return { ok: false, reason: "同じ局面から同じ手を3回以上指すことはできません。" };
     const destinationBefore = state.board[toRow][toCol];
     const destinationTop = destinationBefore.length ? destinationBefore[destinationBefore.length - 1] : null;
