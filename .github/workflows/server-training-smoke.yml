@@ -1,21 +1,32 @@
-name: Server self-play smoke test
+name: Server self-play training
 
 on:
   workflow_dispatch:
     inputs:
+      game_count:
+        description: "Number of self-play games to train in this run (1-100)"
+        required: true
+        default: "10"
+        type: string
       max_plies:
-        description: "Maximum plies for the first server-side test (1-108)"
+        description: "Maximum plies per game (20-108)"
         required: true
         default: "108"
+        type: string
+      checkpoint_every:
+        description: "Save checkpoint after every N games"
+        required: true
+        default: "1"
         type: string
 
 permissions:
   contents: read
 
 jobs:
-  one-game:
+  multi-game-training:
+    name: multi-game-training
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 360
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -23,13 +34,27 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Run one self-play game on the server
+      - name: Restore previous training checkpoint
+        uses: actions/cache@v4
+        with:
+          path: .training-state
+          key: gungi-server-training-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            gungi-server-training-${{ github.ref_name }}-
+      - name: Run resumable multi-game self-play training
         env:
+          GAME_COUNT: ${{ inputs.game_count }}
           MAX_PLIES: ${{ inputs.max_plies }}
-        run: node scripts/server-training-smoke.mjs
-      - name: Upload game result
+          CHECKPOINT_EVERY: ${{ inputs.checkpoint_every }}
+          TRAINING_STATE_DIR: .training-state
+        run: node scripts/server-training.mjs
+      - name: Upload training report and checkpoint
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: server-training-smoke
-          path: artifacts/server-training-smoke.json
-          if-no-files-found: error
+          name: server-training-${{ github.run_id }}
+          path: |
+            artifacts/server-training-report.json
+            artifacts/server-training-checkpoint.json
+          if-no-files-found: warn
+          retention-days: 30
