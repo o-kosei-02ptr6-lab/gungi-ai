@@ -18,6 +18,14 @@ on:
         required: true
         default: "1"
         type: string
+      search_profile:
+        description: "Search profile: standard or deep (depth 8, 2.6s / move)"
+        required: true
+        default: "standard"
+        type: choice
+        options:
+          - standard
+          - deep
 
 permissions:
   contents: read
@@ -46,6 +54,7 @@ jobs:
           GAME_COUNT: ${{ inputs.game_count }}
           MAX_PLIES: ${{ inputs.max_plies }}
           CHECKPOINT_EVERY: ${{ inputs.checkpoint_every }}
+          SEARCH_PROFILE: ${{ inputs.search_profile }}
           TRAINING_STATE_DIR: .training-state
         run: node scripts/server-training.mjs
       - name: Upload training report and checkpoint
