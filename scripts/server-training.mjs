@@ -167,7 +167,12 @@ for (let index = 0; index < gamesRequested; index++) {
   totals.tdErrorGames = (totals.tdErrorGames || 0) + (learned.updates ? 1 : 0);
   const gameSummary = {
     game: checkpoint.games, candidateSide, winner: result.winner || null, draw: !!result.draw,
-    startKey: result.startKey,
+    startKey: result.startKey, endReason: result.endReason || (result.winner ? "marshal-captured" : "max-plies"),
+    marshalCount: ["先手","後手"].reduce((counts, side) => {
+      counts[side] = result.finalState.board.flat().flat().filter(piece => piece.side === side && piece.name === "帥").length;
+      return counts;
+    }, {}),
+    lastMoves: (result.history || []).slice(-8),
     plies: result.plies, nodes: result.nodes, captures: result.captures || 0,
     deployments: result.deployments || 0, uniquePositions: result.uniquePositions || 0,
     repeatedPositionVisits: result.repeatedPositionVisits || 0, finalTarget: result.finalTarget,
