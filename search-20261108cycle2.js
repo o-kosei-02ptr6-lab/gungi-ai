@@ -140,7 +140,7 @@
     return center * 5 + advance * 1.4 + value * 0.025 + (ownStack ? 7 : 0) - enemyDistance * 0.15;
   }
 
-  function generateActions(state, side, maxDeployCandidates) {
+  function generateActions(state, side, maxDeployCandidates, detectWinningCapture = true) {
     const actions = [];
     const moves = E.generateLegalMoves(state, side);
     for (const move of moves) {
@@ -206,22 +206,24 @@
 
     // A legal immediate Marshal capture always overrides every other move.
     // Test the real engine transition so stack/capture rules are respected.
-    const winningCaptures = [];
-    for (const action of actions) {
-      if (action.type !== "move" || action.landingMode !== "capture") continue;
-      const trial = cloneState(state);
-      trial.turn = side;
-      const result = E.movePiece(
-        trial,
-        action.from.row, action.from.col,
-        action.to.row, action.to.col,
-        "capture"
-      );
-      if (result.ok && result.gameOver && result.winner === side) {
-        winningCaptures.push(action);
+    if (detectWinningCapture) {
+      const winningCaptures = [];
+      for (const action of actions) {
+        if (action.type !== "move" || action.landingMode !== "capture") continue;
+        const trial = cloneState(state);
+        trial.turn = side;
+        const result = E.movePiece(
+          trial,
+          action.from.row, action.from.col,
+          action.to.row, action.to.col,
+          "capture"
+        );
+        if (result.ok && result.gameOver && result.winner === side) {
+          winningCaptures.push(action);
+        }
       }
+      if (winningCaptures.length) return winningCaptures;
     }
-    if (winningCaptures.length) return winningCaptures;
     return actions;
   }
 
@@ -327,10 +329,18 @@
   // 連続王手からの詰み筋・逃げ道封鎖を探索の末端で見落としにくくする。
   function generateCheckingActions(state, side, maxDeployCandidates) {
     const checks = [];
-    const actions = getSearchActions(state, side, maxDeployCandidates);
+    // This helper is called only when the moving side is not in check.
+    // Avoid getSearchActions(), which applies every action once to test king
+    // safety; the old implementation then applied each surviving action a
+    // second time to test whether it gives check.
+    // Captures are already supplied by generateCaptureActions() in
+    // quiescence, so only inspect quiet moves/deployments here.
+    const actions = generateActions(state, side, maxDeployCandidates, false);
     for (const action of actions) {
+      if (!isQuietAction(state, action)) continue;
       const child = applyAction(state, action);
       if (!child || child.phase === "finished") continue;
+      if (E.isInCheck(child, side)) continue;
       if (E.isInCheck(child, child.turn)) checks.push(action);
     }
     return checks;
