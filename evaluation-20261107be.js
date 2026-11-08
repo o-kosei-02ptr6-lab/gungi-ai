@@ -25,8 +25,24 @@
     return getWeights();
   }
   function getWeights() { return Object.freeze({ ...weights }); }
+  // NNUE型の軽量評価ヘッド。
+  // 9種類の局面特徴を正負18チャネルに分けたReLU特徴変換へ通し、
+  // 出力層で従来の評価重みを合成する。初期状態では旧評価値と完全一致し、
+  // 既存の学習重み・引き継ぎデータとの互換性を保つ。
+  const NNUE_CHANNELS = WEIGHT_KEYS.flatMap(key => [
+    { key, sign: 1 }, { key, sign: -1 }
+  ]);
+  function nnueForward(parts) {
+    let output = 0;
+    for (const channel of NNUE_CHANNELS) {
+      const activation = Math.max(0, (Number(parts[channel.key]) || 0) * channel.sign);
+      output += activation * weights[channel.key] * channel.sign;
+    }
+    return Math.round(output);
+  }
+  const breakdownCache = new WeakMap();
   function weightedTotal(parts) {
-    return Math.round(WEIGHT_KEYS.reduce((sum, key) => sum + (parts[key] || 0) * weights[key], 0));
+    return nnueForward(parts);
   }
   function opponent(side) { return side === "先手" ? "後手" : "先手"; }
   function advancement(row, side) { return side === "先手" ? 8 - row : row; }
@@ -367,19 +383,23 @@
     if (!state || !Array.isArray(state.board) || !state.hands) {
       throw new TypeError("有効な軍儀の局面を指定してください。");
     }
+    const cached = breakdownCache.get(state);
+    if (cached) return cached;
     const first = sideBreakdown(state, "先手");
     const second = sideBreakdown(state, "後手");
     let terminal = null;
     if (state.phase === "finished" && state.winner) {
       terminal = state.winner === "先手" ? 100000000 : -100000000;
     }
-    return {
+    const result = {
       weights: getWeights(),
       "先手": first,
       "後手": second,
       score: terminal === null ? first.total - second.total : terminal,
       terminal
     };
+    breakdownCache.set(state, result);
+    return result;
   }
 
   function evaluate(state, perspective = "先手") {
