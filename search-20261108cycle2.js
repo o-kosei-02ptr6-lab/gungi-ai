@@ -100,102 +100,20 @@
     return Math.min(120, Math.max(0, nextRetreat - oldRetreat) * 40);
   }
 
-  function antiLoopPenalty(state, action) {
-    if (!action || action.type !== "move") return 0;
-    const wasInCheck = E.isInCheck(state, state.turn);
-    let child = null;
-    let loopPenaltyScale = 1;
-    let priorityChecked = false;
-    const getLoopPenaltyScale = () => {
-      if (priorityChecked) return loopPenaltyScale;
-      priorityChecked = true;
-      if (!child) child = applyAction(state, action);
-      if (!child) return 1;
-      const resolvesCheck = wasInCheck && !E.isInCheck(child, state.turn);
-      const givesCountercheck = E.isInCheck(child, child.turn);
-      if (resolvesCheck) {
-        // 王手を解消する手は最優先。ただし別の安全な応手もある場合、
-        // 同じ往復を選び続けないよう反復罰則を35%だけ残す。
-        const alternatives = generateActions(state, state.turn, 12);
-        const hasOtherSafeResponse = alternatives.some(candidate => {
-          if (actionKey(candidate) === actionKey(action)) return false;
-          const alternativeChild = applyAction(state, candidate);
-          return alternativeChild && !E.isInCheck(alternativeChild, state.turn);
-        });
-        loopPenaltyScale = hasOtherSafeResponse ? 0.35 : 0;
-      } else if (givesCountercheck) {
-        // 反撃王手は優先するが、反撃王手を交互に繰り返す循環を抑えるため、
-        // 代替応手がある局面では通常の反復罰則の70%を残す。
-        loopPenaltyScale = 0.70;
-      }
-      return loopPenaltyScale;
-    };
-    const destination = state.board[action.to.row][action.to.col];
-    // 捕獲や王手回避を往復抑制で妨げない。
-    if (action.landingMode === "capture" && destination.length &&
-        destination[destination.length - 1].side !== state.turn) return 0;
-    const recent = state.history.slice(-16).filter(entry => entry.type === "move" &&
-      entry.piece && entry.piece.id === action.pieceId && entry.from && entry.to);
-    let penalty = 0;
-    // 同じ駒の逆戻りは、複数駒で交互に往復する4手周期の主要因なので強く抑える。
-    const reverse = recent.find(entry =>
-      entry.from.row === action.to.row && entry.from.col === action.to.col &&
-      entry.to.row === action.from.row && entry.to.col === action.from.col);
-    if (reverse) {
-      // 王手回避・反撃を優先し、それ以外の逆戻りは王手中でも抑制する。
-      const distance = recent.length - 1 - recent.indexOf(reverse);
-      penalty = Math.max(penalty, distance <= 1 ? 9000 : 6500);
-    }
-    // 3マス以上を巡回する駒も検出する。例：A→B→C→A のように
-    // 逆戻りを含まない周期を閉じる手には強い減点を与える。
-    const pieceCyclePenalty = (() => {
-      const moves = recent.filter(entry => entry.piece.id === action.pieceId);
-      for (let start = moves.length - 2; start >= 0; start -= 1) {
-        const first = moves[start];
-        if (first.from.row !== action.to.row || first.from.col !== action.to.col) continue;
-        let expected = first.to;
-        let connected = true;
-        let cycleMoves = 1;
-        for (let i = start + 1; i < moves.length; i += 1) {
-          const entry = moves[i];
-          if (entry.from.row !== expected.row || entry.from.col !== expected.col) {
-            connected = false;
-            break;
-          }
-          expected = entry.to;
-          cycleMoves += 1;
-        }
-        if (!connected || expected.row !== action.from.row || expected.col !== action.from.col) continue;
-        const totalMoves = cycleMoves + 1;
-        if (totalMoves >= 3 && totalMoves <= 6) return 13000 + (totalMoves - 3) * 1500;
-      }
-      return 0;
-    })();
-    if (pieceCyclePenalty) {
-      // 周回を閉じる手でも、王手回避・反撃の優先度を残しながら減点する。
-      penalty = Math.max(penalty, pieceCyclePenalty);
-    }
-    // 同じ駒・同じ経路を短い間隔で繰り返す場合も強く減点する。
-    const sameRouteCount = recent.filter(entry =>
-      entry.from.row === action.from.row && entry.from.col === action.from.col &&
-      entry.to.row === action.to.row && entry.to.col === action.to.col).length;
-    // 王手回避・反撃王手は完全免除ではなく、反復部分だけを軽減する。
-    if (penalty) penalty = Math.round(penalty * getLoopPenaltyScale());
-    // 過去の最高到達位置からさらに後退する手に、小さな進展後退コストを加える。
-    // 帥の逃げは除外し、王手回避・反撃は上の優先度スケールで保護する。
-    penalty += historicalRetreatPenalty(state, action);
-    penalty += Math.min(3600, sameRouteCount * 1800);
-    penalty += Math.min(400, Math.max(0, recent.length - 1) * 65);
-    return penalty;
-  }
+  // 循環の長さ別に罰則を変えると、AIが別の周期へ逃げるだけになる。
+  // 盤面・持ち駒・手番が過去と一致した場合は、周期の長さに関係なく
+  // 同じ基準で小さなコストを課す。王手回避や強制応手も同じ基準で扱い、
+  // 戦術的に必要な循環を禁止しない。
   function repeatedPositionPenalty(state) {
     const info = priorPositionInfo(state);
     if (!info.count) return 0;
-    // 複数駒が交互に動く短周期を、単独駒の逆戻りよりさらに強く抑える。
-    const cyclePenalty = info.cycleLength <= 4 ? 22000
-      : info.cycleLength <= 8 ? 17000
-      : info.cycleLength <= 12 ? 12000 : 8000;
-    return Math.min(36000, cyclePenalty + Math.max(0, info.count - 1) * 5000);
+    return Math.min(900, 260 + Math.max(0, info.count - 1) * 180);
+  }
+
+  function antiLoopPenalty(state, action) {
+    if (!action) return 0;
+    const child = applyAction(state, action);
+    return child ? repeatedPositionPenalty(child) : 0;
   }
   function searchContextKey(state) {
     const recent = state.history.slice(-16).map(entry => entry.type === "move"
@@ -464,7 +382,6 @@
           if (position.phase === "finished") {
             return position.winner === position.turn ? MATE - ply : -MATE + ply;
           }
-          if (priorPositionCount(position) > 0) return 0;
 
           const inCheck = E.isInCheck(position, position.turn);
           const standPat = inCheck ? -INF : AI.evaluate(position, position.turn);
@@ -528,7 +445,6 @@
             depth = 1;
           }
 
-          if (priorPositionCount(position) > 0) return 0;
           const key = searchContextKey(position);
           const originalAlpha = alpha;
           const originalBeta = beta;
@@ -557,7 +473,7 @@
               !E.isInCheck(position, position.turn) && !givesCheck;
             const reduction = index >= 4 && depth >= 3 && quiet ? 1 + (index >= 10 && depth >= 5 ? 1 : 0) : 0;
             // 同じ局面へ戻る複数駒の循環にも、駒単位の往復とは別に罰点を与える。
-            const penalty = antiLoopPenalty(position, action) + repeatedPositionPenalty(child);
+            const penalty = repeatedPositionPenalty(child);
             if (index === 0) {
               score = -negamax(child, depth - 1, -beta, -alpha, ply + 1) - penalty;
             } else {
@@ -604,11 +520,11 @@
             if (!child) continue;
             let score;
             if (index === 0) {
-              score = -negamax(child, depth - 1, -beta, -alpha, 1) - antiLoopPenalty(root, action) - repeatedPositionPenalty(child);
+              score = -negamax(child, depth - 1, -beta, -alpha, 1) - repeatedPositionPenalty(child);
             } else {
-              score = -negamax(child, depth - 1, -alpha - 1, -alpha, 1) - antiLoopPenalty(root, action) - repeatedPositionPenalty(child);
+              score = -negamax(child, depth - 1, -alpha - 1, -alpha, 1) - repeatedPositionPenalty(child);
               if (score > alpha && score < beta) {
-                score = -negamax(child, depth - 1, -beta, -alpha, 1) - antiLoopPenalty(root, action) - repeatedPositionPenalty(child);
+                score = -negamax(child, depth - 1, -beta, -alpha, 1) - repeatedPositionPenalty(child);
               }
             }
             if (score > bestScore) {
