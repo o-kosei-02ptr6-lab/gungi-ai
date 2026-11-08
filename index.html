@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#151923">
   <title>軍儀 AI</title>
-  <link rel="stylesheet" href="style-20261107ar.css?v=20261108boardreplay2">
+  <link rel="stylesheet" href="style-20261107ar.css?v=20261108latestonlyreplay1">
 </head>
 <body>
   <header class="topbar">
@@ -52,7 +52,28 @@
         <button id="compare-ai" type="button">基準AIと実力を比較</button>
         <p id="compare-status" role="status">比較はまだ実行されていません。</p>
         <p id="compare-info">学習後に比較すると、調整した重みの効果を確認できます。</p>
-        <div class="saved-games"><h3>学習・検証対局の記録</h3><p>対局の最終盤面は最大40局保存されます。直近1局の棋譜は、下の軍儀盤で初期配置から1手ずつ再生できます。勝局・引き分け局のどちらも対象です。</p><select id="tournament-game-select" aria-label="確認する対局" disabled><option>保存された対局はありません</option></select><p id="tournament-game-detail">対局が保存されると、ここに局面が表示されます。</p><div class="saved-game-history"><div class="history-heading"><h4>直近1局の棋譜</h4><strong id="tournament-game-history-count">棋譜なし</strong></div><div id="tournament-board-view" class="board-wrap tournament-board-wrap" hidden><div id="tournament-board" class="board-coordinates tournament-board"></div><div class="replay-controls"><button id="tournament-replay-first" type="button" aria-label="最初の局面へ">|◀</button><button id="tournament-replay-prev" type="button">◀ 1手戻る</button><button id="tournament-replay-next" type="button">1手進む ▶</button><button id="tournament-replay-last" type="button" aria-label="最終局面へ">▶|</button><input id="tournament-replay-range" type="range" min="0" max="0" value="0" step="1" disabled></div><p id="tournament-replay-status" class="replay-status">棋譜を読み込むと盤面を再生できます。</p></div><ol id="tournament-game-history" class="move-history"><li class="history-empty">対局が保存されると棋譜が表示されます。</li></ol></div></div>
+        <div class="saved-games">
+          <h3>学習・検証対局の記録</h3>
+          <p>勝敗に関係なく、対局の最終盤面を最大40局保存します。ここでは対局を選んで最終結果と持ち駒を確認できます。</p>
+          <select id="tournament-game-select" aria-label="確認する対局" disabled><option>保存された対局はありません</option></select>
+          <p id="tournament-game-detail">対局が保存されると、ここに結果が表示されます。</p>
+        </div>
+        <div class="saved-game-history">
+          <div class="history-heading"><h3>直近1局の棋譜</h3><strong id="tournament-game-history-count">棋譜なし</strong></div>
+          <p>棋譜を保存するのは最新の1局のみです。下の軍儀盤で初期配置から最終局面まで再生できます。勝局・引き分け局のどちらも対象です。</p>
+          <div id="tournament-board-view" class="board-wrap tournament-board-wrap" hidden>
+            <div id="tournament-board" class="board-coordinates tournament-board"></div>
+            <div class="replay-controls">
+              <button id="tournament-replay-first" type="button" aria-label="最初の局面へ">|◀</button>
+              <button id="tournament-replay-prev" type="button">◀ 1手戻る</button>
+              <button id="tournament-replay-next" type="button">1手進む ▶</button>
+              <button id="tournament-replay-last" type="button" aria-label="最終局面へ">▶|</button>
+              <input id="tournament-replay-range" type="range" min="0" max="0" value="0" step="1" disabled>
+            </div>
+            <p id="tournament-replay-status" class="replay-status">最新の棋譜を読み込むと盤面を再生できます。</p>
+          </div>
+          <ol id="tournament-game-history" class="move-history"><li class="history-empty">まだ棋譜はありません。</li></ol>
+        </div>
       </div>
       <div class="transfer-tools">
         <h3>学習結果の引き継ぎ</h3>
@@ -71,6 +92,6 @@
     </section>
   </main>
   <footer>Gungi AI · 開発用プロトタイプ</footer>
-  <script src="engine-20261107bb.js?v=20261108marshalfrontrow1"></script><script src="evaluation-20261107be.js?v=20261108matedirect1"></script><script src="search-20261107bd.js?v=20261108matequiescence1"></script><script src="training-20261107a.js?v=20261108boardreplay2"></script><script src="tournament-20261107a.js?v=20261108boardreplay2"></script><script src="app-20261107bc.js?v=20261108boardreplay2"></script>
+  <script src="engine-20261107bb.js?v=20261108marshalfrontrow1"></script><script src="evaluation-20261107be.js?v=20261108matedirect1"></script><script src="search-20261107bd.js?v=20261108matequiescence1"></script><script src="training-20261107a.js?v=20261108latestonlyreplay1"></script><script src="tournament-20261107a.js?v=20261108latestonlyreplay1"></script><script src="app-20261107bc.js?v=20261108latestonlyreplay1"></script>
 </body>
 </html>
