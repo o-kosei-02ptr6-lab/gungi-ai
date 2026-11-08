@@ -494,7 +494,7 @@
                 score = -negamax(child, depth - 1, -alpha - 1, -alpha, ply + 1) - penalty - retreatPenalty;
               }
               if (score > alpha && score < beta) {
-                score = -negamax(child, depth - 1, -beta, -alpha, ply + 1) - penalty;
+                score = -negamax(child, depth - 1, -beta, -alpha, ply + 1) - penalty - retreatPenalty;
               }
             }
             if (score > bestScore) {
@@ -537,7 +537,8 @@
             } else {
               score = -negamax(child, depth - 1, -alpha - 1, -alpha, 1) - repeatedPositionPenalty(child) - retreatPenalty;
               if (score > alpha && score < beta) {
-                score = -negamax(child, depth - 1, -beta, -alpha, 1) - repeatedPositionPenalty(child);
+                score = -negamax(child, depth - 1, -beta, -alpha, 1) -
+                  repeatedPositionPenalty(child) - retreatPenalty;
               }
             }
             if (score > bestScore) {
