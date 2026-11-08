@@ -42,6 +42,10 @@ assert.equal(search.getRepeatedPositionPenalty(oneRepeat),260,
   "every repeated position should receive the same base cost regardless of cycle length");
 assert.equal(search.getRepeatedPositionPenalty(twoRepeats),440,
   "the cost should rise with repeat count, not with a 4/8/12-ply category");
+assert.equal(search.isThreefoldRepetition(oneRepeat),false,
+  "the first revisit must remain searchable");
+assert.equal(search.isThreefoldRepetition(twoRepeats),true,
+  "the third occurrence must be recognized as a repetition draw");
 
 const progressBoard=empty();
 progressBoard[5][4].push({id:"advancing-piece",name:"槍",side:"先手"});
