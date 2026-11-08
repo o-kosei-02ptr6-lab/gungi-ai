@@ -15,6 +15,7 @@
     try{
       const stored=JSON.parse(localStorage.getItem(GAMES_KEY)||"[]");
       const records=Array.isArray(stored)?stored.filter(item=>item&&item.finalState&&(item.winner||item.draw===true)):[];
+      records.forEach(item=>{delete item.history;});
       const finalOnly={...record};delete finalOnly.history;records.push(finalOnly);
       while(records.length>MAX_SAVED_GAMES){const drawIndex=records.findIndex(item=>item.draw===true||!item.winner);records.splice(drawIndex>=0?drawIndex:0,1);}
       localStorage.setItem(GAMES_KEY,JSON.stringify(records));
