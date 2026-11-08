@@ -102,7 +102,7 @@
   async function play(message){
     const {candidateWeights,championWeights,candidateSide,maxPlies=108,searchOptions={},seed=1}=message;
     const state=await makeStartPosition(seed),startKey=positionKey(state),trajectory=[],mateSamples=[],repetitionEvents=[],moveLog=[];
-    const positionVisits=new Map([[startKey,{visits:1,lastPly:0}]]);
+    const positionVisits=new Map([[startKey,{visits:1,lastPly:0,lastActionIndex:0}]]);
     let nodes=0,plies=0,captures=0,deployments=0,repeatedPositionVisits=0,
       threefoldPositionCount=0,maxPositionVisits=1,endReason="max-plies";
     for(;plies<maxPlies&&state.phase==="move";plies++){
@@ -122,7 +122,7 @@
         state.phase="finished";state.winner=null;endReason="no-legal-action";break;
       }
       const a=result.bestMove;
-      const movingPiece=a.type==="move"?state.board[a.from.row][a.from.col].slice(-1)[0]:null;
+      const movingPiece=a.type==="move"?state.board[a.from.row][a.from.col].slice(-1)[0]:null;\n      const deployingPiece=a.type==="deploy"?state.hands[side].find(piece=>piece.id===a.pieceId):null;
       const applied=a.type==="deploy"
         ?E.deployPiece(state,a.row,a.col,side,a.pieceId)
         :E.movePiece(state,a.from.row,a.from.col,a.to.row,a.to.col,a.landingMode);
@@ -141,15 +141,21 @@
           fromLayer:a.from.layer,toLayer:a.to.layer,landingMode:a.landingMode,
           captured:Array.isArray(applied.captured)?applied.captured.slice():[]
         });
+      }else{
+        moveLog.push({
+          type:"deploy",side,piece:deployingPiece?{...deployingPiece}:null,
+          to:{row:a.row,col:a.col,layer:state.board[a.row][a.col].length}
+        });
       }
       if(state.phase!=="finished"){
         const key=positionKey(state),previous=positionVisits.get(key),visits=(previous?previous.visits:0)+1;
-        positionVisits.set(key,{visits,lastPly:plies+1});
+        const currentActionIndex=moveLog.length;
+        positionVisits.set(key,{visits,lastPly:plies+1,lastActionIndex:currentActionIndex});
         if(visits>1){
           repeatedPositionVisits++;
           repetitionEvents.push({ply:plies+1,previousPly:previous.lastPly,cycleLength:plies+1-previous.lastPly,visits,
             move:moveLog[moveLog.length-1]||null,
-            cycleMoves:moveLog.slice(previous.lastPly,plies+1).slice(-24)});
+            cycleMoves:moveLog.slice(previous.lastActionIndex).slice(-24)});
         }
         if(visits===3)threefoldPositionCount++;
         maxPositionVisits=Math.max(maxPositionVisits,visits);
