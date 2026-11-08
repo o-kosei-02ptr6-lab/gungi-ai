@@ -97,6 +97,37 @@
       const distance = recent.length - 1 - recent.indexOf(reverse);
       penalty = Math.max(penalty, distance <= 1 ? 9000 : 6500);
     }
+    // 3マス以上を巡回する駒も検出する。例：A→B→C→A のように
+    // 逆戻りを含まない周期を閉じる手には強い減点を与える。
+    const pieceCyclePenalty = (() => {
+      const moves = recent.filter(entry => entry.piece.id === action.pieceId);
+      for (let start = moves.length - 2; start >= 0; start -= 1) {
+        const first = moves[start];
+        if (first.from.row !== action.to.row || first.from.col !== action.to.col) continue;
+        let expected = first.to;
+        let connected = true;
+        let cycleMoves = 1;
+        for (let i = start + 1; i < moves.length; i += 1) {
+          const entry = moves[i];
+          if (entry.from.row !== expected.row || entry.from.col !== expected.col) {
+            connected = false;
+            break;
+          }
+          expected = entry.to;
+          cycleMoves += 1;
+        }
+        if (!connected || expected.row !== action.from.row || expected.col !== action.from.col) continue;
+        const totalMoves = cycleMoves + 1;
+        if (totalMoves >= 3 && totalMoves <= 6) return 13000 + (totalMoves - 3) * 1500;
+      }
+      return 0;
+    })();
+    if (pieceCyclePenalty) {
+      const child = applyAction(state, action);
+      // 周回を閉じる手でも、相手への新たな帥手は優先する。
+      if (child && E.isInCheck(child, child.turn)) return 0;
+      penalty = Math.max(penalty, pieceCyclePenalty);
+    }
     // 同じ駒・同じ経路を短い間隔で繰り返す場合も強く減点する。
     const sameRouteCount = recent.filter(entry =>
       entry.from.row === action.from.row && entry.from.col === action.from.col &&
