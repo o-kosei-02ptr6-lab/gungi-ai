@@ -179,7 +179,8 @@ for (let index = 0; index < gamesRequested; index++) {
   totals.tdErrorGames = (totals.tdErrorGames || 0) + (learned.updates ? 1 : 0);
   const gameSummary = {
     game: checkpoint.games, candidateSide, winner: result.winner || null, draw: !!result.draw,
-    startKey: result.startKey, searchDepth: result.depth || null,
+    startKey: result.startKey, searchDepth: result.searchDepth || 0,
+    searchTelemetry: result.searchTelemetry || [],
     endReason: result.endReason || (result.winner ? "marshal-captured" : "max-plies"),
     marshalCount: ["先手","後手"].reduce((counts, side) => {
       counts[side] = result.finalState.board.flat().flat().filter(piece => piece.side === side && piece.name === "帥").length;
@@ -222,7 +223,34 @@ const summary = {
     threefoldPositionCountThisRun: runResults.reduce((sum, x) => sum + (x.threefoldPositionCount || 0), 0),
     maxPositionVisitsThisRun: Math.max(1, ...runResults.map(x => x.maxPositionVisits || 1)),
     repetitionEventCountThisRun: runResults.reduce((sum, x) => sum + (x.repetitionEvents || []).length, 0),
-    medianCycleLengthThisRun: (() => { const a=runResults.flatMap(x=>(x.repetitionEvents||[]).map(e=>e.cycleLength)).sort((x,y)=>x-y); return a.length?a[Math.floor(a.length/2)]:0; })()
+    medianCycleLengthThisRun: (() => { const a=runResults.flatMap(x=>(x.repetitionEvents||[]).map(e=>e.cycleLength)).sort((x,y)=>x-y); return a.length?a[Math.floor(a.length/2)]:0; })(),
+    searchDiagnostics: (() => {
+      const all=runResults.flatMap(x=>x.searchTelemetry||[]);
+      const depths={};
+      for(const item of all) depths[item.completedDepth]=(depths[item.completedDepth]||0)+1;
+      const average=key=>all.length?all.reduce((sum,item)=>sum+(Number(item[key])||0),0)/all.length:0;
+      return {
+        totalSearches:all.length,
+        depthHistogram:depths,
+        meanCompletedDepth:Number(average("completedDepth").toFixed(2)),
+        meanNodes:Math.round(average("nodes")),
+        maxNodes:Math.max(0,...all.map(item=>item.nodes||0)),
+        meanElapsedMs:Math.round(average("elapsedMs")),
+        maxElapsedMs:Math.max(0,...all.map(item=>item.elapsedMs||0)),
+        meanQuiescenceNodes:Math.round(average("quiescenceNodes")),
+        meanTranspositionHits:Math.round(average("transpositionHits")),
+        bySide:["先手","後手"].reduce((out,side)=>{
+          const subset=all.filter(item=>item.side===side);
+          out[side]={
+            searches:subset.length,
+            meanDepth:subset.length?Number((subset.reduce((sum,item)=>sum+(item.completedDepth||0),0)/subset.length).toFixed(2)):0,
+            meanNodes:subset.length?Math.round(subset.reduce((sum,item)=>sum+(item.nodes||0),0)/subset.length):0,
+            meanElapsedMs:subset.length?Math.round(subset.reduce((sum,item)=>sum+(item.elapsedMs||0),0)/subset.length):0
+          };
+          return out;
+        },{})
+      };
+    })()
   },
   weightDiagnostics: {
     min: Math.min(...Object.values(checkpoint.weights)),
