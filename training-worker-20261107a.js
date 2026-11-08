@@ -103,7 +103,7 @@
     const {candidateWeights,championWeights,candidateSide,maxPlies=108,searchOptions={},seed=1}=message;
     const state=await makeStartPosition(seed),startKey=positionKey(state),trajectory=[],mateSamples=[];
     const seenPositions=new Set([startKey]);
-    let nodes=0,plies=0,captures=0,deployments=0,repeatedPositionVisits=0;
+    let nodes=0,plies=0,captures=0,deployments=0,repeatedPositionVisits=0,endReason="max-plies";
     for(;plies<maxPlies&&state.phase==="move";plies++){
       const side=state.turn,isCandidate=side===candidateSide,positionFeatures=snapshotFeatures(state);
       trajectory.push(isCandidate?positionFeatures:Object.fromEntries(FEATURES.map(k=>[k,-positionFeatures[k]])));
@@ -115,7 +115,9 @@
       if(Number.isFinite(mateScore)&&Math.abs(mateScore)>99900000)
         mateSamples.push({features:positionFeatures,target:mateScore>0?1:-1,source:"search-proof",ply:plies});
       if(!result.bestMove){
-        state.phase="finished";state.winner=other(side);break;
+        // 合法手がない状態を、帥を取った勝ちと誤認して学習しない。
+        // 帥手を無視する合法手も探索候補に含めたうえで、真に手がない場合は引き分け扱いにする。
+        state.phase="finished";state.winner=null;endReason="no-legal-action";break;
       }
       const a=result.bestMove;
       const applied=a.type==="deploy"
@@ -124,6 +126,7 @@
       if(!applied||!applied.ok)throw new Error("学習対局の着手に失敗しました: "+(applied&&applied.reason||"不明なエラー"));
       if(a.type==="deploy")deployments++;
       if(applied.captured)captures+=applied.captured.length;
+      if(applied.gameOver&&applied.winner===side)endReason="marshal-captured";
       if(state.phase!=="finished"){
         const key=positionKey(state);
         if(seenPositions.has(key))repeatedPositionVisits++;
@@ -142,7 +145,7 @@
         target:sample.source==="search-proof"?sample.target:(sample.attackerSide===candidateSide?1:-1)}));
     const oriented=candidateSide==="先手"?trajectory:trajectory.map(f=>Object.fromEntries(FEATURES.map(k=>[k,-f[k]])));
     return {candidateSide,startKey,trajectory:oriented,mateSamples:directSamples,finalTarget,candidateFinalScore:outcome.candidateFinalScore,winner:state.winner||null,draw:state.phase!=="finished"||!state.winner,
-      plies,nodes,captures,deployments,uniquePositions:seenPositions.size,repeatedPositionVisits,adjudicated,adjudicationScore,
+      plies,nodes,captures,deployments,uniquePositions:seenPositions.size,repeatedPositionVisits,endReason,adjudicated,adjudicationScore,
       finalState:{board:state.board,hands:state.hands,turn:state.turn,phase:state.phase,winner:state.winner,moveNumber:state.moveNumber},history:state.history.map(entry=>({...entry}))};
   }
   self.onmessage=async event=>{
