@@ -150,7 +150,7 @@
   }
   function trainTrajectory(trajectory,finalTarget,initial){
     const weights={...initial},trace=Object.fromEntries(FEATURES.map(key=>[key,0]));
-    const alpha=.0025,gamma=.985,lambda=.72;
+    const alpha=.0025,gamma=.985,lambda=.72,regularization=.06;
     let absoluteError=0,updates=0;
     for(let i=0;i<trajectory.length;i++){
       const current=trajectory[i];
@@ -161,7 +161,8 @@
       for(const key of FEATURES){
         trace[key]=gamma*lambda*trace[key]+(current[key]||0)/1800;
         const gradient=1-currentValue*currentValue;
-        weights[key]=Math.max(.25,Math.min(2.5,weights[key]+alpha*delta*gradient*trace[key]));
+        const update=delta*gradient*trace[key]-regularization*(weights[key]-1);
+        weights[key]=Math.max(.25,Math.min(2.5,weights[key]+alpha*update));
       }
       absoluteError+=Math.abs(delta);updates++;
     }
@@ -232,7 +233,7 @@
     }catch(error){return {ok:false,error:"端末の保存容量または保存領域の問題です: "+(error&&error.message||error)};}
   }
   function createWorker(){
-    return new Worker("./training-worker-20261107a.js?v=20261108cycleCheck1");
+    return new Worker("./training-worker-20261107a.js?v=20261108fourImprovements1");
   }
   async function trainParallel(options={}){
     const continuous=options.continuous===true;
