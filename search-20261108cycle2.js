@@ -78,7 +78,16 @@
     return priorPositionInfo(state).count;
   }
   function antiLoopPenalty(state, action) {
-    if (!action || action.type !== "move" || E.isInCheck(state, state.turn)) return 0;
+    if (!action || action.type !== "move") return 0;
+    const wasInCheck = E.isInCheck(state, state.turn);
+    let child = null;
+    const loopMovePreservesPriority = () => {
+      if (!child) child = applyAction(state, action);
+      if (!child) return false;
+      // 王手を解消する手、または相手へ反撃の帥手を掛ける手は反復罰則の対象外。
+      // 王手中でも、王手を放置した往復手だけを抑制する。合法手自体は除外しない。
+      return (wasInCheck && !E.isInCheck(child, state.turn)) || E.isInCheck(child, child.turn);
+    };
     const destination = state.board[action.to.row][action.to.col];
     // 捕獲や王手回避を往復抑制で妨げない。
     if (action.landingMode === "capture" && destination.length &&
@@ -91,9 +100,8 @@
       entry.from.row === action.to.row && entry.from.col === action.to.col &&
       entry.to.row === action.from.row && entry.to.col === action.from.col);
     if (reverse) {
-      const child = applyAction(state, action);
-      // 逆戻りによって新たな帥手を掛ける場合は、攻撃を優先する。
-      if (child && E.isInCheck(child, child.turn)) return 0;
+      // 王手回避・反撃を優先し、それ以外の逆戻りは王手中でも抑制する。
+      if (loopMovePreservesPriority()) return 0;
       const distance = recent.length - 1 - recent.indexOf(reverse);
       penalty = Math.max(penalty, distance <= 1 ? 9000 : 6500);
     }
@@ -123,9 +131,8 @@
       return 0;
     })();
     if (pieceCyclePenalty) {
-      const child = applyAction(state, action);
-      // 周回を閉じる手でも、相手への新たな帥手は優先する。
-      if (child && E.isInCheck(child, child.turn)) return 0;
+      // 周回を閉じる手でも、王手回避・反撃なら優先する。
+      if (loopMovePreservesPriority()) return 0;
       penalty = Math.max(penalty, pieceCyclePenalty);
     }
     // 同じ駒・同じ経路を短い間隔で繰り返す場合も強く減点する。
