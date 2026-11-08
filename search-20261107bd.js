@@ -73,12 +73,12 @@
       entry.piece && entry.piece.id === action.pieceId);
     if (recent.some(entry => entry.from && entry.to &&
       entry.from.row === action.to.row && entry.from.col === action.to.col &&
-      entry.to.row === action.from.row && entry.to.col === action.from.col)) return 220;
-    return Math.max(0, recent.length - 1) * 36;
+      entry.to.row === action.from.row && entry.to.col === action.from.col)) return 320;
+    return Math.max(0, recent.length - 1) * 60;
   }
   function repeatedPositionPenalty(state) {
     const visits = priorPositionCount(state);
-    return visits > 0 ? Math.min(900, 180 + (visits - 1) * 240) : 0;
+    return visits > 0 ? Math.min(1600, 320 + (visits - 1) * 400) : 0;
   }
   function searchContextKey(state) {
     const recent = state.history.slice(-10).map(entry => entry.type === "move"
