@@ -62,10 +62,19 @@
     }
     return JSON.stringify({ board, hands, turn: state.turn });
   }
-  function priorPositionCount(state) {
+  function priorPositionInfo(state) {
     const key = repetitionKey(state);
-    return state.history.reduce((count, entry) =>
-      count + (entry.type === "move" && entry.positionKey === key ? 1 : 0), 0);
+    const history = state.history || [];
+    let count = 0;
+    let lastIndex = -1;
+    // The final entry represents the current position, not a prior visit.
+    for (let i = 0; i < history.length - 1; i += 1) {
+      if (history[i].positionKey === key) { count += 1; lastIndex = i; }
+    }
+    return { count, cycleLength: lastIndex >= 0 ? history.length - 1 - lastIndex : 0 };
+  }
+  function priorPositionCount(state) {
+    return priorPositionInfo(state).count;
   }
   function antiLoopPenalty(state, action) {
     if (!action || action.type !== "move") return 0;
@@ -89,9 +98,14 @@
     return penalty;
   }
   function repeatedPositionPenalty(state) {
-    const visits = priorPositionCount(state);
-    // 同一局面への再訪は、単なる駒の往復より強く抑制する。
-    return visits > 0 ? Math.min(3000, 1000 + (visits - 1) * 700) : 0;
+    const info = priorPositionInfo(state);
+    if (!info.count) return 0;
+    // Short cycles are penalized most strongly, including cycles formed by
+    // multiple pieces alternating their moves rather than one piece reversing.
+    const cyclePenalty = info.cycleLength <= 4 ? 2600
+      : info.cycleLength <= 8 ? 1900
+      : info.cycleLength <= 12 ? 1300 : 800;
+    return Math.min(5000, cyclePenalty + Math.max(0, info.count - 1) * 650);
   }
   function searchContextKey(state) {
     const recent = state.history.slice(-10).map(entry => entry.type === "move"
@@ -320,6 +334,13 @@
         const maxTTEntries = Math.max(2000, Math.min(100000, Number(options.maxTTEntries) || 30000));
         const started = now();
         const deadline = started + timeMs;
+        // Establish a current-position baseline after setup and for older games.
+        const root = cloneState(state);
+        const rootKey = repetitionKey(root);
+        const lastHistoryEntry = root.history[root.history.length - 1];
+        if (!lastHistoryEntry || lastHistoryEntry.positionKey !== rootKey) {
+          root.history.push({ type: "position", positionKey: rootKey });
+        }
         const table = new Map();
         const stats = { nodes: 0, qnodes: 0, cutoffs: 0, ttHits: 0 };
         // Killer moves and history scores improve ordering of quiet moves.
@@ -513,18 +534,18 @@
         let completed = null;
         let previousBest = null;
         let previousScore = 0;
-        const fallback = getSearchActions(state, state.turn, maxDeployCandidates)[0] || null;
-        if (!fallback) { resolve({ bestMove: null, score: AI.evaluate(state, state.turn), depth: 0, nodes: 0, elapsedMs: now() - started }); return; }
+        const fallback = getSearchActions(root, root.turn, maxDeployCandidates)[0] || null;
+        if (!fallback) { resolve({ bestMove: null, score: AI.evaluate(root, root.turn), depth: 0, nodes: 0, elapsedMs: now() - started }); return; }
         for (let depth = 1; depth <= maxDepth; depth += 1) {
           try {
             checkStop();
             // Aspiration window reduces root-node work after the first completed iteration.
             const window = depth >= 2 && completed ? 90 : INF;
-            let result = searchRoot(state, depth, previousBest,
+            let result = searchRoot(root, depth, previousBest,
               window === INF ? -INF : previousScore - window,
               window === INF ? INF : previousScore + window);
             if (window !== INF && (result.score <= previousScore - window || result.score >= previousScore + window)) {
-              result = searchRoot(state, depth, previousBest);
+              result = searchRoot(root, depth, previousBest);
             }
             if (result.bestAction) {
               completed = { ...result, depth };
@@ -541,7 +562,7 @@
           if (now() >= deadline || stats.nodes >= maxNodes) break;
           await new Promise(done => setTimeout(done, 0));
         }
-        const result = completed || { bestAction: fallback, score: AI.evaluate(state, state.turn), depth: 0 };
+        const result = completed || { bestAction: fallback, score: AI.evaluate(root, root.turn), depth: 0 };
         resolve({
           bestMove: result.bestAction,
           score: result.score,
