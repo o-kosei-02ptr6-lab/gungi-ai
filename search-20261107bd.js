@@ -530,11 +530,11 @@
     function variants(position,actingSide){
       const actions=generateSetupActions(position),hasPlaced=position.history.some(h=>h.type==="place"&&h.side===actingSide);
       const mayFinish=hasPlaced&&!position.setupFinishPending&&position.hands[actingSide].some(p=>p.name==="帥")===false;
-      const canFinish=hasPlaced&&!position.setupFinishPending&&position.history.some(h=>h.type==="place"&&h.side===actingSide&&h.piece.name==="帥");
+      const canFinish=options.allowFinish!==false&&hasPlaced&&!position.setupFinishPending&&position.history.some(h=>h.type==="place"&&h.side===actingSide&&h.piece.name==="帥");
       const out=[];
       for(const action of actions){
         const piece=position.hands[actingSide].find(p=>p.id===action.pieceId);if(!piece)continue;
-        const finishOptions=canFinish?[false,true]:[false];
+        const finishOptions=canFinish?(position.hands[actingSide].length===1?[true]:[false,true]):[false];
         for(const finishFirst of finishOptions){
           const next=cloneState(position);
           if(finishFirst){const f=E.finishSetup(next,actingSide);if(!f.ok)continue;}
