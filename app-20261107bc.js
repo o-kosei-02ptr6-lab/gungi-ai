@@ -685,7 +685,8 @@
               : "第" + p.game + "局の結果を評価関数へ反映・保存中…";
              if (p.phase === "learning") {
                refreshTournamentGames();
-               if (p.recordSaved === false) trainingStatus.textContent = "対局の棋譜保存に失敗しました：" + (p.recordSaveError || "保存結果を確認できません。");
+               if (p.recordSaved === false) trainingStatus.textContent = "対局の保存に失敗しました：" + (p.recordSaveError || "保存結果を確認できません。");
+                else if (p.recordSaved === true) trainingStatus.textContent = "直近の1局を保存しました（棋譜 " + p.recordHistoryLength + "件）。";
              }
             trainingInfo.textContent = "累計探索局面 " + p.nodes.toLocaleString() + " ／ " +
               (p.phase === "learning" ? "TD目標 " + Number(p.target).toFixed(3) + " ／ 学習AI " + p.candidateWins + "勝・最良AI " + p.championWins + "勝・規定手数引き分け " + p.draws + "局" : "学習データ収集中");
