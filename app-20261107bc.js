@@ -239,7 +239,7 @@
   function refreshTournamentGames(selectedId){
     const select=document.getElementById("tournament-game-select"),detail=document.getElementById("tournament-game-detail"),viewer=document.getElementById("tournament-board-view");
     if(!select||!window.GungiTournament)return;
-    const records=window.GungiTournament.listGameRecords().slice().reverse(),previous=selectedId||select.value;
+    const records=window.GungiTournament.listGameRecords().slice().sort((a,b)=>String(b.savedAt||"").localeCompare(String(a.savedAt||""))),previous=selectedId||select.value;
     select.replaceChildren();
     const gameLabel=record=>record.source==="自己学習"?"自己学習・第"+record.game+"局":"第"+record.pair+"組・第"+record.game+"局";
     if(!records.length){
