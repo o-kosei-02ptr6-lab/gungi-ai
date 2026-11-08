@@ -124,8 +124,9 @@
         });
         loopPenaltyScale = hasOtherSafeResponse ? 0.35 : 0;
       } else if (givesCountercheck) {
-        // 反撃王手の優先度は高く保ちつつ、王手を利用した無限往復を防ぐ。
-        loopPenaltyScale = 0.35;
+        // 反撃王手は優先するが、反撃王手を交互に繰り返す循環を抑えるため、
+        // 代替応手がある局面では通常の反復罰則の70%を残す。
+        loopPenaltyScale = 0.70;
       }
       return loopPenaltyScale;
     };
