@@ -228,7 +228,7 @@
     }catch(error){return {ok:false,error:"端末の保存容量または保存領域の問題です: "+(error&&error.message||error)};}
   }
   function createWorker(){
-    return new Worker("./training-worker-20261107a.js?v=20261108finalonlykifu1");
+    return new Worker("./training-worker-20261107a.js?v=20261108finalonlykifu4");
   }
   async function trainParallel(options={}){
     const continuous=options.continuous===true;
@@ -298,6 +298,10 @@
     AI.setWeights(candidate);saveWeights(candidate,previousGames+completed);
     return {games:completed,decisive,candidateWins,championWins,firstWins,secondWins,draws,adjudicatedGames,
       samples:sampleCount,nodes,tdUpdates,mateUpdates:totalMateUpdates,meanTdError:tdUpdates?totalTdError/tdUpdates:0,weights:candidate,parallelGames:parallel};
+  }
+  async function trainSequential(options={}){
+    if(typeof Worker==="undefined")throw new Error("このブラウザでは学習用Workerを利用できません。Safariを最新版に更新して再読み込みしてください。");
+    return trainParallel({...options,parallelGames:2});
   }
   async function train(options={}){
     const requested=Math.max(1,Math.min(4,Number(options.parallelGames)||2));
