@@ -67,33 +67,70 @@
     for(const k of FEATURES)v[k]=(b["先手"][k]||0)-(b["後手"][k]||0);
     return v;
   }
+  function cloneSetupState(state){
+    return {
+      ...state,
+      board:state.board.map(row=>row.map(stack=>stack.slice())),
+      hands:{"先手":state.hands["先手"].slice(),"後手":state.hands["後手"].slice()},
+      history:state.history.slice(),
+      setupDone:{...state.setupDone}
+    };
+  }
   function randomPlacement(state,side){
     const hand=state.hands[side],count=state.history.filter(x=>x.type==="place"&&x.side===side).length;
-    const piece=count===0?hand.find(p=>p.name==="帥"):random(hand);
-    if(!piece)throw new Error(side+"の配置可能な駒がありません。");
-    const squares=[];
-    for(let row=0;row<E.SIZE;row++)for(let col=0;col<E.SIZE;col++){
-      // 帥は各陣営の最前列に配置する。先手は最下段、後手は最上段。
-      if(piece.name==="帥" && row!==(side==="先手"?E.SIZE-1:0))continue;
-      if(E.canPlacePiece(state,row,col,piece))squares.push({row,col});
+    const preferred=count===0?[hand.find(p=>p.name==="帥")].filter(Boolean):[random(hand)];
+    const orderedPieces=preferred.concat(hand.filter(p=>!preferred.some(q=>q.id===p.id)));
+    const enemy=side==="先手"?"後手":"先手";
+    let safeOwn=[],safeBoth=[],legalFallback=[];
+    for(const piece of orderedPieces){
+      if(!piece)continue;
+      const squares=[];
+      for(let row=0;row<E.SIZE;row++)for(let col=0;col<E.SIZE;col++){
+        // 帥は各陣営の最前列に単独配置する。
+        if(piece.name==="帥" && row!==(side==="先手"?E.SIZE-1:0))continue;
+        if(E.canPlacePiece(state,row,col,piece))squares.push({row,col});
+      }
+      // まず選んだ駒で探し、帥手を解消できない場合だけ他の駒も調べる。
+      const ownSafeForPiece=[];
+      for(const at of squares){
+        const next=cloneSetupState(state);
+        const result=E.placePiece(next,at.row,at.col,side,piece.id);
+        if(!result.ok)continue;
+        const candidate={piece,at};
+        legalFallback.push(candidate);
+        if(E.isInCheck(next,side))continue;
+        ownSafeForPiece.push(candidate);
+        if(!E.isInCheck(next,enemy))safeBoth.push(candidate);
+      }
+      if(ownSafeForPiece.length){
+        safeOwn=ownSafeForPiece;
+        // 選んだ駒だけで安全な配置が見つかったら、他の駒は調べない。
+        break;
+      }
     }
-    if(!squares.length)throw new Error(side+"の配置可能なマスがありません。");
-    const at=random(squares),result=E.placePiece(state,at.row,at.col,side,piece.id);
+    // 自分の帥を守り、可能なら相手への配置直後の帥手も作らない。
+    const choices=safeBoth.length?safeBoth:(safeOwn.length?safeOwn:legalFallback);
+    if(!choices.length)throw new Error(side+"の配置可能なマスがありません。");
+    const chosen=random(choices),result=E.placePiece(state,chosen.at.row,chosen.at.col,side,chosen.piece.id);
     if(!result.ok)throw new Error("自己対局の初期配置に失敗: "+result.reason);
-    if(piece.name==="帥" && (state.board[at.row][at.col].length!==1 ||
-      at.row!==(side==="先手"?E.SIZE-1:0)))
+    if(chosen.piece.name==="帥" && (state.board[chosen.at.row][chosen.at.col].length!==1 ||
+      chosen.at.row!==(side==="先手"?E.SIZE-1:0)))
       throw new Error("帥を自陣の最前列に単独配置できませんでした。");
   }
   function makeStartPosition(){
-    const state=E.createGameState();
-    for(let i=0;i<12;i++){randomPlacement(state,"先手");randomPlacement(state,"後手");}
-    for(const side of ["先手","後手"]){
-      const finish=E.finishSetup(state,side);
-      if(!finish.ok)throw new Error("自己対局の「済」に失敗: "+finish.reason);
-      randomPlacement(state,side);
+    // 両陣営の帥が初手から取られる配置は作り直す。
+    for(let attempt=0;attempt<20;attempt++){
+      const state=E.createGameState();
+      for(let i=0;i<12;i++){randomPlacement(state,"先手");randomPlacement(state,"後手");}
+      for(const side of ["先手","後手"]){
+        const finish=E.finishSetup(state,side);
+        if(!finish.ok)throw new Error("自己対局の「済」に失敗: "+finish.reason);
+        randomPlacement(state,side);
+      }
+      if(state.phase!=="move")throw new Error("初期配置を完了できませんでした。");
+      if(!E.isInCheck(state,"先手")&&!E.isInCheck(state,"後手"))return state;
     }
-    if(state.phase!=="move")throw new Error("初期配置を完了できませんでした。");
-    return state;
+    throw new Error("帥手を防げる初期配置を生成できませんでした。");
   }
   // TD(lambda): learn from each transition, not one label copied across a whole game.
   function valueOf(features,weights){
@@ -243,7 +280,7 @@
   }
 
   function createWorker(){
-    return new Worker("./training-worker-20261107a.js?v=20261108matedirect2");
+    return new Worker("./training-worker-20261107a.js?v=20261108setupdefense1");
   }
   async function trainParallel(options={}){
     const continuous=options.continuous===true;
