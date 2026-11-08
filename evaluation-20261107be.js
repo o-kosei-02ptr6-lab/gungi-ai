@@ -41,6 +41,9 @@
     return Math.round(output);
   }
   const breakdownCache = new WeakMap();
+  function weightsSignature() {
+    return WEIGHT_KEYS.map(key => weights[key]).join(",");
+  }
   function weightedTotal(parts) {
     return nnueForward(parts);
   }
@@ -383,8 +386,9 @@
     if (!state || !Array.isArray(state.board) || !state.hands) {
       throw new TypeError("有効な軍儀の局面を指定してください。");
     }
+    const signature = weightsSignature();
     const cached = breakdownCache.get(state);
-    if (cached) return cached;
+    if (cached && cached.signature === signature) return cached.result;
     const first = sideBreakdown(state, "先手");
     const second = sideBreakdown(state, "後手");
     let terminal = null;
@@ -398,7 +402,7 @@
       score: terminal === null ? first.total - second.total : terminal,
       terminal
     };
-    breakdownCache.set(state, result);
+    breakdownCache.set(state, { signature, result });
     return result;
   }
 
