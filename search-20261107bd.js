@@ -73,11 +73,15 @@
       entry.piece && entry.piece.id === action.pieceId);
     if (recent.some(entry => entry.from && entry.to &&
       entry.from.row === action.to.row && entry.from.col === action.to.col &&
-      entry.to.row === action.from.row && entry.to.col === action.from.col)) return 150;
-    return Math.max(0, recent.length - 1) * 24;
+      entry.to.row === action.from.row && entry.to.col === action.from.col)) return 220;
+    return Math.max(0, recent.length - 1) * 36;
+  }
+  function repeatedPositionPenalty(state) {
+    const visits = priorPositionCount(state);
+    return visits > 0 ? Math.min(900, 180 + (visits - 1) * 240) : 0;
   }
   function searchContextKey(state) {
-    const recent = state.history.slice(-8).map(entry => entry.type === "move"
+    const recent = state.history.slice(-10).map(entry => entry.type === "move"
       ? [entry.piece && entry.piece.id, entry.from && entry.from.row, entry.from && entry.from.col,
          entry.to && entry.to.row, entry.to && entry.to.col, entry.landingMode].join(":")
       : entry.type).join("|");
@@ -428,7 +432,7 @@
             const quiet = isQuietAction(position, action) && !E.isInCheck(position, position.turn);
             const reduction = index >= 4 && depth >= 3 && quiet ? 1 + (index >= 10 && depth >= 5 ? 1 : 0) : 0;
             // 同じ局面へ戻る複数駒の循環にも、駒単位の往復とは別に罰点を与える。
-            const penalty = antiLoopPenalty(position, action) + (priorPositionCount(child) > 0 ? 140 : 0);
+            const penalty = antiLoopPenalty(position, action) + repeatedPositionPenalty(child);
             if (index === 0) {
               score = -negamax(child, depth - 1, -beta, -alpha, ply + 1) - penalty;
             } else {
@@ -475,11 +479,11 @@
             if (!child) continue;
             let score;
             if (index === 0) {
-              score = -negamax(child, depth - 1, -beta, -alpha, 1) - antiLoopPenalty(root, action) - (priorPositionCount(child) > 0 ? 140 : 0);
+              score = -negamax(child, depth - 1, -beta, -alpha, 1) - antiLoopPenalty(root, action) - repeatedPositionPenalty(child);
             } else {
-              score = -negamax(child, depth - 1, -alpha - 1, -alpha, 1) - antiLoopPenalty(root, action) - (priorPositionCount(child) > 0 ? 140 : 0);
+              score = -negamax(child, depth - 1, -alpha - 1, -alpha, 1) - antiLoopPenalty(root, action) - repeatedPositionPenalty(child);
               if (score > alpha && score < beta) {
-                score = -negamax(child, depth - 1, -beta, -alpha, 1) - antiLoopPenalty(root, action) - (priorPositionCount(child) > 0 ? 140 : 0);
+                score = -negamax(child, depth - 1, -beta, -alpha, 1) - antiLoopPenalty(root, action) - repeatedPositionPenalty(child);
               }
             }
             if (score > bestScore) {
@@ -487,6 +491,7 @@
               bestAction = action;
             }
             if (score > alpha) alpha = score;
+            if (alpha >= beta) break;
           }
           if (bestAction) store(key, { depth, score: bestScore, flag: "exact", best: bestAction });
           return { bestAction, score: bestScore };
