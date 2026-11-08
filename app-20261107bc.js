@@ -257,12 +257,12 @@
     const latest=records[0];
     savedReplayFrames=Array.isArray(latest.history)&&latest.history.length?buildSavedReplay(latest.history):[];
     savedReplayIndex=0;
-    renderSavedGameHistory(latest.history);
+    renderSavedGameHistory(latestHistory);
     if(viewer)viewer.hidden=!savedReplayFrames.length;
     if(savedReplayFrames.length)renderSavedReplayFrame();
     else{
       const status=document.getElementById("tournament-replay-status");
-      if(status)status.textContent="最新の対局に棋譜がありません。次の対局から初期配置を含む棋譜を保存します。";
+      if(status)status.textContent="最新の対局に棋譜がありません。次の学習・検証対局の終了時に保存します。";
     }
   }
   const tournamentSelect=document.getElementById("tournament-game-select");
