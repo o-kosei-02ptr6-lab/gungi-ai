@@ -255,7 +255,9 @@
     // Replay is intentionally independent of the record selector: it always shows
     // the newest saved game, while the selector above only inspects final positions.
     const latest=records[0];
-    savedReplayFrames=Array.isArray(latest.history)&&latest.history.length?buildSavedReplay(latest.history):[];
+    const latestKifu=window.GungiTraining&&window.GungiTraining.getLatestGameKifu?window.GungiTraining.getLatestGameKifu():null;
+    const latestHistory=latestKifu&&latestKifu.id===latest.id&&Array.isArray(latestKifu.history)?latestKifu.history:[];
+    savedReplayFrames=latestHistory.length?buildSavedReplay(latestHistory):[];
     savedReplayIndex=0;
     renderSavedGameHistory(latestHistory);
     if(viewer)viewer.hidden=!savedReplayFrames.length;
