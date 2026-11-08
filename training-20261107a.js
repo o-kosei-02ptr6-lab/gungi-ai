@@ -186,19 +186,25 @@
   }
   const GAME_RECORDS_KEY="gungi-ai-tournament-games-v1";
   const LATEST_KIFU_KEY="gungi-ai-latest-kifu-v1";
+  const LATEST_KIFUS_KEY="gungi-ai-latest-kifus-v1";
   const MAX_SAVED_GAMES=40;
-  function getLatestGameKifu(){
-    try{const item=JSON.parse(localStorage.getItem(LATEST_KIFU_KEY)||"null");return item&&Array.isArray(item.history)?item:null;}catch(_){return null;}
+  function getLatestGameKifus(){
+    try{const list=JSON.parse(localStorage.getItem(LATEST_KIFUS_KEY)||"null");if(Array.isArray(list))return list.filter(item=>item&&Array.isArray(item.history)).slice(0,2);const old=JSON.parse(localStorage.getItem(LATEST_KIFU_KEY)||"null");return old&&Array.isArray(old.history)?[old]:[];}catch(_){return [];}
+  }
+  function getLatestGameKifu(){return getLatestGameKifus()[0]||null;}
+  function storeLatestGameKifu(kifu){
+    const list=[kifu,...getLatestGameKifus().filter(item=>item.id!==kifu.id)].slice(0,2);
+    localStorage.setItem(LATEST_KIFUS_KEY,JSON.stringify(list));localStorage.setItem(LATEST_KIFU_KEY,JSON.stringify(list[0]));
+    const check=getLatestGameKifus();return !!(check[0]&&check[0].id===kifu.id&&check[0].history.length===kifu.history.length);
   }
   function migrateLegacyGameRecords(){
     try{
       const records=JSON.parse(localStorage.getItem(GAME_RECORDS_KEY)||"[]");
       if(!Array.isArray(records))return;
       const ordered=records.slice().sort((a,b)=>String(b&&b.savedAt||"").localeCompare(String(a&&a.savedAt||"")));
-      const existing=getLatestGameKifu();
-      if(!existing){
-        const legacy=ordered.find(item=>item&&Array.isArray(item.history)&&item.history.length);
-        if(legacy)localStorage.setItem(LATEST_KIFU_KEY,JSON.stringify({id:legacy.id,savedAt:legacy.savedAt||new Date().toISOString(),source:legacy.source||"過去の対局",history:legacy.history}));
+      if(!getLatestGameKifus().length){
+        const legacy=ordered.filter(item=>item&&Array.isArray(item.history)&&item.history.length).slice(0,2).map(item=>({id:item.id,savedAt:item.savedAt||new Date().toISOString(),source:item.source||"過去の対局",history:item.history}));
+        if(legacy.length){localStorage.setItem(LATEST_KIFUS_KEY,JSON.stringify(legacy));localStorage.setItem(LATEST_KIFU_KEY,JSON.stringify(legacy[0]));}
       }
       let changed=false;
       records.forEach(item=>{if(item&&Object.prototype.hasOwnProperty.call(item,"history")){delete item.history;changed=true;}});
@@ -221,9 +227,7 @@
       const checked=JSON.parse(localStorage.getItem(GAME_RECORDS_KEY)||"[]");
       if(!checked.some(item=>item.id===record.id&&item.finalState))return {ok:false,error:"最終局面の保存確認に失敗しました。"};
       const kifu={id:record.id,savedAt:record.savedAt||new Date().toISOString(),source:record.source||"自己学習",history:Array.isArray(record.history)?record.history.map(entry=>({...entry})):[]};
-      localStorage.setItem(LATEST_KIFU_KEY,JSON.stringify(kifu));
-      const verified=getLatestGameKifu();
-      if(!verified||verified.id!==record.id||verified.history.length!==kifu.history.length)return {ok:false,error:"棋譜の保存確認に失敗しました。"};
+      if(!storeLatestGameKifu(kifu))return {ok:false,error:"棋譜の保存確認に失敗しました。"};
       return {ok:true,id:record.id,historyLength:verified.history.length};
     }catch(error){return {ok:false,error:"端末の保存容量または保存領域の問題です: "+(error&&error.message||error)};}
   }
@@ -325,6 +329,6 @@
     return {weights:AI.getWeights(),games:Math.max(0,Number(data.games)||0)};
   }
   migrateLegacyGameRecords();
-  window.GungiTraining=Object.freeze({train,trainSequential,trainParallel,loadWeights,saveWeights,makeStartPosition,exportData,importData,createBackup,restorePreviousBackup,getLatestGameKifu});
+  window.GungiTraining=Object.freeze({train,trainSequential,trainParallel,loadWeights,saveWeights,makeStartPosition,exportData,importData,createBackup,restorePreviousBackup,getLatestGameKifu,getLatestGameKifus});
   loadWeights();
 })();
