@@ -51,6 +51,39 @@
     return "M:" + action.from.row + ":" + action.from.col + ":" + action.to.row + ":" + action.to.col + ":" + action.landingMode;
   }
 
+  // 同じ盤面に戻る循環や、同じ駒を短い間隔で往復させる手を抑える。
+  // engine側のpositionKeyと同じ形式で、駒IDではなく駒種・陣営・段構成を比較する。
+  function repetitionKey(state) {
+    const board = state.board.map(row => row.map(stack => stack.map(piece => piece.side + ":" + piece.name)));
+    const hands = {};
+    for (const side of ["先手", "後手"]) {
+      hands[side] = {};
+      for (const piece of state.hands[side] || []) hands[side][piece.name] = (hands[side][piece.name] || 0) + 1;
+    }
+    return JSON.stringify({ board, hands, turn: state.turn });
+  }
+  function priorPositionCount(state) {
+    const key = repetitionKey(state);
+    return state.history.reduce((count, entry) =>
+      count + (entry.type === "move" && entry.positionKey === key ? 1 : 0), 0);
+  }
+  function antiLoopPenalty(state, action) {
+    if (!action || action.type !== "move") return 0;
+    const recent = state.history.slice(-10).filter(entry => entry.type === "move" &&
+      entry.piece && entry.piece.id === action.pieceId);
+    if (recent.some(entry => entry.from && entry.to &&
+      entry.from.row === action.to.row && entry.from.col === action.to.col &&
+      entry.to.row === action.from.row && entry.to.col === action.from.col)) return 100;
+    return Math.max(0, recent.length - 1) * 18;
+  }
+  function searchContextKey(state) {
+    const recent = state.history.slice(-8).map(entry => entry.type === "move"
+      ? [entry.piece && entry.piece.id, entry.from && entry.from.row, entry.from && entry.from.col,
+         entry.to && entry.to.row, entry.to && entry.to.col, entry.landingMode].join(":")
+      : entry.type).join("|");
+    return positionKey(state) + "|r" + priorPositionCount(state) + "|h" + recent;
+  }
+
   function deploymentPriority(state, side, piece, row, col) {
     const center = 8 - (Math.abs(row - 4) + Math.abs(col - 4));
     const stack = state.board[row][col];
@@ -304,6 +337,7 @@
           if (position.phase === "finished") {
             return position.winner === position.turn ? MATE - ply : -MATE + ply;
           }
+          if (priorPositionCount(position) > 0) return 0;
 
           const inCheck = E.isInCheck(position, position.turn);
           const standPat = inCheck ? -INF : AI.evaluate(position, position.turn);
@@ -367,7 +401,8 @@
             depth = 1;
           }
 
-          const key = positionKey(position);
+          if (priorPositionCount(position) > 0) return 0;
+          const key = searchContextKey(position);
           const originalAlpha = alpha;
           const originalBeta = beta;
           const cached = table.get(key);
@@ -389,13 +424,13 @@
             if (!child) continue;
             let score;
             if (index === 0) {
-              score = -negamax(child, depth - 1, -beta, -alpha, ply + 1);
+              score = -negamax(child, depth - 1, -beta, -alpha, ply + 1) - antiLoopPenalty(position, action);
             } else {
               // Principal Variation Search: later moves first receive a null-window
               // probe, and are fully re-searched only when they improve alpha.
-              score = -negamax(child, depth - 1, -alpha - 1, -alpha, ply + 1);
+              score = -negamax(child, depth - 1, -alpha - 1, -alpha, ply + 1) - antiLoopPenalty(position, action);
               if (score > alpha && score < beta) {
-                score = -negamax(child, depth - 1, -beta, -alpha, ply + 1);
+                score = -negamax(child, depth - 1, -beta, -alpha, ply + 1) - antiLoopPenalty(position, action);
               }
             }
             if (score > bestScore) {
@@ -416,7 +451,7 @@
         }
 
         function searchRoot(root, depth, previousBest) {
-          const key = positionKey(root);
+          const key = searchContextKey(root);
           const cached = table.get(key);
           const actions = orderActions(root, getSearchActions(root, root.turn, maxDeployCandidates), previousBest || (cached && cached.best), 0, killers, historyScores);
           let alpha = -INF;
@@ -430,11 +465,11 @@
             if (!child) continue;
             let score;
             if (index === 0) {
-              score = -negamax(child, depth - 1, -beta, -alpha, 1);
+              score = -negamax(child, depth - 1, -beta, -alpha, 1) - antiLoopPenalty(root, action);
             } else {
-              score = -negamax(child, depth - 1, -alpha - 1, -alpha, 1);
+              score = -negamax(child, depth - 1, -alpha - 1, -alpha, 1) - antiLoopPenalty(root, action);
               if (score > alpha && score < beta) {
-                score = -negamax(child, depth - 1, -beta, -alpha, 1);
+                score = -negamax(child, depth - 1, -beta, -alpha, 1) - antiLoopPenalty(root, action);
               }
             }
             if (score > bestScore) {
