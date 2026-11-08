@@ -52,7 +52,7 @@
         <button id="compare-ai" type="button">基準AIと実力を比較</button>
         <p id="compare-status" role="status">比較はまだ実行されていません。</p>
         <p id="compare-info">学習後に比較すると、調整した重みの効果を確認できます。</p>
-        <div class="saved-games"><h3>学習・検証対局の最終局面</h3><p>対局を選ぶと、勝敗が決まった局・引き分けの両方の最終盤面を確認できます。最大40局を保存し、上限を超えた場合は引き分けの局から古い順に削除します。</p><select id="tournament-game-select" aria-label="確認する検証対局" disabled><option>保存された検証局面はありません</option></select><p id="tournament-game-detail">検証対局が保存されると、ここに局面が表示されます。</p><div id="tournament-board-view" class="board-wrap tournament-board-wrap" hidden><div id="tournament-board" class="board-coordinates tournament-board"></div></div></div>
+        <div class="saved-games"><h3>学習・検証対局の記録</h3><p>対局を選ぶと最終盤面を確認できます。最大40局を保存し、上限を超えた場合は引き分けの局から古い順に削除します。棋譜は容量を抑えるため、直近1局分のみ保存します。</p><select id="tournament-game-select" aria-label="確認する対局" disabled><option>保存された対局はありません</option></select><p id="tournament-game-detail">対局が保存されると、ここに局面が表示されます。</p><div id="tournament-board-view" class="board-wrap tournament-board-wrap" hidden><div id="tournament-board" class="board-coordinates tournament-board"></div></div><div class="saved-game-history"><div class="history-heading"><h4>直近1局の棋譜</h4><strong id="tournament-game-history-count">棋譜なし</strong></div><ol id="tournament-game-history" class="move-history"><li class="history-empty">対局が保存されると棋譜が表示されます。</li></ol></div></div>
       </div>
       <div class="transfer-tools">
         <h3>学習結果の引き継ぎ</h3>
@@ -71,6 +71,6 @@
     </section>
   </main>
   <footer>Gungi AI · 開発用プロトタイプ</footer>
-  <script src="engine-20261107bb.js?v=20261108marshalfrontrow1"></script><script src="evaluation-20261107be.js?v=20261108matedirect1"></script><script src="search-20261107bd.js?v=20261108matequiescence1"></script><script src="training-20261107a.js?v=20261108setupdefense1"></script><script src="tournament-20261107a.js?v=20261108drawmarshal25"></script><script src="app-20261107bc.js?v=20261108drawmarshal25"></script>
+  <script src="engine-20261107bb.js?v=20261108marshalfrontrow1"></script><script src="evaluation-20261107be.js?v=20261108matedirect1"></script><script src="search-20261107bd.js?v=20261108matequiescence1"></script><script src="training-20261107a.js?v=20261108latestkifu1"></script><script src="tournament-20261107a.js?v=20261108latestkifu1"></script><script src="app-20261107bc.js?v=20261108latestkifu1"></script>
 </body>
 </html>
