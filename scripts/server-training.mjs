@@ -113,7 +113,7 @@ function saveCheckpoint(checkpoint) {
   }, null, 2));
   fs.renameSync(temporary, checkpointPath);
 }
-function playGame(id, candidateWeights, championWeights, candidateSide) {
+function playGame(id, candidateWeights, championWeights, candidateSide, seed) {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error("Self-play game timed out after 30 minutes.")), 30 * 60 * 1000);
     self.postMessage = message => {
@@ -121,7 +121,7 @@ function playGame(id, candidateWeights, championWeights, candidateSide) {
       if (message && message.ok) resolve(message.result);
       else reject(new Error(message && message.error || "Training worker returned no result."));
     };
-    self.onmessage({ data: { id, candidateWeights, championWeights, candidateSide, maxPlies } });
+    self.onmessage({ data: { id, candidateWeights, championWeights, candidateSide, maxPlies, seed } });
   });
 }
 
@@ -144,7 +144,8 @@ fs.mkdirSync(stateDir, { recursive: true });
 for (let index = 0; index < gamesRequested; index++) {
   const candidateSide = (checkpoint.games % 2 === 0) ? "先手" : "後手";
   const beforeWeights = { ...checkpoint.weights };
-  const result = await playGame("server-training-" + (checkpoint.games + 1), beforeWeights, championWeights, candidateSide);
+  const gameNumber = checkpoint.games + 1;
+  const result = await playGame("server-training-" + gameNumber, beforeWeights, championWeights, candidateSide, gameNumber * 7919 + 104729);
   let learned = { weights: beforeWeights, updates: 0, meanTdError: 0 };
   if (result.trajectory && result.trajectory.length) {
     learned = trainTrajectory(result.trajectory, result.finalTarget, beforeWeights);
@@ -153,8 +154,10 @@ for (let index = 0; index < gamesRequested; index++) {
   checkpoint.weights = mate.weights;
   checkpoint.games++;
   const totals = checkpoint.totals;
-  totals.candidateWins = (totals.candidateWins || 0) + (!result.draw && result.finalTarget > 0 ? 1 : 0);
-  totals.championWins = (totals.championWins || 0) + (!result.draw && result.finalTarget < 0 ? 1 : 0);
+  totals.candidateWins = (totals.candidateWins || 0) + (result.winner === candidateSide ? 1 : 0);
+  totals.championWins = (totals.championWins || 0) + (result.winner && result.winner !== candidateSide ? 1 : 0);
+  totals.drawEvaluationSum = (totals.drawEvaluationSum || 0) + (result.draw ? (result.candidateFinalScore || 0) : 0);
+  totals.drawEvaluationCount = (totals.drawEvaluationCount || 0) + (result.draw ? 1 : 0);
   totals.draws = (totals.draws || 0) + (result.draw ? 1 : 0);
   totals.nodes = (totals.nodes || 0) + (result.nodes || 0);
   totals.plies = (totals.plies || 0) + (result.plies || 0);
@@ -164,6 +167,7 @@ for (let index = 0; index < gamesRequested; index++) {
   totals.tdErrorGames = (totals.tdErrorGames || 0) + (learned.updates ? 1 : 0);
   const gameSummary = {
     game: checkpoint.games, candidateSide, winner: result.winner || null, draw: !!result.draw,
+    startKey: result.startKey,
     plies: result.plies, nodes: result.nodes, finalTarget: result.finalTarget,
     candidateFinalScore: result.candidateFinalScore, trajectorySamples: result.trajectory.length,
     mateSamples: (result.mateSamples || []).length, tdUpdates: learned.updates, mateUpdates: mate.updates,
@@ -180,7 +184,10 @@ const summary = {
   success: true, mode: "multi-game-server-self-play-training",
   runStartedAt, completedAt: new Date().toISOString(),
   resumed: !!previous, gamesThisRun: runResults.length, totalGames: checkpoint.games,
-  maxPlies, results: runResults, totals: checkpoint.totals, weights: checkpoint.weights,
+  maxPlies, results: runResults, uniqueStartPositions: new Set(runResults.map(x => x.startKey)).size,
+  drawMeanCandidateFinalScore: checkpoint.totals.drawEvaluationCount
+    ? checkpoint.totals.drawEvaluationSum / checkpoint.totals.drawEvaluationCount : 0,
+  totals: checkpoint.totals, weights: checkpoint.weights,
   meanTdError: checkpoint.totals.tdErrorGames
     ? checkpoint.totals.tdErrorSum / checkpoint.totals.tdErrorGames : 0
 };
