@@ -558,7 +558,7 @@
       trainButton.disabled = false;
       trainButton.textContent = "学習を停止";
       trainingStatus.textContent = "自己対局学習を開始しました。停止ボタンを押すまで繰り返します。";
-      trainingInfo.textContent = "独立したWorkerで2局を同時に進め、両局の結果を集約してから評価関数を更新します。";
+      trainingInfo.textContent = "独立したWorkerで2局を同時に進めます。引き分けも共通評価で最終局面の優劣を測り、学習目標に反映します。";
       let result = null;
       try {
         result = await window.GungiTraining.train({
