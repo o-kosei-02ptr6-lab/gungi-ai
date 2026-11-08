@@ -4,12 +4,12 @@
   self.window = self;
   importScripts(
     "./engine-20261107bb.js?v=20261108marshalfrontrow1",
-    "./evaluation-20261107be.js?v=20261108marshalnet1",
+    "./evaluation-20261107be.js?v=20261108matedirect1",
     "./search-20261107bd.js?v=20261108matequiescence1"
   );
   const E=self.GungiEngine, AI=self.GungiAI, S=self.GungiSearch;
-  const FEATURES=["material","hand","position","activity","mobility","threats","exposure","kingSafety"];
-  const BASELINE_WEIGHTS=Object.freeze({material:1,hand:1,position:1,activity:1,mobility:1,threats:1,exposure:1,kingSafety:1});
+  const FEATURES=["material","hand","position","activity","mobility","threats","exposure","kingSafety","mateNet"];
+  const BASELINE_WEIGHTS=Object.freeze({material:1,hand:1,position:1,activity:1,mobility:1,threats:1,exposure:1,kingSafety:1,mateNet:1});
   function finalOutcome(state,candidateSide){
     if(state.phase==="finished"&&state.winner)
       return {target:state.winner===candidateSide?1:-1,candidateFinalScore:null};
@@ -58,14 +58,17 @@
   }
   async function play(message){
     const {candidateWeights,championWeights,candidateSide,maxPlies=108,searchOptions={}}=message;
-    const state=makeStartPosition(),trajectory=[];
+    const state=makeStartPosition(),trajectory=[],mateSamples=[];
     let nodes=0,plies=0;
     for(;plies<maxPlies&&state.phase==="move";plies++){
-      const side=state.turn,isCandidate=side===candidateSide;
-      if(isCandidate)trajectory.push(snapshotFeatures(state));
+      const side=state.turn,isCandidate=side===candidateSide,positionFeatures=snapshotFeatures(state);
+      if(isCandidate)trajectory.push(positionFeatures);
       AI.setWeights(isCandidate?candidateWeights:championWeights);
       const result=await S.findBestMove(state,{maxDepth:3,timeMs:180,maxNodes:2500,maxDeployCandidates:3,...searchOptions});
       nodes+=result.nodes||0;
+      const mateScore=isCandidate?result.score:-result.score;
+      if(Number.isFinite(mateScore)&&Math.abs(mateScore)>99900000)
+        mateSamples.push({features:positionFeatures,target:mateScore>0?1:-1,source:"search-proof",ply:plies});
       if(!result.bestMove){
         state.phase="finished";state.winner=other(side);break;
       }
@@ -74,13 +77,19 @@
         ?E.deployPiece(state,a.row,a.col,side,a.pieceId)
         :E.movePiece(state,a.from.row,a.from.col,a.to.row,a.to.col,a.landingMode);
       if(!applied||!applied.ok)throw new Error("学習対局の着手に失敗しました: "+(applied&&applied.reason||"不明なエラー"));
+      if(state.phase!=="finished"&&E.isInCheck(state,state.turn))
+        mateSamples.push({features:snapshotFeatures(state),attackerSide:side,ply:plies+1,source:"played-check"});
     }
     // 規定手数までに帥を取れなければ引き分け。盤面評価で勝者を決めない。
     const adjudicated=false,adjudicationScore=null;
     const outcome=finalOutcome(state,candidateSide);
     const finalTarget=outcome.target;
+    const directSamples=mateSamples.filter(sample=>sample.source==="search-proof"||
+      (!!state.winner&&state.winner===sample.attackerSide&&plies+1-sample.ply<=8))
+      .map(sample=>({features:candidateSide==="先手"?sample.features:Object.fromEntries(FEATURES.map(k=>[k,-sample.features[k]])),
+        target:sample.source==="search-proof"?sample.target:(sample.attackerSide===candidateSide?1:-1)}));
     const oriented=candidateSide==="先手"?trajectory:trajectory.map(f=>Object.fromEntries(FEATURES.map(k=>[k,-f[k]])));
-    return {candidateSide,trajectory:oriented,finalTarget,candidateFinalScore:outcome.candidateFinalScore,winner:state.winner||null,draw:state.phase!=="finished",
+    return {candidateSide,trajectory:oriented,mateSamples:directSamples,finalTarget,candidateFinalScore:outcome.candidateFinalScore,winner:state.winner||null,draw:state.phase!=="finished",
       plies,nodes,adjudicated,adjudicationScore,
       finalState:{board:state.board,hands:state.hands,turn:state.turn,phase:state.phase,winner:state.winner,moveNumber:state.moveNumber}};
   }
