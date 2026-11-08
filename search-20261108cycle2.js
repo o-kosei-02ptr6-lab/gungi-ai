@@ -388,6 +388,7 @@
           }
 
           const inCheck = E.isInCheck(position, position.turn);
+          if (!inCheck && isThreefoldRepetition(position)) return 0;
           const standPat = inCheck ? -INF : AI.evaluate(position, position.turn);
           if (!inCheck) {
             if (standPat >= beta) return standPat;
@@ -442,6 +443,7 @@
           if (position.phase === "finished") {
             return position.winner === position.turn ? MATE - ply : -MATE + ply;
           }
+          if (!E.isInCheck(position, position.turn) && isThreefoldRepetition(position)) return 0;
           // 深さ0でも帥手中なら通常の1手探索を延長し、全ての回避手を読む。
           // これにより「評価値は高いが次の手で帥を取られる」手を避ける。
           if (depth <= 0) {
@@ -478,15 +480,18 @@
             const reduction = index >= 4 && depth >= 3 && quiet ? 1 + (index >= 10 && depth >= 5 ? 1 : 0) : 0;
             // 同じ局面へ戻る複数駒の循環にも、駒単位の往復とは別に罰点を与える。
             const penalty = repeatedPositionPenalty(child);
+            // 王手回避を妨げない範囲で、過去に進出した駒を無意味に後退させる手を抑える。
+            const retreatPenalty = E.isInCheck(position, position.turn) || givesCheck
+              ? 0 : historicalRetreatPenalty(position, action);
             if (index === 0) {
-              score = -negamax(child, depth - 1, -beta, -alpha, ply + 1) - penalty;
+              score = -negamax(child, depth - 1, -beta, -alpha, ply + 1) - penalty - retreatPenalty;
             } else {
               // PVS + Late Move Reductions: late quiet moves are first searched
               // one or two plies shallower; an alpha improvement triggers a full-depth re-search.
               const reducedDepth = Math.max(0, depth - 1 - reduction);
-              score = -negamax(child, reducedDepth, -alpha - 1, -alpha, ply + 1) - penalty;
+              score = -negamax(child, reducedDepth, -alpha - 1, -alpha, ply + 1) - penalty - retreatPenalty;
               if (reduction && score > alpha) {
-                score = -negamax(child, depth - 1, -alpha - 1, -alpha, ply + 1) - penalty;
+                score = -negamax(child, depth - 1, -alpha - 1, -alpha, ply + 1) - penalty - retreatPenalty;
               }
               if (score > alpha && score < beta) {
                 score = -negamax(child, depth - 1, -beta, -alpha, ply + 1) - penalty;
@@ -523,10 +528,14 @@
             const child = applyAction(root, action);
             if (!child) continue;
             let score;
+            const retreatPenalty = E.isInCheck(root, root.turn) ||
+              (child.phase !== "finished" && E.isInCheck(child, child.turn))
+              ? 0 : historicalRetreatPenalty(root, action);
             if (index === 0) {
-              score = -negamax(child, depth - 1, -beta, -alpha, 1) - repeatedPositionPenalty(child);
+              score = -negamax(child, depth - 1, -beta, -alpha, 1) -
+                repeatedPositionPenalty(child) - retreatPenalty;
             } else {
-              score = -negamax(child, depth - 1, -alpha - 1, -alpha, 1) - repeatedPositionPenalty(child);
+              score = -negamax(child, depth - 1, -alpha - 1, -alpha, 1) - repeatedPositionPenalty(child) - retreatPenalty;
               if (score > alpha && score < beta) {
                 score = -negamax(child, depth - 1, -beta, -alpha, 1) - repeatedPositionPenalty(child);
               }
