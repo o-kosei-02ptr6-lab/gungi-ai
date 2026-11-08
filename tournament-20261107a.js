@@ -3,7 +3,7 @@
   "use strict";
   const E=window.GungiEngine,AI=window.GungiAI,S=window.GungiSearch,T=window.GungiTraining;
   if(!E||!AI||!S||!T) throw new Error("Engine, evaluator, search and training must load before tournament.");
-  const INITIAL=Object.freeze({material:1,hand:1,position:1,activity:1,mobility:1,threats:1,exposure:1,kingSafety:1});
+  const INITIAL=Object.freeze({material:1,hand:1,position:1,activity:1,mobility:1,threats:1,exposure:1,kingSafety:1,mateNet:1});
   const CHAMPION_KEY="gungi-ai-champion-weights-v1";
   const STATS_KEY="gungi-ai-tournament-stats-v2";
   const GAMES_KEY="gungi-ai-tournament-games-v1";
@@ -34,6 +34,7 @@
     const result={};
     for(const key of featureKeys){
       const n=Number(weights&&weights[key]);
+      if(key==="mateNet"&&(!weights||weights[key]==null)){result[key]=1;continue;}
       if(!Number.isFinite(n)||n<.25||n>2.5)throw new Error("評価関数の重みが不正です: "+key);
       result[key]=n;
     }
