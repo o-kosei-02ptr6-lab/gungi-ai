@@ -276,6 +276,22 @@
     }
     return true;
   }
+  // 同一局面から同一手を3回指すことを禁止するための局面識別子。
+  // 駒IDではなく種類・陣営・段構成と持ち駒数で判定し、同種駒の入れ替わりに左右されない。
+  function getPositionKey(state) {
+    const board = state.board.map(row => row.map(stack => stack.map(piece => piece.side + ":" + piece.name)));
+    const hands = {};
+    for (const side of ["先手", "後手"]) {
+      hands[side] = {};
+      for (const piece of state.hands[side] || []) hands[side][piece.name] = (hands[side][piece.name] || 0) + 1;
+    }
+    return JSON.stringify({ board, hands, turn: state.turn });
+  }
+  function sameMoveAtPosition(entry, positionKey, fromRow, fromCol, toRow, toCol, landingMode) {
+    return entry.type === "move" && entry.positionKey === positionKey &&
+      entry.from && entry.to && entry.from.row === fromRow && entry.from.col === fromCol &&
+      entry.to.row === toRow && entry.to.col === toCol && (entry.landingMode || "capture") === landingMode;
+  }
   function movePiece(state, fromRow, fromCol, toRow, toCol, landingMode = "capture") {
     const sourceStack = getStack(state, fromRow, fromCol);
     const sourceTop = sourceStack && sourceStack.length ? sourceStack[sourceStack.length - 1] : null;
@@ -286,6 +302,9 @@
     if (!canMoveTo(state, fromRow, fromCol, toRow, toCol)) {
       return { ok: false, reason: "その移動はできません。" };
     }
+    const positionKey = getPositionKey(state);
+    const repeatedCount = state.history.reduce((count, entry) => count + (sameMoveAtPosition(entry, positionKey, fromRow, fromCol, toRow, toCol, landingMode) ? 1 : 0), 0);
+    if (repeatedCount >= 2) return { ok: false, reason: "同じ局面から同じ手を3回以上指すことはできません。" };
     const destinationBefore = state.board[toRow][toCol];
     const destinationTop = destinationBefore.length ? destinationBefore[destinationBefore.length - 1] : null;
     // Occupied squares require an explicit landing choice.
@@ -311,7 +330,7 @@
       : destination.filter(piece => !captured.includes(piece));
     state.board[toRow][toCol] = survivors.concat(movingPiece);
     const toLayer = state.board[toRow][toCol].length;
-    state.history.push({ type: "move", from:{row:fromRow,col:fromCol,layer:fromLayer}, to:{row:toRow,col:toCol,layer:toLayer}, fromLayer, toLayer, piece:movingPiece, captured, landingMode });
+    state.history.push({ type: "move", positionKey, from:{row:fromRow,col:fromCol,layer:fromLayer}, to:{row:toRow,col:toCol,layer:toLayer}, fromLayer, toLayer, piece:movingPiece, captured, landingMode });
     state.moveNumber += 1;
     const capturedMarshal = captured.some(piece => piece.name === "帥");
     if (capturedMarshal) {
