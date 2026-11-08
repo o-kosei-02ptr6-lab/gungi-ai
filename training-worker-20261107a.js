@@ -9,6 +9,18 @@
   );
   const E=self.GungiEngine, AI=self.GungiAI, S=self.GungiSearch;
   const FEATURES=["material","hand","position","activity","mobility","threats","exposure","kingSafety"];
+  const BASELINE_WEIGHTS=Object.freeze({material:1,hand:1,position:1,activity:1,mobility:1,threats:1,exposure:1,kingSafety:1});
+  function finalOutcome(state,candidateSide){
+    if(state.phase==="finished"&&state.winner)
+      return {target:state.winner===candidateSide?1:-1,candidateFinalScore:null};
+    const activeWeights=AI.getWeights();
+    try{
+      AI.setWeights(BASELINE_WEIGHTS);
+      const firstScore=AI.evaluate(state,"先手");
+      const candidateFinalScore=candidateSide==="先手"?firstScore:-firstScore;
+      return {target:Math.tanh(candidateFinalScore/1200)*0.5,candidateFinalScore};
+    }finally{AI.setWeights(activeWeights);}
+  }
   const random=list=>list[Math.floor(Math.random()*list.length)];
   const other=side=>side==="先手"?"後手":"先手";
   function snapshotFeatures(state){
@@ -65,9 +77,10 @@
     }
     // 規定手数までに帥を取れなければ引き分け。盤面評価で勝者を決めない。
     const adjudicated=false,adjudicationScore=null;
-    const finalTarget=state.phase==="finished"?(state.winner===candidateSide?1:-1):0;
+    const outcome=finalOutcome(state,candidateSide);
+    const finalTarget=outcome.target;
     const oriented=candidateSide==="先手"?trajectory:trajectory.map(f=>Object.fromEntries(FEATURES.map(k=>[k,-f[k]])));
-    return {candidateSide,trajectory:oriented,finalTarget,winner:state.winner||null,draw:state.phase!=="finished",
+    return {candidateSide,trajectory:oriented,finalTarget,candidateFinalScore:outcome.candidateFinalScore,winner:state.winner||null,draw:state.phase!=="finished",
       plies,nodes,adjudicated,adjudicationScore,
       finalState:{board:state.board,hands:state.hands,turn:state.turn,phase:state.phase,winner:state.winner,moveNumber:state.moveNumber}};
   }
