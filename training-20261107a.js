@@ -232,7 +232,7 @@
     }catch(error){return {ok:false,error:"端末の保存容量または保存領域の問題です: "+(error&&error.message||error)};}
   }
   function createWorker(){
-    return new Worker("./training-worker-20261107a.js?v=20261108speedpass1");
+    return new Worker("./training-worker-20261107a.js?v=20261108randomSetup1");
   }
   async function trainParallel(options={}){
     const continuous=options.continuous===true;
