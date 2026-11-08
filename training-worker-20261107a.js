@@ -5,7 +5,7 @@
   importScripts(
     "./engine-20261107bb.js?v=20261108antiLoop1",
     "./evaluation-20261107be.js?v=20261108matedirect1",
-    "./search-20261107bd.js?v=20261108setupsearch2"
+    "./search-20261107bd.js?v=20261108nnueLmr1"
   );
   const E=self.GungiEngine, AI=self.GungiAI, S=self.GungiSearch;
   const FEATURES=["material","hand","position","activity","mobility","threats","exposure","kingSafety","mateNet"];
@@ -71,9 +71,10 @@
     let nodes=0,plies=0;
     for(;plies<maxPlies&&state.phase==="move";plies++){
       const side=state.turn,isCandidate=side===candidateSide,positionFeatures=snapshotFeatures(state);
-      if(isCandidate)trajectory.push(positionFeatures);
+      trajectory.push(isCandidate?positionFeatures:Object.fromEntries(FEATURES.map(k=>[k,-positionFeatures[k]])));
       AI.setWeights(isCandidate?candidateWeights:championWeights);
-      const result=await S.findBestMove(state,{maxDepth:4,timeMs:450,maxNodes:8000,maxDeployCandidates:5,...searchOptions});
+      const urgent=E.isInCheck(state,side);
+      const result=await S.findBestMove(state,{maxDepth:urgent?4:3,timeMs:urgent?420:220,maxNodes:urgent?7000:3200,maxDeployCandidates:5,...searchOptions});
       nodes+=result.nodes||0;
       const mateScore=isCandidate?result.score:-result.score;
       if(Number.isFinite(mateScore)&&Math.abs(mateScore)>99900000)
