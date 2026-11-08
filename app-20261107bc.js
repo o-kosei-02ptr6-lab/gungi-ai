@@ -138,45 +138,76 @@
     });
     list.scrollTop = list.scrollHeight;
   }
+  let savedReplayFrames=[];
+  let savedReplayIndex=0;
+  function cloneReplaySnapshot(source){
+    return {board:source.board.map(row=>row.map(stack=>stack.slice())),hands:{"先手":source.hands["先手"].slice(),"後手":source.hands["後手"].slice()},turn:source.turn,phase:source.phase,winner:source.winner||null,moveNumber:source.moveNumber||1};
+  }
+  function replayLabel(entry,index){
+    const side=entry.side||(entry.piece&&entry.piece.side)||"";
+    const name=entry.piece?entry.piece.name:"駒";
+    if(entry.type==="place")return "初期配置 · "+side+"："+name+"を "+formatSquare(entry.row,entry.col,entry.layer)+" に配置";
+    if(entry.type==="deploy")return "第"+index+"手 · "+side+"："+name+"を "+formatSquare(entry.row,entry.col,entry.layer)+" に新配置";
+    if(entry.type==="move"){
+      const from=formatSquare(entry.from.row,entry.from.col,entry.fromLayer??entry.from.layer);
+      const to=formatSquare(entry.to.row,entry.to.col,entry.toLayer??entry.to.layer);
+      let label="第"+index+"手 · "+side+"："+name+" "+from+" → "+to;
+      if(entry.landingMode==="tsuke")label+="（ツケ）";
+      else if(entry.captured&&entry.captured.length)label+="（捕獲："+entry.captured.map(piece=>piece.name).join("・")+"／"+entry.captured.length+"枚）";
+      return label;
+    }
+    return side+"："+name;
+  }
+  function buildSavedReplay(history){
+    const state=E.createGameState(),frames=[{snapshot:cloneReplaySnapshot(state),label:"初期局面"}];
+    let ply=0;
+    (Array.isArray(history)?history:[]).forEach(entry=>{
+      const side=entry.side||(entry.piece&&entry.piece.side);
+      if(entry.type==="place"||entry.type==="deploy"){
+        const hand=state.hands[side]||[];
+        const handIndex=hand.findIndex(piece=>entry.piece&&piece.id===entry.piece.id);
+        const piece=handIndex>=0?hand.splice(handIndex,1)[0]:entry.piece;
+        if(!piece)return;
+        state.board[entry.row][entry.col].push(piece);
+        if(entry.type==="deploy"){ply++;state.phase="move";state.turn=side==="先手"?"後手":"先手";}
+      }else if(entry.type==="move"&&entry.from&&entry.to){
+        ply++;
+        const source=state.board[entry.from.row][entry.from.col],destination=state.board[entry.to.row][entry.to.col];
+        const moving=source.pop()||entry.piece;
+        if(entry.landingMode!=="tsuke"&&Array.isArray(entry.captured)&&entry.captured.length){
+          const capturedIds=new Set(entry.captured.map(piece=>piece.id));
+          for(let i=destination.length-1;i>=0;i--)if(capturedIds.has(destination[i].id))destination.splice(i,1);
+        }
+        destination.push(moving);
+        state.phase="move";
+        state.turn=side==="先手"?"後手":"先手";
+        if((entry.captured||[]).some(piece=>piece.name==="帥")){state.phase="finished";state.winner=side;}
+      }
+      frames.push({snapshot:cloneReplaySnapshot(state),label:replayLabel(entry,ply)});
+    });
+    return frames;
+  }
   function renderSavedGameHistory(history){
-    const list=document.getElementById("tournament-game-history");
-    const count=document.getElementById("tournament-game-history-count");
+    const list=document.getElementById("tournament-game-history"),count=document.getElementById("tournament-game-history-count");
     if(!list||!count)return;
     list.replaceChildren();
     if(!Array.isArray(history)||!history.length){
       count.textContent="棋譜なし";
-      const empty=document.createElement("li");
-      empty.className="history-empty";
-      empty.textContent="棋譜を保存しているのは直近1局のみです。古い対局には棋譜がありません。";
-      list.append(empty);
-      return;
+      const empty=document.createElement("li");empty.className="history-empty";
+      empty.textContent="この対局には保存済みの棋譜がありません。新しい対局を実行すると、勝敗に関係なく最新1局の棋譜を保存します。";
+      list.append(empty);return;
     }
     count.textContent=history.length+"件";
     let ply=0;
-    history.forEach(entry=>{
-      const item=document.createElement("li");
-      item.className="history-entry history-"+entry.type;
-      const head=document.createElement("strong"),detail=document.createElement("span");
-      const side=entry.side||(entry.piece&&entry.piece.side)||"";
-      const pieceName=entry.piece?entry.piece.name:"駒";
-      if(entry.type==="place"){
-        head.textContent="初期配置 · "+side;
-        detail.textContent=pieceName+"を "+formatSquare(entry.row,entry.col,entry.layer)+" に配置";
-      }else if(entry.type==="deploy"){
-        ply++;head.textContent="第"+ply+"手 · "+side;
-        detail.textContent=pieceName+"を "+formatSquare(entry.row,entry.col,entry.layer)+" に新配置";
-      }else if(entry.type==="move"){
-        ply++;head.textContent="第"+ply+"手 · "+side;
-        const from=formatSquare(entry.from.row,entry.from.col,entry.fromLayer??entry.from.layer);
-        const to=formatSquare(entry.to.row,entry.to.col,entry.toLayer??entry.to.layer);
-        let description=pieceName+" "+from+" → "+to;
-        if(entry.landingMode==="tsuke")description+="（ツケ）";
-        else if(entry.captured&&entry.captured.length)description+="（捕獲："+entry.captured.map(piece=>piece.name).join("・")+"／"+entry.captured.length+"枚）";
-        detail.textContent=description;
-      }else{
-        head.textContent=side||"記録";detail.textContent=pieceName;
-      }
-      item.append(head,detail);list.append(item);
+    history.forEach((entry,index)=>{
+      if(entry.type==="deploy"||entry.type==="move")ply++;
+      const item=document.createElement("li");item.className="history-entry history-"+entry.type;
+      const head=document.createElement("strong"),detail=document.createElement("span"),label=replayLabel(entry,ply);
+      head.textContent=label.split("：")[0];
+      detail.textContent=label.includes("：")?label.slice(label.indexOf("：")+1):label;
+      item.append(head,detail);
+      item.addEventListener("click",()=>{savedReplayIndex=index+1;renderSavedReplayFrame();});
+      item.style.cursor="pointer";list.append(item);
     });
   }
   function renderTournamentBoard(snapshot) {
@@ -191,19 +222,43 @@
       board.append(cell);
     }
   }
+  function renderSavedReplayFrame(){
+    if(!savedReplayFrames.length)return;
+    savedReplayIndex=Math.max(0,Math.min(savedReplayFrames.length-1,savedReplayIndex));
+    const frame=savedReplayFrames[savedReplayIndex];
+    renderTournamentBoard(frame.snapshot);
+    const status=document.getElementById("tournament-replay-status"),range=document.getElementById("tournament-replay-range");
+    const previous=document.getElementById("tournament-replay-prev"),next=document.getElementById("tournament-replay-next");
+    const first=document.getElementById("tournament-replay-first"),last=document.getElementById("tournament-replay-last");
+    if(status)status.textContent="局面 "+savedReplayIndex+" / "+(savedReplayFrames.length-1)+"　"+frame.label+"　"+(frame.snapshot.phase==="finished"?"対局終了":frame.snapshot.phase==="setup"?"配置中":frame.snapshot.turn+"の手番");
+    if(range){range.max=String(savedReplayFrames.length-1);range.value=String(savedReplayIndex);range.disabled=savedReplayFrames.length<=1;}
+    if(previous)previous.disabled=savedReplayIndex===0;if(first)first.disabled=savedReplayIndex===0;
+    if(next)next.disabled=savedReplayIndex>=savedReplayFrames.length-1;if(last)last.disabled=savedReplayIndex>=savedReplayFrames.length-1;
+  }
   function refreshTournamentGames(selectedId){
     const select=document.getElementById("tournament-game-select"),detail=document.getElementById("tournament-game-detail"),viewer=document.getElementById("tournament-board-view");
     if(!select||!window.GungiTournament)return;
     const records=window.GungiTournament.listGameRecords().slice().reverse(),previous=selectedId||select.value;select.replaceChildren();
-    if(!records.length){const option=document.createElement("option");option.value="";option.textContent="保存された検証局面はありません";select.append(option);select.disabled=true;if(viewer)viewer.hidden=true;renderSavedGameHistory([]);return;}
+    if(!records.length){const option=document.createElement("option");option.value="";option.textContent="保存された対局はありません";select.append(option);select.disabled=true;if(viewer)viewer.hidden=true;renderSavedGameHistory([]);savedReplayFrames=[];return;}
     select.disabled=false;
     const gameLabel=record=>record.source==="自己学習"?"自己学習・第"+record.game+"局":"第"+record.pair+"組・第"+record.game+"局";
     records.forEach(record=>{const option=document.createElement("option");option.value=record.id;option.textContent=gameLabel(record)+"／学習AI "+record.candidateSide+"／"+(record.draw?"引き分け":record.winner+"勝")+"／"+record.plies+"手";select.append(option);});
-    const chosen=records.find(record=>record.id===previous)||records[0];select.value=chosen.id;renderTournamentBoard(chosen.finalState);renderSavedGameHistory(chosen.history);if(viewer)viewer.hidden=false;
+    const chosen=records.find(record=>record.id===previous)||records[0];select.value=chosen.id;
+    savedReplayFrames=buildSavedReplay(chosen.history);savedReplayIndex=0;
+    renderSavedGameHistory(chosen.history);renderSavedReplayFrame();if(viewer)viewer.hidden=false;
     if(detail){const handCount=side=>Object.keys(E.PIECE_COUNTS).map(name=>name+" "+(chosen.finalState.hands[side]||[]).filter(piece=>piece.name===name).length).join("・");detail.textContent=gameLabel(chosen)+"。学習AI："+chosen.candidateSide+"／結果："+(chosen.draw?"引き分け":chosen.winner+"の勝利")+"／"+chosen.plies+"手。最終手番："+chosen.finalState.turn+".\n先手の持ち駒："+handCount("先手")+"\n後手の持ち駒："+handCount("後手");}
   }
   const tournamentSelect=document.getElementById("tournament-game-select");
   if(tournamentSelect)tournamentSelect.addEventListener("change",()=>refreshTournamentGames(tournamentSelect.value));
+  const replayBindings=[
+    ["tournament-replay-prev",()=>savedReplayIndex--],
+    ["tournament-replay-next",()=>savedReplayIndex++],
+    ["tournament-replay-first",()=>savedReplayIndex=0],
+    ["tournament-replay-last",()=>savedReplayIndex=savedReplayFrames.length-1]
+  ];
+  replayBindings.forEach(([id,action])=>{const button=document.getElementById(id);if(button)button.addEventListener("click",()=>{action();renderSavedReplayFrame();});});
+  const replayRange=document.getElementById("tournament-replay-range");
+  if(replayRange)replayRange.addEventListener("input",()=>{savedReplayIndex=Number(replayRange.value);renderSavedReplayFrame();});
   refreshTournamentGames();
   function render() {
     if (mode === "setup") {
