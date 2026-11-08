@@ -122,6 +122,7 @@
         state.phase="finished";state.winner=null;endReason="no-legal-action";break;
       }
       const a=result.bestMove;
+      const movingPiece=a.type==="move"?state.board[a.from.row][a.from.col].slice(-1)[0]:null;
       const applied=a.type==="deploy"
         ?E.deployPiece(state,a.row,a.col,side,a.pieceId)
         :E.movePiece(state,a.from.row,a.from.col,a.to.row,a.to.col,a.landingMode);
@@ -130,7 +131,17 @@
       if(applied.captured)captures+=applied.captured.length;
       if(applied.gameOver&&applied.winner===side)endReason="marshal-captured";
       const latestHistoryEntry=state.history[state.history.length-1];
-      if(latestHistoryEntry&&latestHistoryEntry.type==="move")moveLog.push({...latestHistoryEntry});
+      const historyMatchesAction=latestHistoryEntry&&latestHistoryEntry.type==="move"&&a.type==="move"&&
+        latestHistoryEntry.from&&latestHistoryEntry.to&&
+        latestHistoryEntry.from.row===a.from.row&&latestHistoryEntry.from.col===a.from.col&&
+        latestHistoryEntry.to.row===a.to.row&&latestHistoryEntry.to.col===a.to.col;
+      if(a.type==="move"){
+        moveLog.push(historyMatchesAction?{...latestHistoryEntry}:{
+          type:"move",piece:movingPiece?{...movingPiece}:null,from:{...a.from},to:{...a.to},
+          fromLayer:a.from.layer,toLayer:a.to.layer,landingMode:a.landingMode,
+          captured:Array.isArray(applied.captured)?applied.captured.slice():[]
+        });
+      }
       if(state.phase!=="finished"){
         const key=positionKey(state),previous=positionVisits.get(key),visits=(previous?previous.visits:0)+1;
         positionVisits.set(key,{visits,lastPly:plies+1});
