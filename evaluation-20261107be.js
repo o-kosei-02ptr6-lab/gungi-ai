@@ -14,7 +14,7 @@
   });
   const SIDES = Object.freeze(["先手", "後手"]);
   const CENTER = 4;
-  const WEIGHT_KEYS = ["material", "hand", "position", "activity", "mobility", "threats", "exposure", "kingSafety"];
+  const WEIGHT_KEYS = ["material", "hand", "position", "activity", "mobility", "threats", "exposure", "kingSafety", "mateNet"];
   const weights = Object.fromEntries(WEIGHT_KEYS.map(key => [key, 1]));
 
   function setWeights(next) {
@@ -69,9 +69,26 @@
     return safe;
   }
 
+  function countSafeCheckResponses(state, side, moves) {
+    let safe = 0;
+    for (const move of moves) {
+      const nextState = {
+        ...state, turn: side,
+        board: state.board.map(line => line.map(stack => stack.slice())),
+        hands: state.hands,
+        history: Array.isArray(state.history) ? state.history.slice() : []
+      };
+      const destination = nextState.board[move.to.row][move.to.col];
+      const landingMode = destination.length && destination[destination.length - 1].side === side ? "tsuke" : "capture";
+      const result = E.movePiece(nextState, move.from.row, move.from.col, move.to.row, move.to.col, landingMode);
+      if (result.ok && ((result.gameOver && result.winner === side) || !E.isInCheck(nextState, side))) safe += 1;
+    }
+    return safe;
+  }
+
   function sideBreakdown(state, side) {
     let material = 0, hand = 0, position = 0, activity = 0;
-    let threats = 0, exposure = 0, kingSafety = 0;
+    let threats = 0, exposure = 0, kingSafety = 0, mateNet = 0;
     let boardPieces = 0, handPieces = 0;
 
     const enemy = opponent(side);
@@ -247,12 +264,14 @@
 
     // 敵帥が現在王手ではない場合でも、安全な移動先が少なければ詰めろに近い状態として評価。
     // 逃げ道0〜3に応じて段階的に加点し、4以上では追加点を与えない。
-    if (enemyMarshalForStack && !E.isInCheck(state, enemy)) {
-      const enemySafeEscapes = countSafeMarshalEscapes(
-        state, enemy, enemyMoves, enemyMarshalForStack
-      );
-      const netPressure = [190, 110, 55, 20, 0][Math.min(4, enemySafeEscapes)];
-      threats += netPressure;
+    if (enemyMarshalForStack) {
+      if (E.isInCheck(state, enemy)) {
+        const safeResponses = countSafeCheckResponses(state, enemy, enemyMoves);
+        mateNet += 260 + Math.max(0, 4 - Math.min(4, safeResponses)) * 90;
+      } else {
+        const enemySafeEscapes = countSafeMarshalEscapes(state, enemy, enemyMoves, enemyMarshalForStack);
+        mateNet += [190, 110, 55, 20, 0][Math.min(4, enemySafeEscapes)];
+      }
     }
 
     const ownTargets = new Map();
@@ -333,7 +352,8 @@
       mobility: Math.round(mobility * 2.2),
       threats: Math.round(threats),
       exposure: Math.round(exposure),
-      kingSafety: Math.round(kingSafety)
+      kingSafety: Math.round(kingSafety),
+      mateNet: Math.round(mateNet)
     };
     return {
       ...parts,
