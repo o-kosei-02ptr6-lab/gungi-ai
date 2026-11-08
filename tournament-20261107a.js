@@ -23,8 +23,10 @@
       if(!Array.isArray(checkedRecords)||!checkedRecords.some(item=>item&&item.id===record.id&&item.finalState))
         return {ok:false,error:"最終局面の保存確認に失敗しました。"};
       const kifu={id:record.id,savedAt:record.savedAt||new Date().toISOString(),source:"実力検証",history:Array.isArray(record.history)?record.history.map(entry=>({...entry})):[]};
-      const old=JSON.parse(localStorage.getItem("gungi-ai-latest-kifus-v1")||"[]");
-      const list=[kifu,...(Array.isArray(old)?old:[]).filter(item=>item&&item.id!==kifu.id)].slice(0,2);
+      const old=JSON.parse(localStorage.getItem("gungi-ai-latest-kifus-v1")||"null");
+      const legacy=JSON.parse(localStorage.getItem("gungi-ai-latest-kifu-v1")||"null");
+      const previous=Array.isArray(old)?old:(legacy&&Array.isArray(legacy.history)?[legacy]:[]);
+      const list=[kifu,...previous.filter(item=>item&&item.id!==kifu.id)].slice(0,2);
       localStorage.setItem("gungi-ai-latest-kifus-v1",JSON.stringify(list));localStorage.setItem("gungi-ai-latest-kifu-v1",JSON.stringify(kifu));
       const verify=JSON.parse(localStorage.getItem("gungi-ai-latest-kifus-v1")||"[]");
       return Array.isArray(verify)&&verify[0]&&verify[0].id===record.id&&verify[0].history.length===kifu.history.length?{ok:true,id:record.id,historyLength:verify[0].history.length}:{ok:false,error:"棋譜の保存確認に失敗しました。"};
