@@ -156,7 +156,7 @@
       entry.from.row === action.from.row && entry.from.col === action.from.col &&
       entry.to.row === action.to.row && entry.to.col === action.to.col).length;
     // 王手回避・反撃王手は完全免除ではなく、反復部分だけを軽減する。
-    penalty = Math.round(penalty * getLoopPenaltyScale());
+    if (penalty) penalty = Math.round(penalty * getLoopPenaltyScale());
     penalty += Math.min(3600, sameRouteCount * 1800);
     penalty += Math.min(400, Math.max(0, recent.length - 1) * 65);
     return penalty;
