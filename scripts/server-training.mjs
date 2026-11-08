@@ -71,6 +71,7 @@ function valueOf(features, weights) {
 function trainTrajectory(trajectory, finalTarget, initial) {
   const weights = { ...initial };
   const trace = Object.fromEntries(FEATURES.map(key => [key, 0]));
+  const updateDiagnostics = Object.fromEntries(FEATURES.map(key => [key, { tdDelta: 0, regularization: 0, net: 0, absolute: 0 }]));
   const alpha = 0.0025, gamma = 0.985, lambda = 0.72, regularization = 0.06;
   let absoluteError = 0, updates = 0;
   for (let i = 0; i < trajectory.length; i++) {
@@ -82,13 +83,19 @@ function trainTrajectory(trajectory, finalTarget, initial) {
     for (const key of FEATURES) {
       trace[key] = gamma * lambda * trace[key] + (current[key] || 0) / 1800;
       const gradient = 1 - currentValue * currentValue;
-      const update = delta * gradient * trace[key] - regularization * (weights[key] - 1);
+      const tdUpdate = delta * gradient * trace[key];
+      const regularizationUpdate = -regularization * (weights[key] - 1);
+      const update = tdUpdate + regularizationUpdate;
+      updateDiagnostics[key].tdDelta += alpha * tdUpdate;
+      updateDiagnostics[key].regularization += alpha * regularizationUpdate;
+      updateDiagnostics[key].net += alpha * update;
+      updateDiagnostics[key].absolute += Math.abs(alpha * update);
       weights[key] = Math.max(0.25, Math.min(2.5, weights[key] + alpha * update));
     }
     absoluteError += Math.abs(delta);
     updates++;
   }
-  return { weights, meanTdError: updates ? absoluteError / updates : 0, updates };
+  return { weights, meanTdError: updates ? absoluteError / updates : 0, updates, updateDiagnostics };
 }
 function trainMateSamples(samples, initial) {
   const weights = { ...initial };
@@ -174,6 +181,12 @@ for (let index = 0; index < gamesRequested; index++) {
       return counts;
     }, {}),
     lastMoves: (result.history || []).slice(-8),
+    fullHistory: result.history || [],
+    repetitionEvents: result.repetitionEvents || [],
+    tdUpdateDiagnostics: learned.updateDiagnostics || {},
+    weightsBefore: beforeWeights,
+    weightsAfterTd: learned.weights,
+    weightsAfterMate: mate.weights,
     plies: result.plies, nodes: result.nodes, captures: result.captures || 0,
     deployments: result.deployments || 0, uniquePositions: result.uniquePositions || 0,
     repeatedPositionVisits: result.repeatedPositionVisits || 0,
@@ -202,7 +215,9 @@ const summary = {
     uniquePositionsThisRun: runResults.reduce((sum, x) => sum + x.uniquePositions, 0),
     repeatedPositionVisitsThisRun: runResults.reduce((sum, x) => sum + x.repeatedPositionVisits, 0),
     threefoldPositionCountThisRun: runResults.reduce((sum, x) => sum + (x.threefoldPositionCount || 0), 0),
-    maxPositionVisitsThisRun: Math.max(1, ...runResults.map(x => x.maxPositionVisits || 1))
+    maxPositionVisitsThisRun: Math.max(1, ...runResults.map(x => x.maxPositionVisits || 1)),
+    repetitionEventCountThisRun: runResults.reduce((sum, x) => sum + (x.repetitionEvents || []).length, 0),
+    medianCycleLengthThisRun: (() => { const a=runResults.flatMap(x=>(x.repetitionEvents||[]).map(e=>e.cycleLength)).sort((x,y)=>x-y); return a.length?a[Math.floor(a.length/2)]:0; })()
   },
   weightDiagnostics: {
     min: Math.min(...Object.values(checkpoint.weights)),
