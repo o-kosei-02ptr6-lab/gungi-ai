@@ -36,6 +36,10 @@ const outputDir = path.join(root, "artifacts");
 const gamesRequested = Math.max(1, Math.min(100, Number(process.env.GAME_COUNT) || 10));
 const maxPlies = Math.max(20, Math.min(108, Number(process.env.MAX_PLIES) || 108));
 const checkpointEvery = Math.max(1, Math.min(10, Number(process.env.CHECKPOINT_EVERY) || 1));
+const searchProfile = process.env.SEARCH_PROFILE === "deep" ? "deep" : "standard";
+const searchOptions = searchProfile === "deep"
+  ? { maxDepth: 8, timeMs: 2600, maxNodes: 60000, maxDeployCandidates: 12, maxTTEntries: 60000 }
+  : {};
 
 function normalizeWeights(input) {
   const weights = {};
@@ -121,7 +125,7 @@ function saveCheckpoint(checkpoint) {
   }, null, 2));
   fs.renameSync(temporary, checkpointPath);
 }
-function playGame(id, candidateWeights, championWeights, candidateSide, seed) {
+function playGame(id, candidateWeights, championWeights, candidateSide, seed, searchOptions) {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error("Self-play game timed out after 30 minutes.")), 30 * 60 * 1000);
     self.postMessage = message => {
@@ -129,7 +133,7 @@ function playGame(id, candidateWeights, championWeights, candidateSide, seed) {
       if (message && message.ok) resolve(message.result);
       else reject(new Error(message && message.error || "Training worker returned no result."));
     };
-    self.onmessage({ data: { id, candidateWeights, championWeights, candidateSide, maxPlies, seed } });
+    self.onmessage({ data: { id, candidateWeights, championWeights, candidateSide, maxPlies, seed, searchOptions } });
   });
 }
 
@@ -144,7 +148,7 @@ const runResults = [];
 const runStartedAt = new Date().toISOString();
 console.log(JSON.stringify({
   event: "training-start", resumed: !!previous, startingGames: checkpoint.games,
-  gamesRequested, maxPlies, startingWeights: checkpoint.weights
+  gamesRequested, maxPlies, searchProfile, searchOptions, startingWeights: checkpoint.weights
 }));
 fs.mkdirSync(outputDir, { recursive: true });
 fs.mkdirSync(stateDir, { recursive: true });
@@ -153,7 +157,7 @@ for (let index = 0; index < gamesRequested; index++) {
   const candidateSide = (checkpoint.games % 2 === 0) ? "先手" : "後手";
   const beforeWeights = { ...checkpoint.weights };
   const gameNumber = checkpoint.games + 1;
-  const result = await playGame("server-training-" + gameNumber, beforeWeights, championWeights, candidateSide, gameNumber * 7919 + 104729);
+  const result = await playGame("server-training-" + gameNumber, beforeWeights, championWeights, candidateSide, gameNumber * 7919 + 104729, searchOptions);
   let learned = { weights: beforeWeights, updates: 0, meanTdError: 0 };
   if (result.trajectory && result.trajectory.length) {
     learned = trainTrajectory(result.trajectory, result.finalTarget, beforeWeights);
@@ -175,7 +179,8 @@ for (let index = 0; index < gamesRequested; index++) {
   totals.tdErrorGames = (totals.tdErrorGames || 0) + (learned.updates ? 1 : 0);
   const gameSummary = {
     game: checkpoint.games, candidateSide, winner: result.winner || null, draw: !!result.draw,
-    startKey: result.startKey, endReason: result.endReason || (result.winner ? "marshal-captured" : "max-plies"),
+    startKey: result.startKey, searchDepth: result.depth || null,
+    endReason: result.endReason || (result.winner ? "marshal-captured" : "max-plies"),
     marshalCount: ["先手","後手"].reduce((counts, side) => {
       counts[side] = result.finalState.board.flat().flat().filter(piece => piece.side === side && piece.name === "帥").length;
       return counts;
@@ -207,7 +212,7 @@ const summary = {
   success: true, mode: "multi-game-server-self-play-training",
   runStartedAt, completedAt: new Date().toISOString(),
   resumed: !!previous, gamesThisRun: runResults.length, totalGames: checkpoint.games,
-  maxPlies, results: runResults, uniqueStartPositions: new Set(runResults.map(x => x.startKey)).size,
+  maxPlies, searchProfile, searchOptions, results: runResults, uniqueStartPositions: new Set(runResults.map(x => x.startKey)).size,
   uniqueFinalPositions: new Set(runResults.map(x => JSON.stringify(x.finalState.board))).size,
   progress: {
     capturesThisRun: runResults.reduce((sum, x) => sum + x.captures, 0),
