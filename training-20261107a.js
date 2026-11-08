@@ -187,18 +187,33 @@
   const GAME_RECORDS_KEY="gungi-ai-tournament-games-v1";
   const MAX_SAVED_GAMES=40;
   function saveTrainingGameRecord(record){
-    if(!record||(!record.winner&&!record.draw)||!record.finalState)return;
+    if(!record||(!record.winner&&!record.draw)||!record.finalState)return {ok:false,error:"対局結果または最終盤面がありません。"};
     try{
       const stored=JSON.parse(localStorage.getItem(GAME_RECORDS_KEY)||"[]");
       const records=Array.isArray(stored)?stored.filter(item=>item&&item.finalState&&(item.winner||item.draw===true)):[];
       records.forEach(item=>{delete item.history;});
-      records.push({...record,history:Array.isArray(record.history)?record.history:[]});
+      const latest={...record,history:Array.isArray(record.history)?record.history:[]};
+      records.push(latest);
       while(records.length>MAX_SAVED_GAMES){
         const oldestDraw=records.findIndex(item=>item.draw===true||!item.winner);
         records.splice(oldestDraw>=0?oldestDraw:0,1);
       }
-      localStorage.setItem(GAME_RECORDS_KEY,JSON.stringify(records));
-    }catch(_){}
+      // Quota recovery: keep the newest game and discard older records only if needed.
+      while(true){
+        try{
+          localStorage.setItem(GAME_RECORDS_KEY,JSON.stringify(records));
+          const check=JSON.parse(localStorage.getItem(GAME_RECORDS_KEY)||"[]");
+          const saved=check.find(item=>item.id===latest.id);
+          if(saved&&Array.isArray(saved.history)&&saved.history.length===latest.history.length)return {ok:true,id:latest.id,historyLength:saved.history.length};
+          return {ok:false,error:"保存後の棋譜確認に失敗しました。"};
+        }catch(error){
+          if(records.length<=1)return {ok:false,error:"端末の保存容量が不足しています: "+(error&&error.message||error)};
+          const oldestDraw=records.findIndex((item,index)=>index<records.length-1&&(item.draw===true||!item.winner));
+          const removeIndex=oldestDraw>=0?oldestDraw:0;
+          records.splice(removeIndex,1);
+        }
+      }
+    }catch(error){return {ok:false,error:"対局記録を保存できませんでした: "+(error&&error.message||error)};}
   }
   async function trainSequential(options={}){
     const continuous=options.continuous===true;
