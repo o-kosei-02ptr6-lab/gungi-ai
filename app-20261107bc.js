@@ -613,7 +613,7 @@
       compareButton.disabled = false;
       compareButton.textContent = "検証を停止";
       status.textContent = "統計的に有効な結論が出るまで、基準AIとの比較を自動で続けます。";
-      info.textContent = "同じ初期配置で先手・後手を入れ替えて比較します。引き分けは共通の評価関数で最終局面の優劣を測り、引き分けは0.3点を基準に、最終局面の優劣に応じて±0.2点補正してペア判定に反映します。最低40局から90%信頼区間を確認し、最大200局まで検証します。";
+      info.textContent = "同じ初期配置で先手・後手を入れ替えて比較します。引き分けは共通の評価関数で最終局面の優劣を測ります。このとき帥の安全性・詰み筋の比重を通常の2.5倍にし、その他の項目は通常どおりにします。引き分けは0.3点を基準に、最終局面の優劣に応じて±0.2点補正してペア判定に反映します。最低40局から90%信頼区間を確認し、最大200局まで検証します。";
       try {
         const result = await window.GungiTournament.compare({
           pairs: 2, maxPlies: 108, maxDepth: 2, timeMs: 60, maxNodes: 700, maxDeployCandidates: 2,
