@@ -623,17 +623,17 @@
       trainButton.disabled = false;
       trainButton.textContent = "学習を停止";
       trainingStatus.textContent = "自己対局学習を開始しました。停止ボタンを押すまで繰り返します。";
-      trainingInfo.textContent = "独立したWorkerで2局を同時に進めます。帥手から実際の帥捕獲につながった手順と、探索で証明できた詰み筋を専用特徴に直接学習します。";
+      trainingInfo.textContent = "端末性能に応じた最大4並列Workerで同時に対局します。帥手から実際の帥捕獲につながった手順と、探索で証明できた詰み筋を専用特徴に直接学習します。";
       let result = null;
       try {
         result = await window.GungiTraining.train({
           continuous: true,
           maxPlies: 108,
-          parallelGames: 2,
+          parallelGames: Math.max(2, Math.min(4, (Number(navigator.hardwareConcurrency) || 4) - 1)),
           shouldStop: () => trainingStopRequested,
           onProgress: p => {
             trainingStatus.textContent = p.phase === "parallel"
-              ? "2局を同時に対局中…（完了 " + p.completedGames + "局）"
+              ? p.parallelGames + "局を同時に対局中…（完了 " + p.completedGames + "局）"
               : "第" + p.game + "局の結果を評価関数へ反映・保存中…";
              if (p.phase === "learning") {
                refreshTournamentGames();
