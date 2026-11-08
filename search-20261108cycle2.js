@@ -294,8 +294,6 @@
           }
         }
         if (attacker && attacker.name === "帥") score += 15;
-        // 往復・同一路線の反復は、探索順でも後回しにして浅い枝刈りを避ける。
-        score -= antiLoopPenalty(state, action) * 2;
       }
       return { action, score };
     }).sort((a,b) => b.score - a.score).map(item => item.action);
