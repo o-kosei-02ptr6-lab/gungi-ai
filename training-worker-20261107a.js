@@ -4,8 +4,8 @@
   self.window = self;
   importScripts(
     "./engine-20261107bb.js?v=20261108antiLoop1",
-    "./evaluation-20261107be.js?v=20261108matedirect1",
-    "./search-20261107bd.js?v=20261108cycleCheck1"
+    "./evaluation-20261107be.js?v=20261108fourImprovements1",
+    "./search-20261107bd.js?v=20261108fourImprovements1"
   );
   const E=self.GungiEngine, AI=self.GungiAI, S=self.GungiSearch;
   const FEATURES=["material","hand","position","activity","mobility","threats","exposure","kingSafety","mateNet"];
@@ -82,7 +82,7 @@
   function positionKey(state){
     const board=state.board.map(row=>row.map(stack=>stack.map(p=>p.side+":"+p.name).join(",")).join("/")).join("|");
     const hands=["先手","後手"].map(side=>state.hands[side].map(p=>p.name).sort().join(",")).join("|");
-    return board+"#"+hands;
+    return board+"#"+hands+"#"+state.turn;
   }
   async function makeStartPosition(seed){
     const rng=makeRng(seed);
@@ -102,8 +102,9 @@
   async function play(message){
     const {candidateWeights,championWeights,candidateSide,maxPlies=108,searchOptions={},seed=1}=message;
     const state=await makeStartPosition(seed),startKey=positionKey(state),trajectory=[],mateSamples=[];
-    const seenPositions=new Set([startKey]);
-    let nodes=0,plies=0,captures=0,deployments=0,repeatedPositionVisits=0,endReason="max-plies";
+    const positionVisits=new Map([[startKey,1]]);
+    let nodes=0,plies=0,captures=0,deployments=0,repeatedPositionVisits=0,
+      threefoldPositionCount=0,maxPositionVisits=1,endReason="max-plies";
     for(;plies<maxPlies&&state.phase==="move";plies++){
       const side=state.turn,isCandidate=side===candidateSide,positionFeatures=snapshotFeatures(state);
       trajectory.push(isCandidate?positionFeatures:Object.fromEntries(FEATURES.map(k=>[k,-positionFeatures[k]])));
@@ -128,9 +129,11 @@
       if(applied.captured)captures+=applied.captured.length;
       if(applied.gameOver&&applied.winner===side)endReason="marshal-captured";
       if(state.phase!=="finished"){
-        const key=positionKey(state);
-        if(seenPositions.has(key))repeatedPositionVisits++;
-        seenPositions.add(key);
+        const key=positionKey(state),visits=(positionVisits.get(key)||0)+1;
+        positionVisits.set(key,visits);
+        if(visits>1)repeatedPositionVisits++;
+        if(visits===3)threefoldPositionCount++;
+        maxPositionVisits=Math.max(maxPositionVisits,visits);
       }
       if(state.phase!=="finished"&&E.isInCheck(state,state.turn))
         mateSamples.push({features:snapshotFeatures(state),attackerSide:side,ply:plies+1,source:"played-check"});
@@ -145,7 +148,8 @@
         target:sample.source==="search-proof"?sample.target:(sample.attackerSide===candidateSide?1:-1)}));
     const oriented=candidateSide==="先手"?trajectory:trajectory.map(f=>Object.fromEntries(FEATURES.map(k=>[k,-f[k]])));
     return {candidateSide,startKey,trajectory:oriented,mateSamples:directSamples,finalTarget,candidateFinalScore:outcome.candidateFinalScore,winner:state.winner||null,draw:state.phase!=="finished"||!state.winner,
-      plies,nodes,captures,deployments,uniquePositions:seenPositions.size,repeatedPositionVisits,endReason,adjudicated,adjudicationScore,
+      plies,nodes,captures,deployments,uniquePositions:positionVisits.size,repeatedPositionVisits,
+      threefoldPositionCount,maxPositionVisits,endReason,adjudicated,adjudicationScore,
       finalState:{board:state.board,hands:state.hands,turn:state.turn,phase:state.phase,winner:state.winner,moveNumber:state.moveNumber},history:state.history.map(entry=>({...entry}))};
   }
   self.onmessage=async event=>{
