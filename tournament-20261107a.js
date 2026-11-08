@@ -11,23 +11,23 @@
   const GAMES_KEY="gungi-ai-tournament-games-v1";
   const MAX_SAVED_GAMES=40;
   function saveGameRecord(record){
-    if(!record||(!record.winner&&!record.draw)||!record.finalState)return;
+    if(!record||(!record.winner&&!record.draw)||!record.finalState)return {ok:false,error:"対局結果または最終盤面がありません。"};
     try{
       const stored=JSON.parse(localStorage.getItem(GAMES_KEY)||"[]");
       const records=Array.isArray(stored)?stored.filter(item=>item&&item.finalState&&(item.winner||item.draw===true)):[];
-      records.forEach(item=>{delete item.history;});
-      records.push({...record,history:Array.isArray(record.history)?record.history:[]});
-      while(records.length>MAX_SAVED_GAMES){
-        const oldestDraw=records.findIndex(item=>item.draw===true||!item.winner);
-        records.splice(oldestDraw>=0?oldestDraw:0,1);
-      }
+      const finalOnly={...record};delete finalOnly.history;records.push(finalOnly);
+      while(records.length>MAX_SAVED_GAMES){const drawIndex=records.findIndex(item=>item.draw===true||!item.winner);records.splice(drawIndex>=0?drawIndex:0,1);}
       localStorage.setItem(GAMES_KEY,JSON.stringify(records));
-    }catch(_){}
+      const kifu={id:record.id,savedAt:record.savedAt||new Date().toISOString(),source:"実力検証",history:Array.isArray(record.history)?record.history.map(entry=>({...entry})):[]};
+      localStorage.setItem("gungi-ai-latest-kifu-v1",JSON.stringify(kifu));
+      const verify=JSON.parse(localStorage.getItem("gungi-ai-latest-kifu-v1")||"null");
+      return verify&&verify.id===record.id&&verify.history.length===kifu.history.length?{ok:true}:{ok:false,error:"棋譜の保存確認に失敗しました。"};
+    }catch(error){return {ok:false,error:"対局記録または棋譜を保存できません: "+(error&&error.message||error)};}
   }
   function listGameRecords(){
     try{
       const records=JSON.parse(localStorage.getItem(GAMES_KEY)||"[]");
-      return Array.isArray(records)?records.filter(item=>item&&item.finalState&&(item.winner||item.draw)):[];
+      return Array.isArray(records)?records.filter(item=>item&&item.finalState&&(item.winner||item.draw===true)):[];
     }catch(_){return [];}
   }
   const other=side=>side==="先手"?"後手":"先手";
@@ -144,7 +144,7 @@
           const first=await playOne(start,"後手",candidate,champion,settings,p=>options.onProgress&&options.onProgress({...p,pair:pairNumber,game:1,totalGames:totals.games}));
           const second=await playOne(start,"先手",candidate,champion,settings,p=>options.onProgress&&options.onProgress({...p,pair:pairNumber,game:2,totalGames:totals.games}));
           for(const [result,candidateSide,gameNumber] of [[first,"後手",1],[second,"先手",2]]){
-            saveGameRecord({id:Date.now().toString(36)+"-"+totals.games, pair:pairNumber, game:gameNumber, candidateSide, winner:result.winner||null, draw:!!result.draw, candidateFinalScore:result.candidateFinalScore, plies:result.plies, savedAt:new Date().toISOString(), finalState:result.finalState, history:result.history});
+            saveGameRecord({id:Date.now().toString(36)+"-"+totals.games, savedAt:new Date().toISOString(), pair:pairNumber, game:gameNumber, candidateSide, winner:result.winner||null, draw:!!result.draw, candidateFinalScore:result.candidateFinalScore, plies:result.plies, savedAt:new Date().toISOString(), finalState:result.finalState, history:result.history});
             const candidateWon=!result.draw&&result.winner===candidateSide;
             const championWon=!result.draw&&!candidateWon;
             totals.games++;totals.nodes+=result.nodes;totals.plies+=result.plies;
