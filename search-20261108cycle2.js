@@ -81,12 +81,30 @@
     if (!action || action.type !== "move") return 0;
     const wasInCheck = E.isInCheck(state, state.turn);
     let child = null;
-    const loopMovePreservesPriority = () => {
+    let loopPenaltyScale = 1;
+    let priorityChecked = false;
+    const getLoopPenaltyScale = () => {
+      if (priorityChecked) return loopPenaltyScale;
+      priorityChecked = true;
       if (!child) child = applyAction(state, action);
-      if (!child) return false;
-      // 王手を解消する手、または相手へ反撃の帥手を掛ける手は反復罰則の対象外。
-      // 王手中でも、王手を放置した往復手だけを抑制する。合法手自体は除外しない。
-      return (wasInCheck && !E.isInCheck(child, state.turn)) || E.isInCheck(child, child.turn);
+      if (!child) return 1;
+      const resolvesCheck = wasInCheck && !E.isInCheck(child, state.turn);
+      const givesCountercheck = E.isInCheck(child, child.turn);
+      if (resolvesCheck) {
+        // 王手を解消する手は最優先。ただし別の安全な応手もある場合、
+        // 同じ往復を選び続けないよう反復罰則を35%だけ残す。
+        const alternatives = generateActions(state, state.turn, 12);
+        const hasOtherSafeResponse = alternatives.some(candidate => {
+          if (actionKey(candidate) === actionKey(action)) return false;
+          const alternativeChild = applyAction(state, candidate);
+          return alternativeChild && !E.isInCheck(alternativeChild, state.turn);
+        });
+        loopPenaltyScale = hasOtherSafeResponse ? 0.35 : 0;
+      } else if (givesCountercheck) {
+        // 反撃王手の優先度は高く保ちつつ、王手を利用した無限往復を防ぐ。
+        loopPenaltyScale = 0.35;
+      }
+      return loopPenaltyScale;
     };
     const destination = state.board[action.to.row][action.to.col];
     // 捕獲や王手回避を往復抑制で妨げない。
@@ -101,7 +119,6 @@
       entry.to.row === action.from.row && entry.to.col === action.from.col);
     if (reverse) {
       // 王手回避・反撃を優先し、それ以外の逆戻りは王手中でも抑制する。
-      if (loopMovePreservesPriority()) return 0;
       const distance = recent.length - 1 - recent.indexOf(reverse);
       penalty = Math.max(penalty, distance <= 1 ? 9000 : 6500);
     }
@@ -131,14 +148,15 @@
       return 0;
     })();
     if (pieceCyclePenalty) {
-      // 周回を閉じる手でも、王手回避・反撃なら優先する。
-      if (loopMovePreservesPriority()) return 0;
+      // 周回を閉じる手でも、王手回避・反撃の優先度を残しながら減点する。
       penalty = Math.max(penalty, pieceCyclePenalty);
     }
     // 同じ駒・同じ経路を短い間隔で繰り返す場合も強く減点する。
     const sameRouteCount = recent.filter(entry =>
       entry.from.row === action.from.row && entry.from.col === action.from.col &&
       entry.to.row === action.to.row && entry.to.col === action.to.col).length;
+    // 王手回避・反撃王手は完全免除ではなく、反復部分だけを軽減する。
+    penalty = Math.round(penalty * getLoopPenaltyScale());
     penalty += Math.min(3600, sameRouteCount * 1800);
     penalty += Math.min(400, Math.max(0, recent.length - 1) * 65);
     return penalty;
