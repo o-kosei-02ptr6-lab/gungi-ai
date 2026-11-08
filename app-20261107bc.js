@@ -158,7 +158,8 @@
     }
     return side+"："+name;
   }
-  function buildSavedReplay(history){
+  function buildSavedReplay(history,finalState){
+    if(!Array.isArray(history)||!history.length)return finalState?[{snapshot:cloneReplaySnapshot(finalState),label:"棋譜未保存・最終局面"}]:[];
     const state=E.createGameState(),frames=[{snapshot:cloneReplaySnapshot(state),label:"初期局面"}];
     let ply=0;
     (Array.isArray(history)?history:[]).forEach(entry=>{
@@ -244,7 +245,7 @@
     const gameLabel=record=>record.source==="自己学習"?"自己学習・第"+record.game+"局":"第"+record.pair+"組・第"+record.game+"局";
     records.forEach(record=>{const option=document.createElement("option");option.value=record.id;option.textContent=gameLabel(record)+"／学習AI "+record.candidateSide+"／"+(record.draw?"引き分け":record.winner+"勝")+"／"+record.plies+"手";select.append(option);});
     const chosen=records.find(record=>record.id===previous)||records[0];select.value=chosen.id;
-    savedReplayFrames=buildSavedReplay(chosen.history);savedReplayIndex=0;
+    savedReplayFrames=buildSavedReplay(chosen.history,chosen.finalState);savedReplayIndex=0;
     renderSavedGameHistory(chosen.history);renderSavedReplayFrame();if(viewer)viewer.hidden=false;
     if(detail){const handCount=side=>Object.keys(E.PIECE_COUNTS).map(name=>name+" "+(chosen.finalState.hands[side]||[]).filter(piece=>piece.name===name).length).join("・");detail.textContent=gameLabel(chosen)+"。学習AI："+chosen.candidateSide+"／結果："+(chosen.draw?"引き分け":chosen.winner+"の勝利")+"／"+chosen.plies+"手。最終手番："+chosen.finalState.turn+".\n先手の持ち駒："+handCount("先手")+"\n後手の持ち駒："+handCount("後手");}
   }
