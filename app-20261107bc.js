@@ -558,7 +558,7 @@
       trainButton.disabled = false;
       trainButton.textContent = "学習を停止";
       trainingStatus.textContent = "自己対局学習を開始しました。停止ボタンを押すまで繰り返します。";
-      trainingInfo.textContent = "独立したWorkerで2局を同時に進めます。引き分けも共通評価で最終局面の優劣を測り、学習目標に反映します。";
+      trainingInfo.textContent = "独立したWorkerで2局を同時に進めます。帥手から実際の帥捕獲につながった手順と、探索で証明できた詰み筋を専用特徴に直接学習します。";
       let result = null;
       try {
         result = await window.GungiTraining.train({
