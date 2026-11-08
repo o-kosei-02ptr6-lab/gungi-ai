@@ -6,6 +6,8 @@ on:
     paths:
       - "search-20261108cycle2.js"
       - "scripts/search-context-regression.mjs"
+      - "training-worker-20261107a.js"
+      - "scripts/server-training.mjs"
       - ".github/workflows/engine-regression.yml"
   pull_request:
     paths:
