@@ -166,7 +166,8 @@ for (let index = 0; index < gamesRequested; index++) {
     game: checkpoint.games, candidateSide, winner: result.winner || null, draw: !!result.draw,
     plies: result.plies, nodes: result.nodes, finalTarget: result.finalTarget,
     candidateFinalScore: result.candidateFinalScore, trajectorySamples: result.trajectory.length,
-    mateSamples: (result.mateSamples || []).length, tdUpdates: learned.updates, mateUpdates: mate.updates
+    mateSamples: (result.mateSamples || []).length, tdUpdates: learned.updates, mateUpdates: mate.updates,
+    finalState: result.finalState
   };
   runResults.push(gameSummary);
   if (checkpoint.games % checkpointEvery === 0 || index === gamesRequested - 1) {
@@ -180,8 +181,8 @@ const summary = {
   runStartedAt, completedAt: new Date().toISOString(),
   resumed: !!previous, gamesThisRun: runResults.length, totalGames: checkpoint.games,
   maxPlies, results: runResults, totals: checkpoint.totals, weights: checkpoint.weights,
-  meanTdError: checkpoint.totals.tdUpdates
-    ? checkpoint.totals.tdErrorSum / Math.max(1, checkpoint.totals.tdUpdates / maxPlies) : 0
+  meanTdError: checkpoint.totals.tdErrorGames
+    ? checkpoint.totals.tdErrorSum / checkpoint.totals.tdErrorGames : 0
 };
 fs.writeFileSync(path.join(outputDir, "server-training-report.json"), JSON.stringify(summary, null, 2));
 saveCheckpoint(checkpoint);
