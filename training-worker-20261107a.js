@@ -3,7 +3,7 @@
   "use strict";
   self.window = self;
   importScripts(
-    "./engine-20261107bb.js?v=20261108antiLoop1",
+    "./engine-20261107bb.js?v=20261108cycle3",
     "./evaluation-20261107be.js?v=20261108fourImprovements1",
     "./search-20261108cycle2.js?v=20261108cycle3"
   );
