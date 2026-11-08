@@ -255,7 +255,7 @@
     loadWeights();
     let candidate=AI.getWeights();
     const champion=championWeights();
-    let completed=0,decisive=0,candidateWins=0,championWins=0,firstWins=0,secondWins=0,draws=0,adjudicatedGames=0,nodes=0,sampleCount=0,totalTdError=0,tdUpdates=0;
+    let completed=0,decisive=0,candidateWins=0,championWins=0,firstWins=0,secondWins=0,draws=0,adjudicatedGames=0,nodes=0,sampleCount=0,totalTdError=0,tdUpdates=0,totalMateUpdates=0;
     const workers=[];
     try{
       for(let i=0;i<parallel;i++)workers.push(createWorker());
