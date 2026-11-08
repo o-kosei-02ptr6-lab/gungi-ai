@@ -412,8 +412,10 @@
             ? getSearchActions(position, position.turn, maxDeployCandidates)
             : (() => {
                 const captures = generateCaptureActions(position, position.turn);
-                // 深い静止探索での分岐爆発を抑えつつ、序盤の王手筋を追加する。
-                if (qply >= 4) return captures;
+                // 静止探索の王手候補は各枝で全合法手を生成するため高コスト。
+                // ルートの静止局面(qply=0)でのみ静かな王手を追加し、
+                // 捕獲応酬の各段階では捕獲手だけを読む。
+                if (qply >= 1) return captures;
                 const captureKeys = new Set(captures.map(actionKey));
                 const checks = generateCheckingActions(position, position.turn, maxDeployCandidates)
                   .filter(action => !captureKeys.has(actionKey(action)));
