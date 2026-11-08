@@ -136,7 +136,7 @@
           repeatedPositionVisits++;
           repetitionEvents.push({ply:plies+1,previousPly:previous.lastPly,cycleLength:plies+1-previous.lastPly,visits,
             move:state.history[state.history.length-1]||null,
-            cycleMoves:state.history.slice(previous.lastPly+12,plies+1).filter(entry=>entry.type==="move").slice(-24)});
+            cycleMoves:state.history.filter(entry=>entry.type==="move").slice(previous.lastPly,plies+1).slice(-24)});
         }
         if(visits===3)threefoldPositionCount++;
         maxPositionVisits=Math.max(maxPositionVisits,visits);
