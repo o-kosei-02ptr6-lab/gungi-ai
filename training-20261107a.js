@@ -150,6 +150,7 @@
   }
   function trainTrajectory(trajectory,finalTarget,initial){
     const weights={...initial},trace=Object.fromEntries(FEATURES.map(key=>[key,0]));
+    const updateDiagnostics=Object.fromEntries(FEATURES.map(key=>[key,{tdDelta:0,regularization:0,net:0,absolute:0}]));
     const alpha=.0025,gamma=.985,lambda=.72,regularization=.06;
     let absoluteError=0,updates=0;
     for(let i=0;i<trajectory.length;i++){
@@ -161,12 +162,18 @@
       for(const key of FEATURES){
         trace[key]=gamma*lambda*trace[key]+(current[key]||0)/1800;
         const gradient=1-currentValue*currentValue;
-        const update=delta*gradient*trace[key]-regularization*(weights[key]-1);
+        const tdUpdate=delta*gradient*trace[key];
+        const regularizationUpdate=-regularization*(weights[key]-1);
+        const update=tdUpdate+regularizationUpdate;
+        updateDiagnostics[key].tdDelta+=alpha*tdUpdate;
+        updateDiagnostics[key].regularization+=alpha*regularizationUpdate;
+        updateDiagnostics[key].net+=alpha*update;
+        updateDiagnostics[key].absolute+=Math.abs(alpha*update);
         weights[key]=Math.max(.25,Math.min(2.5,weights[key]+alpha*update));
       }
       absoluteError+=Math.abs(delta);updates++;
     }
-    return {weights,meanTdError:updates?absoluteError/updates:0,updates};
+    return {weights,meanTdError:updates?absoluteError/updates:0,updates,updateDiagnostics};
   }
   function loadWeights(){
     try{const saved=JSON.parse(localStorage.getItem(STORAGE_KEY)||"null");if(saved&&saved.weights)AI.setWeights(normalizeWeights(saved.weights));}catch(_){}
