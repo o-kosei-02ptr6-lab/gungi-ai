@@ -138,6 +138,47 @@
     });
     list.scrollTop = list.scrollHeight;
   }
+  function renderSavedGameHistory(history){
+    const list=document.getElementById("tournament-game-history");
+    const count=document.getElementById("tournament-game-history-count");
+    if(!list||!count)return;
+    list.replaceChildren();
+    if(!Array.isArray(history)||!history.length){
+      count.textContent="棋譜なし";
+      const empty=document.createElement("li");
+      empty.className="history-empty";
+      empty.textContent="棋譜を保存しているのは直近1局のみです。古い対局には棋譜がありません。";
+      list.append(empty);
+      return;
+    }
+    count.textContent=history.length+"件";
+    let ply=0;
+    history.forEach(entry=>{
+      const item=document.createElement("li");
+      item.className="history-entry history-"+entry.type;
+      const head=document.createElement("strong"),detail=document.createElement("span");
+      const side=entry.side||(entry.piece&&entry.piece.side)||"";
+      const pieceName=entry.piece?entry.piece.name:"駒";
+      if(entry.type==="place"){
+        head.textContent="初期配置 · "+side;
+        detail.textContent=pieceName+"を "+formatSquare(entry.row,entry.col,entry.layer)+" に配置";
+      }else if(entry.type==="deploy"){
+        ply++;head.textContent="第"+ply+"手 · "+side;
+        detail.textContent=pieceName+"を "+formatSquare(entry.row,entry.col,entry.layer)+" に新配置";
+      }else if(entry.type==="move"){
+        ply++;head.textContent="第"+ply+"手 · "+side;
+        const from=formatSquare(entry.from.row,entry.from.col,entry.fromLayer??entry.from.layer);
+        const to=formatSquare(entry.to.row,entry.to.col,entry.toLayer??entry.to.layer);
+        let description=pieceName+" "+from+" → "+to;
+        if(entry.landingMode==="tsuke")description+="（ツケ）";
+        else if(entry.captured&&entry.captured.length)description+="（捕獲："+entry.captured.map(piece=>piece.name).join("・")+"／"+entry.captured.length+"枚）";
+        detail.textContent=description;
+      }else{
+        head.textContent=side||"記録";detail.textContent=pieceName;
+      }
+      item.append(head,detail);list.append(item);
+    });
+  }
   function renderTournamentBoard(snapshot) {
     const board=document.getElementById("tournament-board");if(!board)return;board.replaceChildren();
     for(let row=0;row<E.SIZE;row++)for(let col=0;col<E.SIZE;col++){
@@ -154,11 +195,11 @@
     const select=document.getElementById("tournament-game-select"),detail=document.getElementById("tournament-game-detail"),viewer=document.getElementById("tournament-board-view");
     if(!select||!window.GungiTournament)return;
     const records=window.GungiTournament.listGameRecords().slice().reverse(),previous=selectedId||select.value;select.replaceChildren();
-    if(!records.length){const option=document.createElement("option");option.value="";option.textContent="保存された検証局面はありません";select.append(option);select.disabled=true;if(viewer)viewer.hidden=true;return;}
+    if(!records.length){const option=document.createElement("option");option.value="";option.textContent="保存された検証局面はありません";select.append(option);select.disabled=true;if(viewer)viewer.hidden=true;renderSavedGameHistory([]);return;}
     select.disabled=false;
     const gameLabel=record=>record.source==="自己学習"?"自己学習・第"+record.game+"局":"第"+record.pair+"組・第"+record.game+"局";
     records.forEach(record=>{const option=document.createElement("option");option.value=record.id;option.textContent=gameLabel(record)+"／学習AI "+record.candidateSide+"／"+(record.draw?"引き分け":record.winner+"勝")+"／"+record.plies+"手";select.append(option);});
-    const chosen=records.find(record=>record.id===previous)||records[0];select.value=chosen.id;renderTournamentBoard(chosen.finalState);if(viewer)viewer.hidden=false;
+    const chosen=records.find(record=>record.id===previous)||records[0];select.value=chosen.id;renderTournamentBoard(chosen.finalState);renderSavedGameHistory(chosen.history);if(viewer)viewer.hidden=false;
     if(detail){const handCount=side=>Object.keys(E.PIECE_COUNTS).map(name=>name+" "+(chosen.finalState.hands[side]||[]).filter(piece=>piece.name===name).length).join("・");detail.textContent=gameLabel(chosen)+"。学習AI："+chosen.candidateSide+"／結果："+(chosen.draw?"引き分け":chosen.winner+"の勝利")+"／"+chosen.plies+"手。最終手番："+chosen.finalState.turn+".\n先手の持ち駒："+handCount("先手")+"\n後手の持ち駒："+handCount("後手");}
   }
   const tournamentSelect=document.getElementById("tournament-game-select");
