@@ -4,8 +4,8 @@
   self.window = self;
   importScripts(
     "./engine-20261107bb.js?v=20261108cycle4",
-    "./evaluation-20261107be.js?v=20261108fourImprovements1",
-    "./search-20261108cycle2.js?v=20261108cycle4"
+    "./evaluation-20261107be.js?v=20261108attack2",
+    "./search-20261108cycle2.js?v=20261108attack2"
   );
   const E=self.GungiEngine, AI=self.GungiAI, S=self.GungiSearch;
   const FEATURES=["material","hand","position","activity","mobility","threats","exposure","kingSafety","mateNet"];
@@ -111,7 +111,7 @@
       trajectory.push(candidateSide==="先手"?positionFeatures:Object.fromEntries(FEATURES.map(k=>[k,-positionFeatures[k]])));
       AI.setWeights(isCandidate?candidateWeights:championWeights);
       const urgent=E.isInCheck(state,side);
-      const result=await S.findBestMove(state,{maxDepth:4,timeMs:urgent?650:360,maxNodes:urgent?9000:5200,maxDeployCandidates:6,...searchOptions});
+      const result=await S.findBestMove(state,{maxDepth:5,timeMs:urgent?900:600,maxNodes:urgent?14000:9000,maxDeployCandidates:8,...searchOptions});
       nodes+=result.nodes||0;
       const mateScore=isCandidate?result.score:-result.score;
       if(Number.isFinite(mateScore)&&Math.abs(mateScore)>99900000)
