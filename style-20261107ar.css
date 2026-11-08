@@ -157,3 +157,6 @@ main{width:min(100% - 24px,680px);margin:18px auto 36px;display:grid;gap:14px}.p
 .saved-games{display:grid;gap:9px;margin-top:12px;padding-top:12px;border-top:1px solid #3a4659}.saved-games h3{margin:0;font-size:15px}.saved-games p{font-size:12px;line-height:1.6}#tournament-game-detail{white-space:pre-line;overflow-wrap:anywhere}.tournament-board-wrap{padding:7px;margin-top:2px}.tournament-board{pointer-events:none}.tournament-board .square{cursor:default}
 
 .replay-controls{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-top:10px}.replay-controls button{margin:0!important;padding:8px 10px!important;min-height:36px}.replay-controls input[type=range]{width:100%;margin:5px 0;accent-color:#b9c7e2}.replay-status{margin:4px 0 0;font-size:12px;line-height:1.6;color:var(--text)}.saved-game-history{display:grid;gap:9px;margin-top:18px;padding-top:14px;border-top:1px solid #3a4659}.saved-game-history>p{font-size:12px;line-height:1.6;margin:0}.saved-game-history .history-entry{cursor:pointer}.saved-game-history .history-entry:active{opacity:.7}
+
+.saved-game-history{margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border,#596273)}
+.saved-game-history .history-heading h3{margin:0}
