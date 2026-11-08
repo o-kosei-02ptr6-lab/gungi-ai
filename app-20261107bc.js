@@ -716,6 +716,8 @@
   const compareButton = document.getElementById("compare-ai");
   if (compareButton && window.GungiTournament) {
     compareButton.addEventListener("click", async () => {
+      const status = document.getElementById("compare-status");
+      const info = document.getElementById("compare-info");
       if (trainingRunning || aiThinking) return;
       if (tournamentRunning) {
         tournamentRunning = false;
@@ -727,8 +729,6 @@
       tournamentRunning = true;
       compareButton.disabled = true;
       compareButton.textContent = "比較対局中…";
-      const status = document.getElementById("compare-status");
-      const info = document.getElementById("compare-info");
       compareButton.disabled = false;
       compareButton.textContent = "検証を停止";
       status.textContent = "統計的に有効な結論が出るまで、基準AIとの比較を自動で続けます。";
