@@ -423,14 +423,21 @@
             const child = applyAction(position, action);
             if (!child) continue;
             let score;
+            const quiet = isQuietAction(position, action) && !E.isInCheck(position, position.turn);
+            const reduction = index >= 4 && depth >= 3 && quiet ? 1 + (index >= 10 && depth >= 5 ? 1 : 0) : 0;
+            const penalty = antiLoopPenalty(position, action);
             if (index === 0) {
-              score = -negamax(child, depth - 1, -beta, -alpha, ply + 1) - antiLoopPenalty(position, action);
+              score = -negamax(child, depth - 1, -beta, -alpha, ply + 1) - penalty;
             } else {
-              // Principal Variation Search: later moves first receive a null-window
-              // probe, and are fully re-searched only when they improve alpha.
-              score = -negamax(child, depth - 1, -alpha - 1, -alpha, ply + 1) - antiLoopPenalty(position, action);
+              // PVS + Late Move Reductions: late quiet moves are first searched
+              // one or two plies shallower; an alpha improvement triggers a full-depth re-search.
+              const reducedDepth = Math.max(0, depth - 1 - reduction);
+              score = -negamax(child, reducedDepth, -alpha - 1, -alpha, ply + 1) - penalty;
+              if (reduction && score > alpha) {
+                score = -negamax(child, depth - 1, -alpha - 1, -alpha, ply + 1) - penalty;
+              }
               if (score > alpha && score < beta) {
-                score = -negamax(child, depth - 1, -beta, -alpha, ply + 1) - antiLoopPenalty(position, action);
+                score = -negamax(child, depth - 1, -beta, -alpha, ply + 1) - penalty;
               }
             }
             if (score > bestScore) {
@@ -450,12 +457,12 @@
           return bestScore;
         }
 
-        function searchRoot(root, depth, previousBest) {
+        function searchRoot(root, depth, previousBest, alphaStart = -INF, betaStart = INF) {
           const key = searchContextKey(root);
           const cached = table.get(key);
           const actions = orderActions(root, getSearchActions(root, root.turn, maxDeployCandidates), previousBest || (cached && cached.best), 0, killers, historyScores);
-          let alpha = -INF;
-          const beta = INF;
+          let alpha = alphaStart;
+          const beta = betaStart;
           let bestScore = -INF;
           let bestAction = null;
           for (let index = 0; index < actions.length; index += 1) {
@@ -484,15 +491,24 @@
 
         let completed = null;
         let previousBest = null;
+        let previousScore = 0;
         const fallback = getSearchActions(state, state.turn, maxDeployCandidates)[0] || null;
         if (!fallback) { resolve({ bestMove: null, score: AI.evaluate(state, state.turn), depth: 0, nodes: 0, elapsedMs: now() - started }); return; }
         for (let depth = 1; depth <= maxDepth; depth += 1) {
           try {
             checkStop();
-            const result = searchRoot(state, depth, previousBest);
+            // Aspiration window reduces root-node work after the first completed iteration.
+            const window = depth >= 2 && completed ? 90 : INF;
+            let result = searchRoot(state, depth, previousBest,
+              window === INF ? -INF : previousScore - window,
+              window === INF ? INF : previousScore + window);
+            if (window !== INF && (result.score <= previousScore - window || result.score >= previousScore + window)) {
+              result = searchRoot(state, depth, previousBest);
+            }
             if (result.bestAction) {
               completed = { ...result, depth };
               previousBest = result.bestAction;
+              previousScore = result.score;
             }
           } catch (error) {
             if (!(error instanceof SearchAbort)) throw error;
