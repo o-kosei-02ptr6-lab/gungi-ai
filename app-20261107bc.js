@@ -429,8 +429,8 @@
       render();
       try {
         const result = await window.GungiSearch.findBestSetupPlacement(state, {
-          timeMs: 1400,
-          maxNodes: 700,
+          timeMs: 3000,
+          maxNodes: 2800,
           onProgress: progress => {
             messageElement.textContent = "配置を検討中… " + progress.nodes.toLocaleString() + "候補を評価";
           }
