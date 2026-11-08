@@ -463,7 +463,11 @@
             const child = applyAction(position, action);
             if (!child) continue;
             let score;
-            const quiet = isQuietAction(position, action) && !E.isInCheck(position, position.turn);
+            // 王手を掛ける手は静かな手に見えても戦術手。LMRで浅く読まず、
+            // 王手筋・連続王手・帥の逃げ道封鎖を通常の深さで検証する。
+            const givesCheck = child.phase !== "finished" && E.isInCheck(child, child.turn);
+            const quiet = isQuietAction(position, action) &&
+              !E.isInCheck(position, position.turn) && !givesCheck;
             const reduction = index >= 4 && depth >= 3 && quiet ? 1 + (index >= 10 && depth >= 5 ? 1 : 0) : 0;
             // 同じ局面へ戻る複数駒の循環にも、駒単位の往復とは別に罰点を与える。
             const penalty = antiLoopPenalty(position, action) + repeatedPositionPenalty(child);
