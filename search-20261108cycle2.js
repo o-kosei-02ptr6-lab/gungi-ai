@@ -77,6 +77,12 @@
   function priorPositionCount(state) {
     return priorPositionInfo(state).count;
   }
+  // 同一局面が3回目に現れたら、非王手局面では探索上の引き分けとして扱う。
+  // 初回の再訪では打ち切らず、2回目の再訪（合計3回）で循環を確定する。
+  // 王手中は詰み判定を優先するため、合法な応手の探索を続ける。
+  function isThreefoldRepetition(state) {
+    return priorPositionCount(state) >= 2;
+  }
   // 過去に到達した前進位置を基準に、同じ駒が意味なく後退する動きを軽く抑える。
   // 静的な位置評価だけでは「一度進んだ駒を元へ戻す」履歴上の損失を捉えにくいため、
   // 最高到達前進度からの後退幅が増える場合だけ小さなコストを付ける。
@@ -692,7 +698,7 @@
     getSearchContextKey: searchContextKey,
     getAntiLoopPenalty: antiLoopPenalty,
     getHistoricalRetreatPenalty: historicalRetreatPenalty,
-    getRepeatedPositionPenalty: repeatedPositionPenalty,
+    getRepeatedPositionPenalty: repeatedPositionPenalty,\n    isThreefoldRepetition,
     cloneState
   });
 })();
