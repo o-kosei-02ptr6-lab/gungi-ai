@@ -14,7 +14,7 @@
     if(!record||(!record.winner&&!record.draw)||!record.finalState)return;
     try{
       const stored=JSON.parse(localStorage.getItem(GAMES_KEY)||"[]");
-      const records=Array.isArray(stored)?stored.filter(item=>item&&item.finalState&&(item.winner||item.draw)):[];
+      const records=Array.isArray(stored)?stored.filter(item=>item&&item.finalState&&(item.winner||item.draw===true)):[];
       records.forEach(item=>{delete item.history;});
       records.push({...record,history:Array.isArray(record.history)?record.history:[]});
       while(records.length>MAX_SAVED_GAMES){
