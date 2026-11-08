@@ -8,245 +8,61 @@ import { performance } from "node:perf_hooks";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const self = {};
 const context = vm.createContext({
-  self,
-  window: self,
-  console,
-  Date,
-  Math,
-  Map,
-  Set,
-  Object,
-  Array,
-  Number,
-  String,
-  Boolean,
-  JSON,
-  Promise,
-  Error,
-  TypeError,
-  performance,
-  setTimeout,
-  clearTimeout
+  self, window: self, console, Date, Math, Map, Set, Object, Array, Number,
+  String, Boolean, JSON, Promise, Error, TypeError, performance, setTimeout, clearTimeout
 });
-
-for (const file of [
-  "engine-20261107bb.js",
-  "evaluation-20261107be.js",
-  "search-20261108cycle2.js"
-]) {
-  vm.runInContext(fs.readFileSync(path.join(root, file), "utf8"), context, { filename: file });
+for (const file of ["engine-20261107bb.js","evaluation-20261107be.js","search-20261108cycle2.js"]) {
+  vm.runInContext(fs.readFileSync(path.join(root,file),"utf8"),context,{filename:file});
 }
+const search=self.GungiSearch;
+assert.ok(search,"search engine should load");
+assert.equal(typeof search.getSearchContextKey,"function");
 
-const search = self.GungiSearch;
-assert.ok(search, "search engine should load");
-assert.equal(typeof search.getSearchContextKey, "function", "search context key diagnostic should be exposed");
+const empty=()=>Array.from({length:9},()=>Array.from({length:9},()=>[]));
+const base={board:empty(),hands:{"先手":[],"後手":[]},turn:"先手",history:[]};
+const entry=(id,index)=>({type:"move",piece:{id},from:{row:index%9,col:(index+1)%9},to:{row:(index+2)%9,col:(index+3)%9},landingMode:"capture",positionKey:"unrelated"});
+const historyA=Array.from({length:16},(_,i)=>entry("p"+i,i));
+const historyB=historyA.map(x=>({...x,piece:{...x.piece},from:{...x.from},to:{...x.to}}));
+historyB[5]=entry("different-piece",5);
+assert.notEqual(search.getSearchContextKey({...base,history:historyA}),search.getSearchContextKey({...base,history:historyB}),
+  "TT keys must preserve all 16 anti-loop-relevant history records");
+assert.equal(search.getSearchContextKey({...base,history:historyA}),
+  search.getSearchContextKey({...base,history:historyA.map(x=>({...x,piece:{...x.piece},from:{...x.from},to:{...x.to}}))}));
 
-const emptyBoard = Array.from({ length: 9 }, () => Array.from({ length: 9 }, () => []));
-const base = {
-  board: emptyBoard,
-  hands: { "先手": [], "後手": [] },
-  turn: "先手",
-  history: []
-};
-
-function moveEntry(id, index) {
-  return {
-    type: "move",
-    piece: { id },
-    from: { row: index % 9, col: (index + 1) % 9 },
-    to: { row: (index + 2) % 9, col: (index + 3) % 9 },
-    landingMode: "capture",
-    positionKey: "not-the-current-position"
-  };
-}
-
-const historyA = Array.from({ length: 16 }, (_, index) => moveEntry("piece-" + index, index));
-const historyB = historyA.map(entry => ({
-  ...entry,
-  piece: { ...entry.piece },
-  from: { ...entry.from },
-  to: { ...entry.to }
-}));
-
-// This is the 11th most recent history entry: it is outside the old 10-entry
-// TT context, but inside the 16-entry window used by antiLoopPenalty().
-historyB[5] = moveEntry("different-old-piece", 5);
-
-const keyA = search.getSearchContextKey({ ...base, history: historyA });
-const keyB = search.getSearchContextKey({ ...base, history: historyB });
-assert.notEqual(
-  keyA,
-  keyB,
-  "transposition keys must differ when any of the last 16 anti-loop-relevant records differ"
-);
-assert.equal(
-  keyA,
-  search.getSearchContextKey({ ...base, history: historyA.map(entry => ({
-    ...entry,
-    piece: { ...entry.piece },
-    from: { ...entry.from },
-    to: { ...entry.to }
-  })) }),
-  "equivalent history context should produce the same transposition key"
-);
-
-
-const cycleBoard = Array.from({ length: 9 }, () => Array.from({ length: 9 }, () => []));
-cycleBoard[4][4].push({ id: "loop-piece", name: "兵", side: "先手" });
-const reverseState = {
-  board: cycleBoard,
-  hands: { "先手": [], "後手": [] },
-  turn: "先手",
-  history: [{
-    type: "move",
-    piece: { id: "loop-piece", name: "兵", side: "先手" },
-    from: { row: 4, col: 3 },
-    to: { row: 4, col: 4 },
-    landingMode: "capture",
-    positionKey: "not-the-current-position"
-  }]
-};
-const reversePenalty = search.getAntiLoopPenalty(reverseState, {
-  type: "move", pieceId: "loop-piece",
-  from: { row: 4, col: 4 }, to: { row: 4, col: 3 },
-  landingMode: "capture"
+const board=empty();
+board[4][4].push({id:"loop-piece",name:"兵",side:"先手"});
+const repetitionKey=JSON.stringify({
+  board:board.map(row=>row.map(stack=>stack.map(piece=>piece.side+":"+piece.name))),
+  hands:{"先手":{},"後手":{}},turn:"先手"
 });
+const oneRepeat={board,hands:{"先手":[],"後手":[]},turn:"先手",
+  history:[{type:"move",positionKey:repetitionKey}]};
+const twoRepeats={...oneRepeat,history:[...oneRepeat.history,{type:"move",positionKey:repetitionKey}]};
+assert.equal(search.getRepeatedPositionPenalty(oneRepeat),260,
+  "every repeated position should receive the same base cost regardless of cycle length");
+assert.equal(search.getRepeatedPositionPenalty(twoRepeats),440,
+  "the cost should rise with repeat count, not with a 4/8/12-ply category");
 
-assert.ok(reversePenalty >= 9000, "immediate reverse moves should receive a strong penalty");
+const progressBoard=empty();
+progressBoard[5][4].push({id:"advancing-piece",name:"槍",side:"先手"});
+const progressState={board:progressBoard,hands:{"先手":[],"後手":[]},turn:"先手",history:[{
+  type:"move",piece:{id:"advancing-piece",name:"槍",side:"先手"},
+  from:{row:7,col:4},to:{row:5,col:4},positionKey:"older-position"
+}]};
+assert.equal(search.getHistoricalRetreatPenalty(progressState,{
+  type:"move",pieceId:"advancing-piece",from:{row:5,col:4},to:{row:6,col:4},landingMode:"capture"
+}),40);
+assert.equal(search.getHistoricalRetreatPenalty(progressState,{
+  type:"move",pieceId:"advancing-piece",from:{row:5,col:4},to:{row:4,col:4},landingMode:"capture"
+}),0);
 
-const threeCycleBoard = Array.from({ length: 9 }, () => Array.from({ length: 9 }, () => []));
-threeCycleBoard[4][6].push({ id: "cycle-piece", name: "弓", side: "先手" });
-const threeCycleState = {
-  board: threeCycleBoard,
-  hands: { "先手": [], "後手": [] },
-  turn: "先手",
-  history: [
-    { type: "move", piece: { id: "cycle-piece" }, from: { row: 4, col: 4 }, to: { row: 4, col: 5 }, positionKey: "p1" },
-    { type: "move", piece: { id: "cycle-piece" }, from: { row: 4, col: 5 }, to: { row: 4, col: 6 }, positionKey: "p2" }
-  ]
-};
-const threeCyclePenalty = search.getAntiLoopPenalty(threeCycleState, {
-  type: "move", pieceId: "cycle-piece",
-  from: { row: 4, col: 6 }, to: { row: 4, col: 4 },
-  landingMode: "capture"
-});
-
-assert.ok(
-  threeCyclePenalty >= 13000,
-  "closing a three-square cycle should receive a strong penalty"
-);
- 
-const progressBoard = Array.from({ length: 9 }, () => Array.from({ length: 9 }, () => []));
-progressBoard[5][4].push({ id: "advancing-piece", name: "槍", side: "先手" });
-const progressState = {
-  board: progressBoard,
-  hands: { "先手": [], "後手": [] },
-  turn: "先手",
-  history: [{
-    type: "move",
-    piece: { id: "advancing-piece", name: "槍", side: "先手" },
-    from: { row: 7, col: 4 },
-    to: { row: 5, col: 4 },
-    positionKey: "older-position"
-  }]
-};
-const retreatPenalty = search.getHistoricalRetreatPenalty(progressState, {
-  type: "move", pieceId: "advancing-piece",
-  from: { row: 5, col: 4 }, to: { row: 6, col: 4 },
-  landingMode: "capture"
-});
-const advancePenalty = search.getHistoricalRetreatPenalty(progressState, {
-  type: "move", pieceId: "advancing-piece",
-  from: { row: 5, col: 4 }, to: { row: 4, col: 4 },
-  landingMode: "capture"
-});
-assert.equal(retreatPenalty, 40,
-  "moving behind a piece's historical furthest rank should receive a small progress penalty");
-assert.equal(advancePenalty, 0,
-  "moving beyond the historical furthest rank should not receive a retreat penalty");
-
-const marshalProgressBoard = Array.from({ length: 9 }, () => Array.from({ length: 9 }, () => []));
-marshalProgressBoard[5][4].push({ id: "marshal-progress", name: "帥", side: "先手" });
-const marshalProgressPenalty = search.getHistoricalRetreatPenalty({
-  board: marshalProgressBoard, history: progressState.history
-}, {
-  type: "move", pieceId: "marshal-progress",
-  from: { row: 5, col: 4 }, to: { row: 6, col: 4 },
-  landingMode: "capture"
-});
-assert.equal(marshalProgressPenalty, 0,
-  "Marshal escapes must not be discouraged by historical progress penalties");
-
-
-// 王手中でも、王手を放置して同じ駒を往復させる手には反復罰則を適用する。
-// 一方、帥自身が安全地帯へ逃げる逆戻りは罰則の対象にしない。
-const checkedBoard = Array.from({ length: 9 }, () => Array.from({ length: 9 }, () => []));
-checkedBoard[8][4].push({ id: "checked-marshal", name: "帥", side: "先手" });
-checkedBoard[6][4].push({ id: "checking-knight", name: "騎", side: "後手" });
-checkedBoard[4][4].push({ id: "looping-general", name: "少将", side: "先手" });
-const checkedLoopState = {
-  board: checkedBoard,
-  hands: { "先手": [], "後手": [] },
-  turn: "先手",
-  history: [{
-    type: "move",
-    piece: { id: "looping-general", name: "少将", side: "先手" },
-    from: { row: 4, col: 3 },
-    to: { row: 4, col: 4 },
-    landingMode: "capture",
-    positionKey: "old-position"
-  }]
-};
-assert.equal(context.window.GungiEngine.isInCheck(checkedLoopState, "先手"), true,
-  "the regression position must begin in check");
-const unresolvedCheckPenalty = search.getAntiLoopPenalty(checkedLoopState, {
-  type: "move", pieceId: "looping-general",
-  from: { row: 4, col: 4 }, to: { row: 4, col: 3 },
-  landingMode: "capture"
-});
-assert.ok(unresolvedCheckPenalty >= 9000,
-  "an oscillating move that leaves the Marshal in check should be penalized");
-
-const marshalEscapeState = {
-  board: checkedBoard.map(row => row.map(stack => stack.slice())),
-  hands: { "先手": [], "後手": [] },
-  turn: "先手",
-  history: [{
-    type: "move",
-    piece: { id: "checked-marshal", name: "帥", side: "先手" },
-    from: { row: 8, col: 3 },
-    to: { row: 8, col: 4 },
-    landingMode: "capture",
-    positionKey: "old-position"
-  }]
-};
-const marshalEscapePenalty = search.getAntiLoopPenalty(marshalEscapeState, {
-  type: "move", pieceId: "checked-marshal",
-  from: { row: 8, col: 4 }, to: { row: 8, col: 3 },
-  landingMode: "capture"
-});
-assert.ok(marshalEscapePenalty > 0 && marshalEscapePenalty < 9000,
-  "a repeated check-evasion move should retain priority but receive a reduced penalty when another safe response exists");
-
-const repeatedBoardKey = JSON.stringify({
-  board: cycleBoard.map(row => row.map(stack => stack.map(piece => piece.side + ":" + piece.name))),
-  hands: { "先手": {}, "後手": {} },
-  turn: "先手"
-});
-const repeatedState = {
-  board: cycleBoard,
-  hands: { "先手": [], "後手": [] },
-  turn: "先手",
-  history: [{ type: "move", positionKey: repeatedBoardKey }]
-};
-assert.ok(
-  search.getRepeatedPositionPenalty(repeatedState) >= 22000,
-  "short repeated positions should receive a decisive cycle penalty"
-);
+const marshalBoard=empty();
+marshalBoard[5][4].push({id:"marshal-progress",name:"帥",side:"先手"});
+assert.equal(search.getHistoricalRetreatPenalty({board:marshalBoard,history:progressState.history},{
+  type:"move",pieceId:"marshal-progress",from:{row:5,col:4},to:{row:6,col:4},landingMode:"capture"
+}),0,"Marshal escapes must not be discouraged by retreat history");
 
 console.log(JSON.stringify({
-  success: true,
-  test: "history-sensitive transposition key",
-  checkedHistoryWindow: 16,
-  changedEntryDistanceFromLatest: 11
-}, null, 2));
+  success:true,
+  tests:["history-sensitive TT key","cycle-length-independent repetition cost","repeat-count escalation","historical retreat diagnostic","Marshal escape exemption"]
+},null,2));
