@@ -232,12 +232,13 @@
     }catch(error){return {ok:false,error:"端末の保存容量または保存領域の問題です: "+(error&&error.message||error)};}
   }
   function createWorker(){
-    return new Worker("./training-worker-20261107a.js?v=20261108setupsearch2");
+    return new Worker("./training-worker-20261107a.js?v=20261108speedpass1");
   }
   async function trainParallel(options={}){
     const continuous=options.continuous===true;
     const games=Math.max(1,Math.min(4,Number(options.games)||2));
-    const parallel=Math.max(2,Math.min(4,Number(options.parallelGames)||2));
+    const deviceWorkers=Math.max(2,Math.min(4,(Number(navigator.hardwareConcurrency)||4)-1));
+    const parallel=Math.max(2,Math.min(deviceWorkers,4,Number(options.parallelGames)||deviceWorkers));
     const maxPlies=Math.max(20,Math.min(108,Number(options.maxPlies)||108));
     let previousGames=0;
     try{const previous=JSON.parse(localStorage.getItem(STORAGE_KEY)||"null");previousGames=previous&&Number.isFinite(previous.games)?previous.games:0;}catch(_){}
@@ -308,7 +309,8 @@
     return trainParallel({...options,parallelGames:2});
   }
   async function train(options={}){
-    const requested=Math.max(1,Math.min(4,Number(options.parallelGames)||2));
+    const deviceWorkers=Math.max(2,Math.min(4,(Number(navigator.hardwareConcurrency)||4)-1));
+    const requested=Math.max(2,Math.min(deviceWorkers,4,Number(options.parallelGames)||deviceWorkers));
     if(requested>1&&typeof Worker!=="undefined")return trainParallel({...options,parallelGames:requested});
     return trainSequential(options);
   }
