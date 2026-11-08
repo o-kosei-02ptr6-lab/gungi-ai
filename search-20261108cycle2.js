@@ -698,7 +698,8 @@
     getSearchContextKey: searchContextKey,
     getAntiLoopPenalty: antiLoopPenalty,
     getHistoricalRetreatPenalty: historicalRetreatPenalty,
-    getRepeatedPositionPenalty: repeatedPositionPenalty,\n    isThreefoldRepetition,
+    getRepeatedPositionPenalty: repeatedPositionPenalty,
+    isThreefoldRepetition,
     cloneState
   });
 })();
