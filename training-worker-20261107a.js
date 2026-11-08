@@ -37,56 +37,28 @@
       setupDone:{...state.setupDone}
     };
   }
-  function randomPlacement(state,side){
-    const hand=state.hands[side],count=state.history.filter(x=>x.type==="place"&&x.side===side).length;
-    const preferred=count===0?[hand.find(p=>p.name==="帥")].filter(Boolean):[random(hand)];
-    const orderedPieces=preferred.concat(hand.filter(p=>!preferred.some(q=>q.id===p.id)));
-    const enemy=side==="先手"?"後手":"先手";
-    let safeOwn=[],safeBoth=[],legalFallback=[];
-    for(const piece of orderedPieces){
-      if(!piece)continue;
-      const squares=[];
-      for(let row=0;row<E.SIZE;row++)for(let col=0;col<E.SIZE;col++){
-        // 帥は各陣営の最前列に単独配置する。
-        if(piece.name==="帥" && row!==(side==="先手"?E.SIZE-1:0))continue;
-        if(E.canPlacePiece(state,row,col,piece))squares.push({row,col});
-      }
-      // まず選んだ駒で探し、帥手を解消できない場合だけ他の駒も調べる。
-      const ownSafeForPiece=[];
-      for(const at of squares){
-        const next=cloneSetupState(state);
-        const result=E.placePiece(next,at.row,at.col,side,piece.id);
-        if(!result.ok)continue;
-        const candidate={piece,at};
-        legalFallback.push(candidate);
-        if(E.isInCheck(next,side))continue;
-        ownSafeForPiece.push(candidate);
-        if(!E.isInCheck(next,enemy))safeBoth.push(candidate);
-      }
-      if(ownSafeForPiece.length){
-        safeOwn=ownSafeForPiece;
-        // 選んだ駒だけで安全な配置が見つかったら、他の駒は調べない。
-        break;
-      }
+  async function randomPlacement(state,side){
+    if(state.setupTurn!==side)throw new Error("配置順が一致しません。");
+    const result=await S.findBestSetupPlacement(state,{timeMs:120,maxNodes:260});
+    if(!result.bestMove)throw new Error(side+"の配置可能なマスがありません。");
+    if(result.finishRecommended){
+      const finish=E.finishSetup(state,side);
+      if(!finish.ok)throw new Error("自己学習AIの「済」に失敗: "+finish.reason);
     }
-    // 自分の帥を守り、可能なら相手への配置直後の帥手も作らない。
-    const choices=safeBoth.length?safeBoth:(safeOwn.length?safeOwn:legalFallback);
-    if(!choices.length)throw new Error(side+"の配置可能なマスがありません。");
-    const chosen=random(choices),result=E.placePiece(state,chosen.at.row,chosen.at.col,side,chosen.piece.id);
-    if(!result.ok)throw new Error("自己対局の初期配置に失敗: "+result.reason);
-    if(chosen.piece.name==="帥" && (state.board[chosen.at.row][chosen.at.col].length!==1 ||
-      chosen.at.row!==(side==="先手"?E.SIZE-1:0)))
-      throw new Error("帥を自陣の最前列に単独配置できませんでした。");
+    const action=result.bestMove,placed=E.placePiece(state,action.row,action.col,side,action.pieceId);
+    if(!placed.ok)throw new Error("自己学習AIの配置に失敗: "+placed.reason);
+    if(E.isInCheck(state,side))throw new Error("自己学習AIが帥手を受ける配置を選びました。");
+    if(action.pieceName==="帥"&&(state.board[action.row][action.col].length!==1||
+      action.row!==(side==="先手"?E.SIZE-1:0)))throw new Error("帥の配置規則に違反しました。");
   }
-  function makeStartPosition(){
-    // 両陣営の帥が初手から取られる配置は作り直す。
+  async function makeStartPosition(){
     for(let attempt=0;attempt<20;attempt++){
       const state=E.createGameState();
-      for(let i=0;i<12;i++){randomPlacement(state,"先手");randomPlacement(state,"後手");}
+      for(let i=0;i<12;i++){await randomPlacement(state,"先手");await randomPlacement(state,"後手");}
       for(const side of ["先手","後手"]){
         const finish=E.finishSetup(state,side);
         if(!finish.ok)throw new Error("自己対局の「済」に失敗: "+finish.reason);
-        randomPlacement(state,side);
+        await randomPlacement(state,side);
       }
       if(state.phase!=="move")throw new Error("初期配置を完了できませんでした。");
       if(!E.isInCheck(state,"先手")&&!E.isInCheck(state,"後手"))return state;
@@ -95,7 +67,7 @@
   }
   async function play(message){
     const {candidateWeights,championWeights,candidateSide,maxPlies=108,searchOptions={}}=message;
-    const state=makeStartPosition(),trajectory=[],mateSamples=[];
+    const state=await makeStartPosition(),trajectory=[],mateSamples=[];
     let nodes=0,plies=0;
     for(;plies<maxPlies&&state.phase==="move";plies++){
       const side=state.turn,isCandidate=side===candidateSide,positionFeatures=snapshotFeatures(state);
