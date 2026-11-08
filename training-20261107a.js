@@ -296,7 +296,7 @@
   }
 
   function createWorker(){
-    return new Worker("./training-worker-20261107a.js?v=20261108latestkifu1");
+    return new Worker("./training-worker-20261107a.js?v=20261108trainingrecordfix2");
   }
   async function trainParallel(options={}){
     const continuous=options.continuous===true;
@@ -345,7 +345,7 @@
           if(r.adjudicated)adjudicatedGames++;
           if(r.draw)draws++;
           else{decisive++;if(r.finalTarget>0)candidateWins++;else championWins++;if(r.winner==="先手")firstWins++;else secondWins++;}
-          saveTrainingGameRecord({id:"training-"+Date.now().toString(36)+"-"+completed,pair:null,game:completed+1,source:"自己学習",candidateSide:r.candidateSide,winner:r.winner||null,draw:!!r.draw,candidateFinalScore:r.candidateFinalScore,plies:r.plies,savedAt:new Date().toISOString(),finalState:r.finalState,history:r.history});
+          const recordSave=saveTrainingGameRecord({id:"training-"+Date.now().toString(36)+"-"+completed,pair:null,game:completed+1,source:"自己学習",candidateSide:r.candidateSide,winner:r.winner||null,draw:!!r.draw,candidateFinalScore:r.candidateFinalScore,plies:r.plies,savedAt:new Date().toISOString(),finalState:r.finalState,history:r.history});
           if(r.trajectory.length){
             const learned=trainTrajectory(r.trajectory,r.finalTarget,candidate);
             candidate=learned.weights;totalTdError+=learned.meanTdError;tdUpdates+=learned.updates;
@@ -355,7 +355,7 @@
           if(options.onProgress)options.onProgress({
             game:completed,games,ply:r.plies,nodes,phase:"learning",target:r.finalTarget,
             adjudicated:r.adjudicated,adjudicationScore:r.adjudicationScore,adjudicatedGames,
-            parallelGames:results.length,completedGames:completed,mateUpdates:totalMateUpdates,
+            parallelGames:results.length,completedGames:completed,recordSaved:recordSave.ok,recordSaveError:recordSave.error||'',recordId:recordSave.id||'',recordHistoryLength:recordSave.historyLength||0,mateUpdates:totalMateUpdates,
             meanTdError:tdUpdates?totalTdError/tdUpdates:0,candidateWins,championWins,firstWins,secondWins,draws
           });
         }
