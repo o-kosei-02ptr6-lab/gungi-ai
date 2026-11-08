@@ -5,7 +5,7 @@
   importScripts(
     "./engine-20261107bb.js?v=20261108antiLoop1",
     "./evaluation-20261107be.js?v=20261108matedirect1",
-    "./search-20261107bd.js?v=20261108nnueLmr1"
+    "./search-20261107bd.js?v=20261108cycleCheck1"
   );
   const E=self.GungiEngine, AI=self.GungiAI, S=self.GungiSearch;
   const FEATURES=["material","hand","position","activity","mobility","threats","exposure","kingSafety","mateNet"];
