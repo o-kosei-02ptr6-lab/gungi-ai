@@ -314,6 +314,7 @@
     // 攻めの拠点として信頼しにくいため、圧力への寄与を大きく割り引く。
     if (enemyMarshalForStack) {
       let safeApproachPressure = 0;
+      let safeApproachAttackers = 0;
       for (let row = 0; row < E.SIZE; row += 1) {
         for (let col = 0; col < E.SIZE; col += 1) {
           const stack = state.board[row][col];
@@ -322,11 +323,19 @@
           const distance = Math.abs(row - enemyMarshalForStack.row) +
             Math.abs(col - enemyMarshalForStack.col);
           if (distance > 3) continue;
-          const base = distance === 1 ? 30 : distance === 2 ? 18 : 8;
-          safeApproachPressure += base * (enemyTargets.has(row + "," + col) ? 0.35 : 1);
+          const safe = !enemyTargets.has(row + "," + col);
+          const base = distance === 1 ? 42 : distance === 2 ? 26 : 12;
+          safeApproachPressure += base * (safe ? 1 : 0.35);
+          if (safe) safeApproachAttackers += 1;
         }
       }
-      mateNet += Math.min(96, safeApproachPressure);
+      // 敵帥の近くに安全な攻撃駒が複数いる場合、単独の接近よりも
+      // 包囲を継続しやすい形として追加評価する。
+      mateNet += Math.min(128, safeApproachPressure);
+      if (safeApproachAttackers >= 2) {
+        mateNet += Math.min(72, (safeApproachAttackers - 1) * 18 +
+          (safeApproachAttackers >= 3 ? 18 : 0));
+      }
     }
 
     // 敵陣への進出度に応じた基本ボーナスに、敵帥とのマンハッタン距離倍率を掛ける。
