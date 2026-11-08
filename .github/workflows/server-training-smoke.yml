@@ -1,0 +1,35 @@
+name: Server self-play smoke test
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_plies:
+        description: "Maximum plies for the first server-side test (1-108)"
+        required: true
+        default: "108"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  one-game:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Run one self-play game on the server
+        env:
+          MAX_PLIES: ${{ inputs.max_plies }}
+        run: node scripts/server-training-smoke.mjs
+      - name: Upload game result
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-training-smoke
+          path: artifacts/server-training-smoke.json
+          if-no-files-found: error
