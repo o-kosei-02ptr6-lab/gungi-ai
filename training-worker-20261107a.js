@@ -39,7 +39,7 @@
   }
   async function randomPlacement(state,side){
     if(state.setupTurn!==side)throw new Error("配置順が一致しません。");
-    const result=await S.findBestSetupPlacement(state,{timeMs:120,maxNodes:260});
+    const result=await S.findBestSetupPlacement(state,{timeMs:120,maxNodes:260,allowFinish:false});
     if(!result.bestMove)throw new Error(side+"の配置可能なマスがありません。");
     if(result.finishRecommended){
       const finish=E.finishSetup(state,side);
