@@ -69,6 +69,8 @@
   function countSafeMarshalEscapes(state, side, moves, marshal) {
     if (!marshal) return 0;
     let safe = 0;
+    // 評価側が参照するのは最大4個まで。必要数に達したら盤面複製と
+    // 合法性判定を打ち切り、評価値を変えずに余分な処理を省く。
     for (const move of moves) {
       if (move.piece.id !== marshal.piece.id) continue;
       const nextState = {
@@ -83,13 +85,17 @@
         ? "tsuke" : "capture";
       const result = E.movePiece(nextState, move.from.row, move.from.col,
         move.to.row, move.to.col, landingMode);
-      if (result.ok && !result.gameOver && !E.isInCheck(nextState, side)) safe += 1;
+      if (result.ok && !result.gameOver && !E.isInCheck(nextState, side)) {
+        safe += 1;
+        if (safe >= 4) break;
+      }
     }
     return safe;
   }
 
   function countSafeCheckResponses(state, side, moves) {
     let safe = 0;
+    // 詰み評価で必要なのは0〜4の区別だけなので、4応手で打ち切る。
     for (const move of moves) {
       const nextState = {
         ...state, turn: side,
@@ -100,7 +106,10 @@
       const destination = nextState.board[move.to.row][move.to.col];
       const landingMode = destination.length && destination[destination.length - 1].side === side ? "tsuke" : "capture";
       const result = E.movePiece(nextState, move.from.row, move.from.col, move.to.row, move.to.col, landingMode);
-      if (result.ok && ((result.gameOver && result.winner === side) || !E.isInCheck(nextState, side))) safe += 1;
+      if (result.ok && ((result.gameOver && result.winner === side) || !E.isInCheck(nextState, side))) {
+        safe += 1;
+        if (safe >= 4) break;
+      }
     }
     return safe;
   }
