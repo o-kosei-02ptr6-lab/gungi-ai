@@ -463,7 +463,7 @@
               if (!child) continue;
               const score = child.phase === "finished"
                 ? (child.winner === position.turn ? MATE - ply - 1 : -MATE + ply + 1)
-                : -AI.evaluate(child, child.turn);
+                : -evaluateMemo(child, child.turn, memo);
               if (score > bestEvasion) bestEvasion = score;
             }
             return bestEvasion === -INF ? -MATE + ply : bestEvasion;
@@ -598,7 +598,7 @@
         let previousBest = null;
         let previousScore = 0;
         const fallback = getSearchActions(root, root.turn, maxDeployCandidates, memo)[0] || null;
-        if (!fallback) { resolve({ bestMove: null, score: AI.evaluate(root, root.turn), depth: 0, nodes: 0, elapsedMs: now() - started }); return; }
+        if (!fallback) { resolve({ bestMove: null, score: evaluateMemo(root, root.turn, memo), depth: 0, nodes: 0, elapsedMs: now() - started }); return; }
         for (let depth = 1; depth <= maxDepth; depth += 1) {
           try {
             checkStop();
@@ -625,7 +625,7 @@
           if (now() >= deadline || stats.nodes >= maxNodes) break;
           await new Promise(done => setTimeout(done, 0));
         }
-        const result = completed || { bestAction: fallback, score: AI.evaluate(root, root.turn), depth: 0 };
+        const result = completed || { bestAction: fallback, score: evaluateMemo(root, root.turn, memo), depth: 0 };
         resolve({
           bestMove: result.bestAction,
           score: result.score,
