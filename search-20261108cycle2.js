@@ -17,6 +17,27 @@
   const now = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
   const other = side => side === "先手" ? "後手" : "先手";
 
+  // Search positions are immutable. Memoize repeated rule/evaluation queries
+  // within one search only; this avoids stale entries across turns or weight updates.
+  function isInCheckMemo(state, side, memo) {
+    if (!memo) return E.isInCheck(state, side);
+    let bySide = memo.checks.get(state);
+    if (!bySide) { bySide = new Map(); memo.checks.set(state, bySide); }
+    if (bySide.has(side)) { memo.checkHits += 1; return bySide.get(side); }
+    const value = E.isInCheck(state, side);
+    bySide.set(side, value);
+    return value;
+  }
+  function evaluateMemo(state, side, memo) {
+    if (!memo) return AI.evaluate(state, side);
+    let bySide = memo.evaluations.get(state);
+    if (!bySide) { bySide = new Map(); memo.evaluations.set(state, bySide); }
+    if (bySide.has(side)) { memo.evaluationHits += 1; return bySide.get(side); }
+    const value = AI.evaluate(state, side);
+    bySide.set(side, value);
+    return value;
+  }
+
   function cloneState(state) {
     return {
       board: state.board.map(row => row.map(stack => stack.slice())),
@@ -143,7 +164,7 @@
     return center * 5 + advance * 1.4 + value * 0.025 + (ownStack ? 7 : 0) - enemyDistance * 0.15;
   }
 
-  function generateActions(state, side, maxDeployCandidates, detectWinningCapture = true) {
+  function generateActions(state, side, maxDeployCandidates, detectWinningCapture = true, memo = null) {
     const actions = [];
     const moves = E.generateLegalMoves(state, side);
     for (const move of moves) {
@@ -191,7 +212,7 @@
       }
     }
     deployments.sort((a,b) => b.priority - a.priority);
-    if (E.isInCheck(state, side)) {
+    if (isInCheckMemo(state, side, memo)) {
       // 帥手中は合い駒の見落としを防ぐため、配置候補を省略しない。
       actions.push(...deployments.map(({priority, ...action}) => action));
     } else {
@@ -249,9 +270,9 @@
   // すでに帥手を受けている場合だけでなく、遮蔽物を動かして
   // 相手の射線・移動範囲を帥まで通してしまう手も候補にしない。
   // 移動・捕獲・ツケ・「新」による合い駒を同じ基準で検査する。
-  function getSearchActions(state, side, maxDeployCandidates) {
-    const actions = generateActions(state, side, maxDeployCandidates);
-    const inCheck = E.isInCheck(state, side);
+  function getSearchActions(state, side, maxDeployCandidates, memo = null) {
+    const actions = generateActions(state, side, maxDeployCandidates, true, memo);
+    const inCheck = isInCheckMemo(state, side, memo);
     const safeActions = [];
     for (const action of actions) {
       const child = applyAction(state, action);
@@ -260,7 +281,7 @@
       // ただし、ユーザー指定により帥手を解消しない合法手も候補から除外しない。
       if (child && (
         (child.phase === "finished" && child.winner === side) ||
-        !E.isInCheck(child, side)
+        !isInCheckMemo(child, side, memo)
       )) {
         safeActions.push(action);
       }
@@ -335,7 +356,7 @@
 
   // 静止探索用：通常の捕獲に加え、帥手を掛ける静かな手も読む。
   // 連続王手からの詰み筋・逃げ道封鎖を探索の末端で見落としにくくする。
-  function generateCheckingActions(state, side, maxDeployCandidates) {
+  function generateCheckingActions(state, side, maxDeployCandidates, memo = null) {
     const checks = [];
     // This helper is called only when the moving side is not in check.
     // Avoid getSearchActions(), which applies every action once to test king
@@ -343,13 +364,13 @@
     // second time to test whether it gives check.
     // Captures are already supplied by generateCaptureActions() in
     // quiescence, so only inspect quiet moves/deployments here.
-    const actions = generateActions(state, side, maxDeployCandidates, false);
+    const actions = generateActions(state, side, maxDeployCandidates, false, memo);
     for (const action of actions) {
       if (!isQuietAction(state, action)) continue;
       const child = applyAction(state, action);
       if (!child || child.phase === "finished") continue;
-      if (E.isInCheck(child, side)) continue;
-      if (E.isInCheck(child, child.turn)) checks.push(action);
+      if (isInCheckMemo(child, side, memo)) continue;
+      if (isInCheckMemo(child, child.turn, memo)) checks.push(action);
     }
     return checks;
   }
@@ -370,6 +391,7 @@
         const root = cloneState(state);
         const table = new Map();
         const stats = { nodes: 0, qnodes: 0, cutoffs: 0, ttHits: 0 };
+        const memo = { checks: new WeakMap(), evaluations: new WeakMap(), checkHits: 0, evaluationHits: 0 };
         // Killer moves and history scores improve ordering of quiet moves.
         // They are local to one search and never alter legal move generation.
         const killers = new Map();
@@ -405,9 +427,9 @@
             return position.winner === position.turn ? MATE - ply : -MATE + ply;
           }
 
-          const inCheck = E.isInCheck(position, position.turn);
+          const inCheck = isInCheckMemo(position, position.turn, memo);
           if (!inCheck && isThreefoldRepetition(position)) return 0;
-          const standPat = inCheck ? -INF : AI.evaluate(position, position.turn);
+          const standPat = inCheck ? -INF : evaluateMemo(position, position.turn, memo);
           if (!inCheck) {
             if (standPat >= beta) return standPat;
             if (standPat > alpha) alpha = standPat;
@@ -417,7 +439,7 @@
           // 帥手中は静止評価で打ち切らず、合法な全応手を調べる。
           // 応手がなければ、その場で詰みとして扱う。
           const tactical = inCheck
-            ? getSearchActions(position, position.turn, maxDeployCandidates)
+            ? getSearchActions(position, position.turn, maxDeployCandidates, memo)
             : (() => {
                 const captures = generateCaptureActions(position, position.turn);
                 // 静止探索の王手候補は各枝で全合法手を生成するため高コスト。
@@ -425,7 +447,7 @@
                 // 捕獲応酬の各段階では捕獲手だけを読む。
                 if (qply >= 1) return captures;
                 const captureKeys = new Set(captures.map(actionKey));
-                const checks = generateCheckingActions(position, position.turn, maxDeployCandidates)
+                const checks = generateCheckingActions(position, position.turn, maxDeployCandidates, memo)
                   .filter(action => !captureKeys.has(actionKey(action)));
                 return captures.concat(checks);
               })();
@@ -463,11 +485,11 @@
           if (position.phase === "finished") {
             return position.winner === position.turn ? MATE - ply : -MATE + ply;
           }
-          if (!E.isInCheck(position, position.turn) && isThreefoldRepetition(position)) return 0;
+          if (!isInCheckMemo(position, position.turn, memo) && isThreefoldRepetition(position)) return 0;
           // 深さ0でも帥手中なら通常の1手探索を延長し、全ての回避手を読む。
           // これにより「評価値は高いが次の手で帥を取られる」手を避ける。
           if (depth <= 0) {
-            if (!E.isInCheck(position, position.turn)) return quiescence(position, alpha, beta, ply, 0);
+            if (!isInCheckMemo(position, position.turn, memo)) return quiescence(position, alpha, beta, ply, 0);
             depth = 1;
           }
 
@@ -482,8 +504,8 @@
             else if (cached.flag === "upper") beta = Math.min(beta, cached.score);
             if (alpha >= beta) return cached.score;
           }
-          const actions = orderActions(position, getSearchActions(position, position.turn, maxDeployCandidates), cached && cached.best, ply, killers, historyScores);
-          if (!actions.length) return E.isInCheck(position, position.turn) ? -MATE + ply : AI.evaluate(position, position.turn);
+          const actions = orderActions(position, getSearchActions(position, position.turn, maxDeployCandidates, memo), cached && cached.best, ply, killers, historyScores);
+          if (!actions.length) return isInCheckMemo(position, position.turn, memo) ? -MATE + ply : evaluateMemo(position, position.turn, memo);
           let bestScore = -INF;
           let bestAction = null;
           for (let index = 0; index < actions.length; index += 1) {
@@ -494,14 +516,14 @@
             let score;
             // 王手を掛ける手は静かな手に見えても戦術手。LMRで浅く読まず、
             // 王手筋・連続王手・帥の逃げ道封鎖を通常の深さで検証する。
-            const givesCheck = child.phase !== "finished" && E.isInCheck(child, child.turn);
+            const givesCheck = child.phase !== "finished" && isInCheckMemo(child, child.turn, memo);
             const quiet = isQuietAction(position, action) &&
-              !E.isInCheck(position, position.turn) && !givesCheck;
+              !isInCheckMemo(position, position.turn, memo) && !givesCheck;
             const reduction = index >= 4 && depth >= 3 && quiet ? 1 + (index >= 10 && depth >= 5 ? 1 : 0) : 0;
             // 同じ局面へ戻る複数駒の循環にも、駒単位の往復とは別に罰点を与える。
             const penalty = repeatedPositionPenalty(child);
             // 王手回避を妨げない範囲で、過去に進出した駒を無意味に後退させる手を抑える。
-            const retreatPenalty = E.isInCheck(position, position.turn) || givesCheck
+            const retreatPenalty = isInCheckMemo(position, position.turn, memo) || givesCheck
               ? 0 : historicalRetreatPenalty(position, action);
             if (index === 0) {
               score = -negamax(child, depth - 1, -beta, -alpha, ply + 1) - penalty - retreatPenalty;
@@ -528,7 +550,7 @@
               break;
             }
           }
-          if (!bestAction) return AI.evaluate(position, position.turn);
+          if (!bestAction) return evaluateMemo(position, position.turn, memo);
           const flag = bestScore <= originalAlpha ? "upper" : bestScore >= originalBeta ? "lower" : "exact";
           store(key, { depth, score: bestScore, flag, best: bestAction });
           return bestScore;
@@ -537,7 +559,7 @@
         function searchRoot(root, depth, previousBest, alphaStart = -INF, betaStart = INF) {
           const key = searchContextKey(root);
           const cached = table.get(key);
-          const actions = orderActions(root, getSearchActions(root, root.turn, maxDeployCandidates), previousBest || (cached && cached.best), 0, killers, historyScores);
+          const actions = orderActions(root, getSearchActions(root, root.turn, maxDeployCandidates, memo), previousBest || (cached && cached.best), 0, killers, historyScores);
           let alpha = alphaStart;
           const beta = betaStart;
           let bestScore = -INF;
@@ -548,8 +570,8 @@
             const child = applyAction(root, action);
             if (!child) continue;
             let score;
-            const retreatPenalty = E.isInCheck(root, root.turn) ||
-              (child.phase !== "finished" && E.isInCheck(child, child.turn))
+            const retreatPenalty = isInCheckMemo(root, root.turn, memo) ||
+              (child.phase !== "finished" && isInCheckMemo(child, child.turn, memo))
               ? 0 : historicalRetreatPenalty(root, action);
             if (index === 0) {
               score = -negamax(child, depth - 1, -beta, -alpha, 1) -
@@ -575,7 +597,7 @@
         let completed = null;
         let previousBest = null;
         let previousScore = 0;
-        const fallback = getSearchActions(root, root.turn, maxDeployCandidates)[0] || null;
+        const fallback = getSearchActions(root, root.turn, maxDeployCandidates, memo)[0] || null;
         if (!fallback) { resolve({ bestMove: null, score: AI.evaluate(root, root.turn), depth: 0, nodes: 0, elapsedMs: now() - started }); return; }
         for (let depth = 1; depth <= maxDepth; depth += 1) {
           try {
@@ -612,6 +634,8 @@
           quiescenceNodes: stats.qnodes,
           cutoffs: stats.cutoffs,
           transpositionHits: stats.ttHits,
+          checkCacheHits: memo.checkHits,
+          evaluationCacheHits: memo.evaluationHits,
           elapsedMs: Math.round(now() - started)
         });
       })().catch(reject);
