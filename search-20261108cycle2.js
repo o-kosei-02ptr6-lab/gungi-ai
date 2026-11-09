@@ -390,7 +390,15 @@
         const deadline = started + timeMs;
         const root = cloneState(state);
         const table = new Map();
-        const stats = { nodes: 0, qnodes: 0, cutoffs: 0, ttHits: 0 };
+        const stats = { nodes: 0, qnodes: 0, cutoffs: 0, ttHits: 0,
+          q: { inCheckNodes: 0, quietNodes: 0, standPatEvaluations: 0,
+            standPatCutoffs: 0, qplyLimitStops: 0, repetitionStops: 0,
+            terminalNodes: 0, evasionActions: 0, captureActions: 0,
+            checkingActions: 0, noTacticalActions: 0, appliedActions: 0,
+            evasionLimitNodes: 0, timingSamples: 0,
+            generationMs: 0, orderingMs: 0, evaluationMs: 0,
+            checkMs: 0, applyMs: 0 }
+        };
         const memo = { checks: new WeakMap(), evaluations: new WeakMap(), checkHits: 0, evaluationHits: 0 };
         // Killer moves and history scores improve ordering of quiet moves.
         // They are local to one search and never alter legal move generation.
@@ -422,55 +430,87 @@
         function quiescence(position, alpha, beta, ply, qply) {
           stats.nodes += 1;
           stats.qnodes += 1;
+          const q = stats.q;
+          // Timing is sampled once per 32 qnodes to keep instrumentation overhead low.
+          const sampled = (stats.qnodes & 31) === 1;
+          const qStarted = sampled ? now() : 0;
+          if (sampled) q.timingSamples++;
           if ((stats.nodes & 127) === 0) checkStop();
           if (position.phase === "finished") {
+            q.terminalNodes++;
             return position.winner === position.turn ? MATE - ply : -MATE + ply;
           }
 
+          let t = sampled ? now() : 0;
           const inCheck = isInCheckMemo(position, position.turn, memo);
-          if (!inCheck && isThreefoldRepetition(position)) return 0;
+          if (sampled) q.checkMs += now() - t;
+          if (inCheck) q.inCheckNodes++; else q.quietNodes++;
+          if (!inCheck && isThreefoldRepetition(position)) {
+            q.repetitionStops++;
+            return 0;
+          }
+          t = sampled ? now() : 0;
           const standPat = inCheck ? -INF : evaluateMemo(position, position.turn, memo);
+          if (sampled) q.evaluationMs += now() - t;
           if (!inCheck) {
-            if (standPat >= beta) return standPat;
+            q.standPatEvaluations++;
+            if (standPat >= beta) { q.standPatCutoffs++; return standPat; }
             if (standPat > alpha) alpha = standPat;
-            if (qply >= 5) return standPat;
+            if (qply >= 5) { q.qplyLimitStops++; return standPat; }
           }
 
           // 帥手中は静止評価で打ち切らず、合法な全応手を調べる。
           // 応手がなければ、その場で詰みとして扱う。
-          const tactical = inCheck
-            ? getSearchActions(position, position.turn, maxDeployCandidates, memo)
-            : (() => {
-                const captures = generateCaptureActions(position, position.turn);
-                // 静止探索の王手候補は各枝で全合法手を生成するため高コスト。
-                // ルートの静止局面(qply=0)でのみ静かな王手を追加し、
-                // 捕獲応酬の各段階では捕獲手だけを読む。
-                if (qply >= 1) return captures;
-                const captureKeys = new Set(captures.map(actionKey));
-                const checks = generateCheckingActions(position, position.turn, maxDeployCandidates, memo)
-                  .filter(action => !captureKeys.has(actionKey(action)));
-                return captures.concat(checks);
-              })();
+          t = sampled ? now() : 0;
+          let tactical;
+          if (inCheck) {
+            tactical = getSearchActions(position, position.turn, maxDeployCandidates, memo);
+            q.evasionActions += tactical.length;
+          } else {
+            const captures = generateCaptureActions(position, position.turn);
+            q.captureActions += captures.length;
+            if (qply >= 1) tactical = captures;
+            else {
+              const captureKeys = new Set(captures.map(actionKey));
+              const checks = generateCheckingActions(position, position.turn, maxDeployCandidates, memo)
+                .filter(action => !captureKeys.has(actionKey(action)));
+              q.checkingActions += checks.length;
+              tactical = captures.concat(checks);
+            }
+          }
+          if (sampled) q.generationMs += now() - t;
+          t = sampled ? now() : 0;
           const ordered = orderActions(position, tactical, null, ply, killers, historyScores);
+          if (sampled) q.orderingMs += now() - t;
           if (inCheck && !ordered.length) return -MATE + ply;
+          if (!ordered.length) q.noTacticalActions++;
           // 長い連続王手では探索資源を守りつつ、少なくとも王手回避手を
           // 1手実行してから評価する。王手中の静止評価による誤判定を防ぐ。
           if (inCheck && qply >= 10) {
+            q.evasionLimitNodes++;
             let bestEvasion = -INF;
             for (const action of ordered) {
               checkStop();
+              t = sampled ? now() : 0;
               const child = applyAction(position, action);
+              if (sampled) q.applyMs += now() - t;
+              q.appliedActions++;
               if (!child) continue;
+              t = sampled ? now() : 0;
               const score = child.phase === "finished"
                 ? (child.winner === position.turn ? MATE - ply - 1 : -MATE + ply + 1)
                 : -evaluateMemo(child, child.turn, memo);
+              if (sampled) q.evaluationMs += now() - t;
               if (score > bestEvasion) bestEvasion = score;
             }
             return bestEvasion === -INF ? -MATE + ply : bestEvasion;
           }
           for (const action of ordered) {
             checkStop();
+            t = sampled ? now() : 0;
             const child = applyAction(position, action);
+            if (sampled) q.applyMs += now() - t;
+            q.appliedActions++;
             if (!child) continue;
             const score = -quiescence(child, -beta, -alpha, ply + 1, qply + 1);
             if (score >= beta) return score;
@@ -632,6 +672,7 @@
           depth: result.depth,
           nodes: stats.nodes,
           quiescenceNodes: stats.qnodes,
+          quiescenceDiagnostics: { ...stats.q },
           cutoffs: stats.cutoffs,
           transpositionHits: stats.ttHits,
           checkCacheHits: memo.checkHits,
