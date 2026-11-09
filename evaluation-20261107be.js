@@ -114,15 +114,18 @@
     return safe;
   }
 
-  function sideBreakdown(state, side) {
+  function sideBreakdown(state, side, context) {
     let material = 0, hand = 0, position = 0, activity = 0;
     let threats = 0, exposure = 0, kingSafety = 0, mateNet = 0;
     let boardPieces = 0, handPieces = 0;
 
     const enemy = opponent(side);
-    const moveList = E.generateLegalMoves(state, side);
-    const enemyMoves = E.generateLegalMoves(state, enemy);
-    const enemyMarshalForStack = E.getMarshalPosition(state, enemy);
+    // Both sides' legal moves are shared by the two perspective evaluations.
+    // Generate each side once per position instead of regenerating both lists
+    // inside each sideBreakdown call.
+    const moveList = context.moveLists.get(side);
+    const enemyMoves = context.moveLists.get(enemy);
+    const enemyMarshalForStack = context.marshalPositions.get(enemy);
     const moveCountByPiece = new Map();
     const movesByPiece = new Map();
     const controlledSquares = new Map();
@@ -476,8 +479,13 @@
     const signature = weightsSignature();
     const cached = breakdownCache.get(state);
     if (cached && cached.signature === signature) return cached.result;
-    const first = sideBreakdown(state, "先手");
-    const second = sideBreakdown(state, "後手");
+    const sides = ["先手", "後手"];
+    const context = {
+      moveLists: new Map(sides.map(side => [side, E.generateLegalMoves(state, side)])),
+      marshalPositions: new Map(sides.map(side => [side, E.getMarshalPosition(state, side)]))
+    };
+    const first = sideBreakdown(state, "先手", context);
+    const second = sideBreakdown(state, "後手", context);
     let terminal = null;
     if (state.phase === "finished" && state.winner) {
       terminal = state.winner === "先手" ? 100000000 : -100000000;
