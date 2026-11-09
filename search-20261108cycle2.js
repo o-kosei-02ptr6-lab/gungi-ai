@@ -475,7 +475,17 @@
               const checks = generateCheckingActions(position, position.turn, maxDeployCandidates, memo)
                 .filter(action => !captureKeys.has(actionKey(action)));
               q.checkingActions += checks.length;
-              tactical = captures.concat(checks);
+              // Quiet checks can be numerous in Gungi because reserve deployments
+              // and stacked movement create many checking continuations. Keep all
+              // captures, but search only the four best-ordered quiet checks at
+              // the first quiescence ply. This is deliberately limited to the
+              // optional checking extension; forced check evasions remain exhaustive.
+              const orderedChecks = orderActions(position, checks, null, ply, killers, historyScores);
+              const selectedChecks = orderedChecks.slice(0, 4);
+              q.checkingCandidatesBeforeLimit = (q.checkingCandidatesBeforeLimit || 0) + checks.length;
+              q.checkingCandidatesAfterLimit = (q.checkingCandidatesAfterLimit || 0) + selectedChecks.length;
+              q.checkingCandidatesPruned = (q.checkingCandidatesPruned || 0) + Math.max(0, checks.length - selectedChecks.length);
+              tactical = captures.concat(selectedChecks);
             }
           }
           if (sampled) q.generationMs += now() - t;
