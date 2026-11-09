@@ -238,6 +238,18 @@ const summary = {
         meanElapsedMs:Math.round(average("elapsedMs")),
         maxElapsedMs:Math.max(0,...all.map(item=>item.elapsedMs||0)),
         meanQuiescenceNodes:Math.round(average("quiescenceNodes")),
+        quiescenceBreakdown: (() => {
+          const keys=["inCheckNodes","quietNodes","standPatEvaluations","standPatCutoffs","qplyLimitStops","repetitionStops","terminalNodes","evasionActions","captureActions","checkingActions","noTacticalActions","appliedActions","evasionLimitNodes","timingSamples","generationMs","orderingMs","evaluationMs","checkMs","applyMs"];
+          const totals=Object.fromEntries(keys.map(key=>[key,all.reduce((sum,item)=>sum+(Number(item.quiescenceDiagnostics&&item.quiescenceDiagnostics[key])||0),0)]));
+          const qnodes=all.reduce((sum,item)=>sum+(Number(item.quiescenceNodes)||0),0);
+          const sampled=totals.timingSamples||0;
+          for(const key of ["generationMs","orderingMs","evaluationMs","checkMs","applyMs"]) {
+            totals["estimatedTotal"+key[0].toUpperCase()+key.slice(1)]=sampled?Math.round(totals[key]/sampled*32*qnodes/32):0;
+            totals["sampleMean"+key[0].toUpperCase()+key.slice(1)]=sampled?Number((totals[key]/sampled).toFixed(3)):0;
+          }
+          totals.qnodes=qnodes;
+          return totals;
+        })(),
         meanTranspositionHits:Math.round(average("transpositionHits")),
         totalCheckCacheHits:all.reduce((sum,item)=>sum+(Number(item.checkCacheHits)||0),0),
         meanCheckCacheHits:Number(average("checkCacheHits").toFixed(2)),
