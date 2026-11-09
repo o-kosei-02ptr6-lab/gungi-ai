@@ -143,6 +143,8 @@
         completedDepth:Number.isFinite(result.depth)?result.depth:0,
         nodes:result.nodes||0,quiescenceNodes:result.quiescenceNodes||0,
         cutoffs:result.cutoffs||0,transpositionHits:result.transpositionHits||0,
+        checkCacheHits:result.checkCacheHits||0,
+        evaluationCacheHits:result.evaluationCacheHits||0,
         elapsedMs:result.elapsedMs||0,score:Number.isFinite(result.score)?result.score:null,
         selectedMove:describeSearchAction(result.bestMove,selectedPiece),
         iterations
