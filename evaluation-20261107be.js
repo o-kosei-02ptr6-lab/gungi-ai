@@ -120,6 +120,9 @@
     let boardPieces = 0, handPieces = 0;
 
     const enemy = opponent(side);
+    // Reuse the per-position check state prepared by evaluateBreakdown().
+    const ownInCheck = context.inCheck.get(side);
+    const enemyInCheck = context.inCheck.get(enemy);
     // Both sides' legal moves are shared by the two perspective evaluations.
     // Generate each side once per position instead of regenerating both lists
     // inside each sideBreakdown call.
@@ -374,7 +377,7 @@
     // 敵帥が現在王手ではない場合でも、安全な移動先が少なければ詰めろに近い状態として評価。
     // 逃げ道0〜3に応じて段階的に加点し、4以上では追加点を与えない。
     if (enemyMarshalForStack) {
-      if (E.isInCheck(state, enemy)) {
+      if (enemyInCheck) {
         const safeResponses = countSafeCheckResponses(state, enemy, enemyMoves);
         mateNet += 320 + Math.max(0, 4 - Math.min(4, safeResponses)) * 110;
       } else {
@@ -401,7 +404,7 @@
     }
 
     const marshal = E.getMarshalPosition(state, side);
-    if (E.isInCheck(state, side)) kingSafety -= 8500;
+    if (ownInCheck) kingSafety -= 8500;
     if (marshal) {
       let nearbyFriends = 0;
       const adjacentSquares = new Set();
@@ -447,7 +450,7 @@
       );
       kingSafety += Math.min(4, safeMarshalEscapes) * 12;
       // 帥手中に安全な逃げ道が少ないほど詰みに近い。相手側の評価にも反映する。
-      if (E.isInCheck(state, side)) {
+      if (ownInCheck) {
         kingSafety -= Math.max(0, 4 - Math.min(4, safeMarshalEscapes)) * 450;
       }
     }
@@ -482,7 +485,10 @@
     const sides = ["先手", "後手"];
     const context = {
       moveLists: new Map(sides.map(side => [side, E.generateLegalMoves(state, side)])),
-      marshalPositions: new Map(sides.map(side => [side, E.getMarshalPosition(state, side)]))
+      marshalPositions: new Map(sides.map(side => [side, E.getMarshalPosition(state, side)])),
+      // A position's check status is immutable during evaluation. Compute it
+      // once per side and share it across both perspective breakdowns.
+      inCheck: new Map(sides.map(side => [side, E.isInCheck(state, side)]))
     };
     const first = sideBreakdown(state, "先手", context);
     const second = sideBreakdown(state, "後手", context);
