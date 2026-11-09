@@ -142,6 +142,7 @@
         requestedDepth:Math.max(1,Math.min(8,Number(searchOptions.maxDepth)||5)),
         completedDepth:Number.isFinite(result.depth)?result.depth:0,
         nodes:result.nodes||0,quiescenceNodes:result.quiescenceNodes||0,
+        quiescenceDiagnostics:result.quiescenceDiagnostics||{},
         cutoffs:result.cutoffs||0,transpositionHits:result.transpositionHits||0,
         checkCacheHits:result.checkCacheHits||0,
         evaluationCacheHits:result.evaluationCacheHits||0,
