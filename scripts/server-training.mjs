@@ -239,13 +239,20 @@ const summary = {
         maxElapsedMs:Math.max(0,...all.map(item=>item.elapsedMs||0)),
         meanQuiescenceNodes:Math.round(average("quiescenceNodes")),
         meanTranspositionHits:Math.round(average("transpositionHits")),
+        totalCheckCacheHits:all.reduce((sum,item)=>sum+(Number(item.checkCacheHits)||0),0),
+        meanCheckCacheHits:Number(average("checkCacheHits").toFixed(2)),
+        totalEvaluationCacheHits:all.reduce((sum,item)=>sum+(Number(item.evaluationCacheHits)||0),0),
+        meanEvaluationCacheHits:Number(average("evaluationCacheHits").toFixed(2)),
+        cacheHitSearches:all.filter(item=>(Number(item.checkCacheHits)||0)+(Number(item.evaluationCacheHits)||0)>0).length,
         bySide:["先手","後手"].reduce((out,side)=>{
           const subset=all.filter(item=>item.side===side);
           out[side]={
             searches:subset.length,
             meanDepth:subset.length?Number((subset.reduce((sum,item)=>sum+(item.completedDepth||0),0)/subset.length).toFixed(2)):0,
             meanNodes:subset.length?Math.round(subset.reduce((sum,item)=>sum+(item.nodes||0),0)/subset.length):0,
-            meanElapsedMs:subset.length?Math.round(subset.reduce((sum,item)=>sum+(item.elapsedMs||0),0)/subset.length):0
+            meanElapsedMs:subset.length?Math.round(subset.reduce((sum,item)=>sum+(item.elapsedMs||0),0)/subset.length):0,
+            meanCheckCacheHits:subset.length?Number((subset.reduce((sum,item)=>sum+(Number(item.checkCacheHits)||0),0)/subset.length).toFixed(2)):0,
+            meanEvaluationCacheHits:subset.length?Number((subset.reduce((sum,item)=>sum+(Number(item.evaluationCacheHits)||0),0)/subset.length).toFixed(2)):0
           };
           return out;
         },{})
