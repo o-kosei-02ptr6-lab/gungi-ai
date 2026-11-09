@@ -11,6 +11,9 @@
   const PIECE_VALUES = AI.PIECE_VALUES;
 
   class SearchAbort extends Error {}
+  // Reuse child positions already built while filtering legal actions. The search
+  // tree treats parent positions as immutable, so this cache is safe per action.
+  const appliedChildren = new WeakMap();
   const now = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
   const other = side => side === "先手" ? "後手" : "先手";
 
@@ -228,6 +231,8 @@
   }
 
   function applyAction(state, action) {
+    const cached = appliedChildren.get(action);
+    if (cached && cached.parent === state) return cached.child;
     const next = cloneState(state);
     let result;
     if (action.type === "deploy") {
@@ -235,7 +240,9 @@
     } else {
       result = E.movePiece(next, action.from.row, action.from.col, action.to.row, action.to.col, action.landingMode);
     }
-    return result && result.ok ? next : null;
+    if (!result || !result.ok) return null;
+    appliedChildren.set(action, { parent: state, child: next });
+    return next;
   }
 
   // 着手後に自分の帥が相手の捕獲可能範囲へ入る手を除外する。
@@ -248,6 +255,7 @@
     const safeActions = [];
     for (const action of actions) {
       const child = applyAction(state, action);
+      // Keep the already-created child position attached to this action for search.
       // 自分の帥を危険にさらさない手を先に並べる。
       // ただし、ユーザー指定により帥手を解消しない合法手も候補から除外しない。
       if (child && (
