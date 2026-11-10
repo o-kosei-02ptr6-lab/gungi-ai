@@ -34,10 +34,10 @@
     for(const k of FEATURES)v[k]=(b["先手"][k]||0)-(b["後手"][k]||0);
     return v;
   }
-  async function searchSetupPlacement(state,side,diagnostics){
+  async function searchSetupPlacement(state,side,diagnostics,allowFinish=true){
     if(state.setupTurn!==side)throw new Error("配置順が一致しません。");
     const options={timeMs:100,maxNodes:100,rootCandidateLimit:12,replyCandidateLimit:6,
-      rootBeam:4,replyBeam:3,allowFinish:true,requireNoCheckBoth:true};
+      rootBeam:4,replyBeam:3,allowFinish,requireNoCheckBoth:true};
     let result=await S.findBestSetupPlacement(state,options);
     if(!result.bestMove){
       // If a neutral placement is impossible, retain own-king safety rather than
@@ -115,7 +115,7 @@
       // First place both Marshals using the existing setup search.
       for(let step=0;step<2;step++){
         if(state.phase!=="setup")throw new Error("帥配置中に配置フェーズが終了しました。");
-        await searchSetupPlacement(state,state.setupTurn,setupDiagnostics);
+        await searchSetupPlacement(state,state.setupTurn,setupDiagnostics,false);
       }
       if(!["先手","後手"].every(side=>state.history.some(entry=>entry.type==="place"&&entry.side===side&&entry.piece.name==="帥")))
         throw new Error("双方の帥配置を確認できません。");
