@@ -18,6 +18,30 @@ const search=self.GungiSearch;
 assert.ok(search,"search engine should load");
 assert.equal(typeof search.getSearchContextKey,"function");
 
+// Setup search must honor the mandatory Marshal-first rule for both sides,
+// preserve the front-row-only Marshal square, and return executable placements.
+const engine=self.GungiEngine;
+const setupState=engine.createGameState();
+const firstSetup=await search.findBestSetupPlacement(setupState,{
+  timeMs:100,maxNodes:100,allowFinish:false,requireNoCheckBoth:true
+});
+assert.ok(firstSetup.bestMove,"setup search should return a legal first-side placement");
+assert.equal(firstSetup.bestMove.pieceName,"帥");
+assert.equal(firstSetup.bestMove.row,engine.SIZE-1);
+const firstPlacement=engine.placePiece(setupState,firstSetup.bestMove.row,
+  firstSetup.bestMove.col,"先手",firstSetup.bestMove.pieceId);
+assert.ok(firstPlacement.ok,"first Marshal placement should execute");
+const secondSetup=await search.findBestSetupPlacement(setupState,{
+  timeMs:100,maxNodes:100,allowFinish:false,requireNoCheckBoth:true
+});
+assert.ok(secondSetup.bestMove,"setup search should return a legal second-side placement");
+assert.equal(secondSetup.bestMove.pieceName,"帥");
+assert.equal(secondSetup.bestMove.row,0);
+const secondPlacement=engine.placePiece(setupState,secondSetup.bestMove.row,
+  secondSetup.bestMove.col,"後手",secondSetup.bestMove.pieceId);
+assert.ok(secondPlacement.ok,"second Marshal placement should execute");
+assert.equal(setupState.setupTurn,"先手","alternating setup order should be preserved");
+
 const empty=()=>Array.from({length:9},()=>Array.from({length:9},()=>[]));
 const base={board:empty(),hands:{"先手":[],"後手":[]},turn:"先手",history:[]};
 const entry=(id,index)=>({type:"move",piece:{id},from:{row:index%9,col:(index+1)%9},to:{row:(index+2)%9,col:(index+3)%9},landingMode:"capture",positionKey:"unrelated"});
