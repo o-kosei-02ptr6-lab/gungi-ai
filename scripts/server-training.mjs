@@ -189,6 +189,9 @@ for (let index = 0; index < gamesRequested; index++) {
     }, {}),
     lastMoves: (result.history || []).slice(-8),
     fullHistory: result.history || [],
+    // 1局分の各手直前の盤面を保存し、終了後に局面再生できるようにする。
+    startState: result.startState || null,
+    positionSamples: result.positionSamples || [],
     repetitionEvents: result.repetitionEvents || [],
     tdUpdateDiagnostics: learned.updateDiagnostics || {},
     weightsBefore: beforeWeights,
