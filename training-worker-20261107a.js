@@ -120,11 +120,25 @@
       if(!["先手","後手"].every(side=>state.history.some(entry=>entry.type==="place"&&entry.side===side&&entry.piece.name==="帥")))
         throw new Error("双方の帥配置を確認できません。");
       randomizeBalancedOpening(state,seed,setupDiagnostics);
-      // Remaining pieces and the timing of 済 are selected by the regular search.
+      // Do not let the setup search end after only a Marshal and a few pieces.
+      // Every side must deploy at least seven pieces (Marshal + six others) before 済
+      // becomes an option. This prevents open-board, immediate-Marshal-capture games.
+      const minimumSetupPiecesPerSide=7;
       for(let step=0;state.phase==="setup"&&step<50;step++){
-        await searchSetupPlacement(state,state.setupTurn,setupDiagnostics);
+        const side=state.setupTurn;
+        const deployed=state.history.filter(entry=>entry.type==="place"&&entry.side===side).length;
+        await searchSetupPlacement(state,side,setupDiagnostics,deployed>=minimumSetupPiecesPerSide);
       }
       if(state.phase!=="move")throw new Error("配置探索が52回以内に初期配置を完了できませんでした。");
+      const deployedBySide=Object.fromEntries(["先手","後手"].map(side=>[
+        side,state.history.filter(entry=>entry.type==="place"&&entry.side===side).length
+      ]));
+      setupDiagnostics.deployedBySide=deployedBySide;
+      setupDiagnostics.minimumSetupPiecesPerSide=minimumSetupPiecesPerSide;
+      if(Object.values(deployedBySide).some(count=>count<minimumSetupPiecesPerSide))
+        throw new Error("初期配置の駒数が安全基準を満たしていません。");
+      if(E.isInCheck(state,"先手")||E.isInCheck(state,"後手"))
+        throw new Error("初期配置完了時点で帥手が発生しています。");
       return {state,setupDiagnostics};
     }finally{AI.setWeights(activeWeights);}
   }
@@ -192,6 +206,7 @@
         cutoffs:result.cutoffs||0,transpositionHits:result.transpositionHits||0,
         checkCacheHits:result.checkCacheHits||0,
         evaluationCacheHits:result.evaluationCacheHits||0,
+        positionEvaluationCacheHits:result.positionEvaluationCacheHits||0,
         legalMoveCacheHits:result.legalMoveCacheHits||0,
         elapsedMs:result.elapsedMs||0,score:Number.isFinite(result.score)?result.score:null,
         selectedMove:describeSearchAction(result.bestMove,selectedPiece),
