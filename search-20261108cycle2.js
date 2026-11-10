@@ -808,6 +808,10 @@
           if(finishFirst&&!E.finishSetup(next,actingSide).ok)continue;
           const placed=E.placePiece(next,action.row,action.col,actingSide,action.pieceId);
           if(!placed.ok||E.isInCheck(next,actingSide))continue;
+          // Training and paired verification can request neutral starting positions:
+          // preserve own-king safety while preferring placements that do not begin
+          // the opponent's game already in check.
+          if(options.requireNoCheckBoth&&E.isInCheck(next,other(actingSide)))continue;
           const priority=deploymentPriority(position,actingSide,piece,action.row,action.col)*0.08+
             (action.stacking?1.5*action.targetLayer:0);
           out.push({action,finishFirst,next,priority,score:-INF});
