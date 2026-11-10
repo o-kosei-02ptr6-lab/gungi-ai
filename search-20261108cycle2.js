@@ -589,7 +589,6 @@
                 score = -negamax(child, depth - 1, -beta, -alpha, ply + 1) - penalty - retreatPenalty;
               }
             }
-            rootCandidates.push({ action: actionKey(action), score: Number.isFinite(score) ? Math.round(score) : null });
             if (score > bestScore) {
               bestScore = score;
               bestAction = action;
@@ -635,6 +634,7 @@
                   repeatedPositionPenalty(child) - retreatPenalty;
               }
             }
+            rootCandidates.push({ action: actionKey(action), score: Number.isFinite(score) ? Math.round(score) : null });
             if (score > bestScore) {
               bestScore = score;
               bestAction = action;
