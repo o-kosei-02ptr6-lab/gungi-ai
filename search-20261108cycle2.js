@@ -650,8 +650,30 @@
         let completed = null;
         let previousBest = null;
         let previousScore = 0;
-        const fallback = getSearchActions(root, root.turn, maxDeployCandidates, memo)[0] || null;
-        if (!fallback) { resolve({ bestMove: null, score: evaluateMemo(root, root.turn, memo), depth: 0, nodes: 0, elapsedMs: now() - started }); return; }
+        const fallbackActions = orderActions(root,
+          getSearchActions(root, root.turn, maxDeployCandidates, memo), null, 0, killers, historyScores);
+        const fallback = fallbackActions[0] || null;
+        if (!fallback) { resolve({ bestMove: null, score: evaluateMemo(root, root.turn, memo), depth: 0, nodes: 0, elapsedMs: now() - started, rootCandidates: [], rootCandidateSource: "none" }); return; }
+        function scoreFallbackRootCandidates() {
+          const scored = [];
+          // 深い探索が時間切れになる局面でも、候補手の比較材料を必ず残す。
+          // これは探索スコアではなく、上位12合法手を1手進めた静的評価である。
+          for (const action of fallbackActions.slice(0, 12)) {
+            const child = applyAction(root, action);
+            if (!child) continue;
+            let score = child.phase === "finished"
+              ? (child.winner === root.turn ? MATE : -MATE)
+              : evaluateMemo(child, root.turn, memo);
+            score -= repeatedPositionPenalty(child);
+            if (!isInCheckMemo(root, root.turn, memo) &&
+                !(child.phase !== "finished" && isInCheckMemo(child, child.turn, memo))) {
+              score -= historicalRetreatPenalty(root, action);
+            }
+            scored.push({ action: actionKey(action), score: Number.isFinite(score) ? Math.round(score) : null });
+          }
+          scored.sort((a,b) => (b.score ?? -INF) - (a.score ?? -INF));
+          return scored.slice(0, 5);
+        }
         for (let depth = 1; depth <= maxDepth; depth += 1) {
           try {
             checkStop();
@@ -679,6 +701,9 @@
           await new Promise(done => setTimeout(done, 0));
         }
         const result = completed || { bestAction: fallback, score: evaluateMemo(root, root.turn, memo), depth: 0 };
+        const searchedCandidates = result.rootCandidates || [];
+        const rootCandidateSource = searchedCandidates.length ? "search" : "static-fallback";
+        const rootCandidates = searchedCandidates.length ? searchedCandidates : scoreFallbackRootCandidates();
         resolve({
           bestMove: result.bestAction,
           score: result.score,
@@ -691,7 +716,8 @@
           checkCacheHits: memo.checkHits,
           evaluationCacheHits: memo.evaluationHits,
           elapsedMs: Math.round(now() - started),
-          rootCandidates: result.rootCandidates || []
+          rootCandidates,
+          rootCandidateSource
         });
       })().catch(reject);
     });
