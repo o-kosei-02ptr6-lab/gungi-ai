@@ -78,8 +78,8 @@
         await searchSetupPlacement(state,side,setupDiagnostics);
       }
       if(state.phase!=="move")throw new Error("初期配置を完了できませんでした。");
-      if(E.isInCheck(state,"先手")||E.isInCheck(state,"後手"))
-        throw new Error("配置探索後の初期局面で帥手が発生しました。");
+      // Own-king safety is checked after every placement. An opponent check
+      // created by a placement is a legal strategic outcome, not a setup error.
       return {state,setupDiagnostics};
     }finally{AI.setWeights(activeWeights);}
   }
