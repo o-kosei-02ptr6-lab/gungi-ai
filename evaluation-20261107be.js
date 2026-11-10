@@ -378,10 +378,10 @@
     // 逃げ道0〜3に応じて段階的に加点し、4以上では追加点を与えない。
     if (enemyMarshalForStack) {
       if (enemyInCheck) {
-        const safeResponses = countSafeCheckResponses(state, enemy, enemyMoves);
+        const safeResponses = context.safeCheckResponses.get(enemy) || 0;
         mateNet += 320 + Math.max(0, 4 - Math.min(4, safeResponses)) * 110;
       } else {
-        const enemySafeEscapes = countSafeMarshalEscapes(state, enemy, enemyMoves, enemyMarshalForStack);
+        const enemySafeEscapes = context.safeMarshalEscapes.get(enemy) || 0;
         mateNet += [250, 160, 90, 30, 0][Math.min(4, enemySafeEscapes)];
       }
     }
@@ -445,9 +445,7 @@
 
       // 帥を実際に動かした局面を作り、相手が次の手で帥を取れない移動先だけを
       // 安全な逃げ道として数える。単なる移動可能マスは逃げ道に含めない。
-      const safeMarshalEscapes = countSafeMarshalEscapes(
-        state, side, moveList, marshal
-      );
+      const safeMarshalEscapes = context.safeMarshalEscapes.get(side) || 0;
       kingSafety += Math.min(4, safeMarshalEscapes) * 12;
       // 帥手中に安全な逃げ道が少ないほど詰みに近い。相手側の評価にも反映する。
       if (ownInCheck) {
@@ -490,6 +488,20 @@
       // once per side and share it across both perspective breakdowns.
       inCheck: new Map(sides.map(side => [side, E.isInCheck(state, side)]))
     };
+    // Both perspective breakdowns ask for the same Marshal escape/check-response
+    // counts. Compute each side's tactical safety once per position and share it.
+    // This preserves the exact 0..4 capped counts while avoiding duplicate board
+    // clones, move applications, and check tests in every quiescence evaluation.
+    context.safeMarshalEscapes = new Map(sides.map(side => [
+      side,
+      countSafeMarshalEscapes(state, side, context.moveLists.get(side), context.marshalPositions.get(side))
+    ]));
+    context.safeCheckResponses = new Map(sides.map(side => [
+      side,
+      context.inCheck.get(side)
+        ? countSafeCheckResponses(state, side, context.moveLists.get(side))
+        : 0
+    ]));
     const first = sideBreakdown(state, "先手", context);
     const second = sideBreakdown(state, "後手", context);
     let terminal = null;
