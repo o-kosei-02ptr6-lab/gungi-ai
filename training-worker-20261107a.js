@@ -61,18 +61,70 @@
     diagnostics.finishDecisions+=result.finishRecommended?1:0;
     return result;
   }
+  function cloneSetupState(state){
+    return {
+      board:state.board.map(row=>row.map(stack=>stack.slice())),
+      hands:{先手:state.hands["先手"].slice(),後手:state.hands["後手"].slice()},
+      turn:state.turn,setupTurn:state.setupTurn,
+      setupDone:{...state.setupDone},setupFinishPending:state.setupFinishPending,
+      phase:state.phase,winner:state.winner,moveNumber:state.moveNumber,
+      history:state.history.slice()
+    };
+  }
+  function randomizeBalancedOpening(state,seed,diagnostics){
+    // 帥を双方が置いた直後に、低〜中価値の同一駒を3組だけ対称配置する。
+    // 駒数と種類を完全に揃え、重要駒（将・弓・砲・筒・謀・騎・忍・砦）は残す。
+    const rng=makeRng(seed^0x51A7B1E);
+    const pairNames=["兵","侍","槍"];
+    for(const name of pairNames){
+      let placed=false;
+      for(let attempt=0;attempt<80&&!placed;attempt++){
+        const candidates=[];
+        for(let row=6;row<=8;row++)for(let col=0;col<E.SIZE;col++){
+          const mirrorRow=8-row;
+          const firstStack=state.board[row][col],secondStack=state.board[mirrorRow][col];
+          if(firstStack.length||secondStack.length)continue;
+          const firstPiece=state.hands["先手"].find(piece=>piece.name===name);
+          const secondPiece=state.hands["後手"].find(piece=>piece.name===name);
+          if(firstPiece&&secondPiece&&E.canPlacePiece(state,row,col,firstPiece)&&
+             E.canPlacePiece(state,mirrorRow,col,secondPiece))candidates.push({row,col,mirrorRow,firstPiece,secondPiece});
+        }
+        if(!candidates.length)break;
+        const choice=random(candidates,rng),backup=cloneSetupState(state);
+        const first=E.placePiece(state,choice.row,choice.col,"先手",choice.firstPiece.id);
+        const second=first.ok?E.placePiece(state,choice.mirrorRow,choice.col,"後手",choice.secondPiece.id):{ok:false};
+        if(first.ok&&second.ok&&!E.isInCheck(state,"先手")&&!E.isInCheck(state,"後手")){
+          placed=true;
+          diagnostics.randomPlacements+=2;
+          diagnostics.randomPairs++;
+          diagnostics.randomPieceTypes.push(name);
+        }else{
+          Object.assign(state,backup);
+        }
+      }
+      if(!placed)diagnostics.randomPairSkips++;
+    }
+  }
   async function makeStartPosition(seed){
     const activeWeights=AI.getWeights();
     AI.setWeights(BASELINE_WEIGHTS);
     try{
       const state=E.createGameState();
-      const setupDiagnostics={placements:0,nodes:0,elapsedMs:0,candidates:0,neutralFallbacks:0,finishDecisions:0};
-      // Let the same two-ply setup search choose both placements and the
-      // timing of "済". Every chosen finish is followed by its mandatory placement.
+      const setupDiagnostics={placements:0,nodes:0,elapsedMs:0,candidates:0,neutralFallbacks:0,
+        finishDecisions:0,randomPlacements:0,randomPairs:0,randomPairSkips:0,randomPieceTypes:[]};
+      // First place both Marshals using the existing setup search.
+      for(let step=0;step<2;step++){
+        if(state.phase!=="setup")throw new Error("帥配置中に配置フェーズが終了しました。");
+        await searchSetupPlacement(state,state.setupTurn,setupDiagnostics);
+      }
+      if(!["先手","後手"].every(side=>state.history.some(entry=>entry.type==="place"&&entry.side===side&&entry.piece.name==="帥")))
+        throw new Error("双方の帥配置を確認できません。");
+      randomizeBalancedOpening(state,seed,setupDiagnostics);
+      // Remaining pieces and the timing of 済 are selected by the regular search.
       for(let step=0;state.phase==="setup"&&step<50;step++){
         await searchSetupPlacement(state,state.setupTurn,setupDiagnostics);
       }
-      if(state.phase!=="move")throw new Error("配置探索が50回以内に初期配置を完了できませんでした。");
+      if(state.phase!=="move")throw new Error("配置探索が52回以内に初期配置を完了できませんでした。");
       return {state,setupDiagnostics};
     }finally{AI.setWeights(activeWeights);}
   }
@@ -168,6 +220,13 @@
       if(!applied||!applied.ok)throw new Error("学習対局の着手に失敗しました: "+(applied&&applied.reason||"不明なエラー"));
       if(a.type==="deploy")deployments++;
       if(applied.captured)captures+=applied.captured.length;
+      // GitHub Actionsの実行ログに各手の実盤面を逐次出力し、学習中でも追跡可能にする。
+      const liveBoard=state.board.map(row=>row.map(stack=>stack.length?
+        stack.map(piece=>(piece.side==="先手"?"先":"後")+piece.name).join("+"):"."));
+      console.log("GUNGI_TRAINING_POSITION "+JSON.stringify({
+        gameSeed:seed,ply:plies+1,side,move:describeSearchAction(a,selectedPiece),
+        board:liveBoard,turn:state.turn,phase:state.phase
+      }));
       if(applied.gameOver&&applied.winner===side)endReason="marshal-captured";
       const latestHistoryEntry=state.history[state.history.length-1];
       const historyMatchesAction=latestHistoryEntry&&latestHistoryEntry.type==="move"&&a.type==="move"&&
@@ -216,7 +275,9 @@
       searchDepth:searchTelemetry.length?Math.max(...searchTelemetry.map(item=>item.completedDepth)):0,finalTarget,candidateFinalScore:outcome.candidateFinalScore,winner:state.winner||null,draw:state.phase!=="finished"||!state.winner,
       plies,nodes,captures,deployments,uniquePositions:positionVisits.size,repeatedPositionVisits,
       threefoldPositionCount,maxPositionVisits,endReason,adjudicated,adjudicationScore,
-      finalState:{board:state.board,hands:state.hands,turn:state.turn,phase:state.phase,winner:state.winner,moveNumber:state.moveNumber},history:state.history.map(entry=>({...entry}))};
+      startState:{board:setupStart.state.board.map(row=>row.map(stack=>stack.map(piece=>({side:piece.side,name:piece.name})))),hands:Object.fromEntries(["先手","後手"].map(s=>[s,(setupStart.state.hands[s]||[]).map(piece=>piece.name).sort()]))},
+      finalState:{board:state.board,hands:state.hands,turn:state.turn,phase:state.phase,winner:state.winner,moveNumber:state.moveNumber},
+      history:state.history.map(entry=>({...entry}))};
   }
   self.onmessage=async event=>{
     const {id,...message}=event.data||{};
