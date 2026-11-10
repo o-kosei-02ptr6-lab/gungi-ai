@@ -81,21 +81,6 @@
     const hands=["先手","後手"].map(side=>state.hands[side].map(p=>p.name).sort().join(",")).join("|");
     return board+"#"+hands+"#"+state.turn;
   }
-  async function makeStartPosition(seed){
-    const rng=makeRng(seed);
-    for(let attempt=0;attempt<20;attempt++){
-      const state=E.createGameState();
-      for(let i=0;i<12;i++){randomPlacement(state,"先手",rng);randomPlacement(state,"後手",rng);}
-      for(const side of ["先手","後手"]){
-        const finish=E.finishSetup(state,side);
-        if(!finish.ok)throw new Error("自己対局の「済」に失敗: "+finish.reason);
-        randomPlacement(state,side,rng);
-      }
-      if(state.phase!=="move")throw new Error("初期配置を完了できませんでした。");
-      if(!E.isInCheck(state,"先手")&&!E.isInCheck(state,"後手"))return state;
-    }
-    throw new Error("帥手を防げる初期配置を生成できませんでした。");
-  }
   function aPieceForTelemetry(state,action){
     if(!action)return null;
     if(action.type==="move"){
