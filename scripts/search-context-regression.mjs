@@ -15,8 +15,18 @@ for (const file of ["engine-20261107bb.js","evaluation-20261107be.js","search-20
   vm.runInContext(fs.readFileSync(path.join(root,file),"utf8"),context,{filename:file});
 }
 const search=self.GungiSearch;
+const evaluator=self.GungiAI;
 assert.ok(search,"search engine should load");
 assert.equal(typeof search.getSearchContextKey,"function");
+
+// A cloned but position-identical state should reuse the exact evaluation.
+const cacheProbe=self.GungiEngine.createGameState();
+const cacheBefore=evaluator.getEvaluationCacheStats().hits;
+const cacheScoreA=evaluator.evaluate(cacheProbe,"先手");
+const cacheScoreB=evaluator.evaluate(search.cloneState(cacheProbe),"先手");
+assert.equal(cacheScoreA,cacheScoreB,"position cache must preserve the exact evaluation score");
+assert.ok(evaluator.getEvaluationCacheStats().hits>cacheBefore,
+  "cloned identical positions should hit the shared evaluation cache");
 
 // Setup search must honor the mandatory Marshal-first rule for both sides,
 // preserve the front-row-only Marshal square, and return executable placements.
