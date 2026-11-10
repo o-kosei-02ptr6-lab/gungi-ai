@@ -7,7 +7,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const files = {
   "engine-20261107bb.js": "engine-20261107bb.js",
   "evaluation-20261107be.js": "evaluation-20261107be.js",
-  "search-20261107bd.js": "search-20261107bd.js",
+  "search-20261108cycle3.js": "search-20261108cycle3.js",
   "training-worker-20261107a.js": "training-worker-20261107a.js"
 };
 const self = {};
