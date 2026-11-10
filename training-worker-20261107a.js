@@ -34,50 +34,54 @@
     for(const k of FEATURES)v[k]=(b["先手"][k]||0)-(b["後手"][k]||0);
     return v;
   }
-  function cloneSetupState(state){
-    return {
-      ...state,
-      board:state.board.map(row=>row.map(stack=>stack.slice())),
-      hands:{"先手":state.hands["先手"].slice(),"後手":state.hands["後手"].slice()},
-      history:state.history.slice(),
-      setupDone:{...state.setupDone}
-    };
-  }
-  function randomPlacement(state,side,rng){
+  async function searchSetupPlacement(state,side,diagnostics){
     if(state.setupTurn!==side)throw new Error("配置順が一致しません。");
-    const hand=state.hands[side],count=state.history.filter(x=>x.type==="place"&&x.side===side).length;
-    const preferred=count===0?[hand.find(p=>p.name==="帥")].filter(Boolean):[random(hand,rng)];
-    const orderedPieces=preferred.concat(hand.filter(p=>!preferred.some(q=>q.id===p.id)));
-    const enemy=other(side);
-    let safeOwn=[],safeBoth=[],legalFallback=[];
-    for(const piece of orderedPieces){
-      if(!piece)continue;
-      const squares=[];
-      for(let row=0;row<E.SIZE;row++)for(let col=0;col<E.SIZE;col++){
-        if(piece.name==="帥"&&row!==(side==="先手"?E.SIZE-1:0))continue;
-        if(E.canPlacePiece(state,row,col,piece))squares.push({row,col});
-      }
-      const ownSafeForPiece=[];
-      for(const at of squares){
-        const next=cloneSetupState(state);
-        const result=E.placePiece(next,at.row,at.col,side,piece.id);
-        if(!result.ok)continue;
-        const candidate={piece,at};
-        legalFallback.push(candidate);
-        if(E.isInCheck(next,side))continue;
-        ownSafeForPiece.push(candidate);
-        if(!E.isInCheck(next,enemy))safeBoth.push(candidate);
-      }
-      if(ownSafeForPiece.length){safeOwn=ownSafeForPiece;break;}
+    const options={timeMs:100,maxNodes:100,rootCandidateLimit:12,replyCandidateLimit:6,
+      rootBeam:4,replyBeam:3,allowFinish:false,requireNoCheckBoth:true};
+    let result=await S.findBestSetupPlacement(state,options);
+    if(!result.bestMove){
+      // If a neutral placement is impossible, retain own-king safety rather than
+      // aborting a whole training game; record this exception in the report.
+      result=await S.findBestSetupPlacement(state,{...options,requireNoCheckBoth:false});
+      diagnostics.neutralFallbacks++;
     }
-    const choices=safeBoth.length?safeBoth:(safeOwn.length?safeOwn:legalFallback);
-    if(!choices.length)throw new Error(side+"の配置可能なマスがありません。");
-    const chosen=random(choices,rng);
-    const result=E.placePiece(state,chosen.at.row,chosen.at.col,side,chosen.piece.id);
-    if(!result.ok)throw new Error("自己学習の初期配置に失敗: "+result.reason);
-    if(chosen.piece.name==="帥"&&(state.board[chosen.at.row][chosen.at.col].length!==1||
-      chosen.at.row!==(side==="先手"?E.SIZE-1:0)))throw new Error("帥の配置規則に違反しました。");
-    if(E.isInCheck(state,side))throw new Error("自己学習AIが帥手を受ける配置を選びました。");
+    if(!result.bestMove)throw new Error(side+"の配置探索で合法手が見つかりません。");
+    const action=result.bestMove;
+    if(result.finishRecommended){
+      const finish=E.finishSetup(state,side);
+      if(!finish.ok)throw new Error("配置探索が選んだ「済」を実行できません: "+finish.reason);
+    }
+    const applied=E.placePiece(state,action.row,action.col,side,action.pieceId);
+    if(!applied.ok)throw new Error("配置探索の着手に失敗: "+applied.reason);
+    if(E.isInCheck(state,side))throw new Error("配置探索が自陣の帥手を許しました。");
+    diagnostics.placements++;
+    diagnostics.nodes+=result.nodes||0;
+    diagnostics.elapsedMs+=result.elapsedMs||0;
+    diagnostics.candidates+=result.candidateCount||0;
+    return result;
+  }
+  async function makeStartPosition(seed){
+    const activeWeights=AI.getWeights();
+    AI.setWeights(BASELINE_WEIGHTS);
+    try{
+      const state=E.createGameState();
+      const setupDiagnostics={placements:0,nodes:0,elapsedMs:0,candidates:0,neutralFallbacks:0};
+      // Keep the established 12-round alternating order and the mandatory
+      // post-"済" placement, but choose every square and piece via shared search.
+      for(let i=0;i<12;i++){
+        await searchSetupPlacement(state,"先手",setupDiagnostics);
+        await searchSetupPlacement(state,"後手",setupDiagnostics);
+      }
+      for(const side of ["先手","後手"]){
+        const finish=E.finishSetup(state,side);
+        if(!finish.ok)throw new Error("自己対局の「済」に失敗: "+finish.reason);
+        await searchSetupPlacement(state,side,setupDiagnostics);
+      }
+      if(state.phase!=="move")throw new Error("初期配置を完了できませんでした。");
+      if(E.isInCheck(state,"先手")||E.isInCheck(state,"後手"))
+        throw new Error("配置探索後の初期局面で帥手が発生しました。");
+      return {state,setupDiagnostics};
+    }finally{AI.setWeights(activeWeights);}
   }
   function positionKey(state){
     const board=state.board.map(row=>row.map(stack=>stack.map(p=>p.side+":"+p.name).join(",")).join("/")).join("|");
@@ -117,7 +121,8 @@
   }
   async function play(message){
     const {candidateWeights,championWeights,candidateSide,maxPlies=108,searchOptions={},seed=1}=message;
-    const state=await makeStartPosition(seed),startKey=positionKey(state),trajectory=[],mateSamples=[],repetitionEvents=[],moveLog=[],searchTelemetry=[],positionSamples=[];
+    const setupStart=await makeStartPosition(seed),state=setupStart.state,setupDiagnostics=setupStart.setupDiagnostics;
+    const startKey=positionKey(state),trajectory=[],mateSamples=[],repetitionEvents=[],moveLog=[],searchTelemetry=[],positionSamples=[];
     const positionVisits=new Map([[startKey,{visits:1,lastPly:0,lastActionIndex:0}]]);
     let nodes=0,plies=0,captures=0,deployments=0,repeatedPositionVisits=0,
       threefoldPositionCount=0,maxPositionVisits=1,endReason="max-plies";
@@ -229,7 +234,7 @@
       (!!state.winner&&state.winner===sample.attackerSide&&plies+1-sample.ply<=8))
       .map(sample=>({features:candidateSide==="先手"?sample.features:Object.fromEntries(FEATURES.map(k=>[k,-sample.features[k]])),
         target:sample.source==="search-proof"?sample.target:(sample.attackerSide===candidateSide?1:-1)}));
-    return {candidateSide,startKey,trajectory,mateSamples:directSamples,repetitionEvents,searchTelemetry,positionSamples,
+    return {candidateSide,startKey,setupDiagnostics,trajectory,mateSamples:directSamples,repetitionEvents,searchTelemetry,positionSamples,
       searchDepth:searchTelemetry.length?Math.max(...searchTelemetry.map(item=>item.completedDepth)):0,finalTarget,candidateFinalScore:outcome.candidateFinalScore,winner:state.winner||null,draw:state.phase!=="finished"||!state.winner,
       plies,nodes,captures,deployments,uniquePositions:positionVisits.size,repeatedPositionVisits,
       threefoldPositionCount,maxPositionVisits,endReason,adjudicated,adjudicationScore,
