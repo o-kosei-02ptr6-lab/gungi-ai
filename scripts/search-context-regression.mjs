@@ -27,6 +27,15 @@ const cacheScoreB=evaluator.evaluate(search.cloneState(cacheProbe),"先手");
 assert.equal(cacheScoreA,cacheScoreB,"position cache must preserve the exact evaluation score");
 assert.ok(evaluator.getEvaluationCacheStats().hits>cacheBefore,
   "cloned identical positions should hit the shared evaluation cache");
+const marshal=cacheProbe.hands["先手"].find(piece=>piece.name==="帥");
+assert.ok(self.GungiEngine.placePiece(cacheProbe,8,4,"先手",marshal.id).ok,
+  "cache probe should mutate through a legal Marshal placement");
+const mutatedScore=evaluator.evaluate(cacheProbe,"先手");
+const mutatedCloneScore=evaluator.evaluate(search.cloneState(cacheProbe),"先手");
+assert.equal(mutatedScore,mutatedCloneScore,
+  "mutating a state object must invalidate its object-identity evaluation cache");
+assert.notEqual(mutatedScore,cacheScoreA,
+  "a changed board must not reuse the previous position's evaluation");
 
 // Setup search must honor the mandatory Marshal-first rule for both sides,
 // preserve the front-row-only Marshal square, and return executable placements.
