@@ -558,6 +558,7 @@
           if (!actions.length) return isInCheckMemo(position, position.turn, memo) ? -MATE + ply : evaluateMemo(position, position.turn, memo);
           let bestScore = -INF;
           let bestAction = null;
+          const rootCandidates = [];
           for (let index = 0; index < actions.length; index += 1) {
             const action = actions[index];
             checkStop();
@@ -589,6 +590,7 @@
                 score = -negamax(child, depth - 1, -beta, -alpha, ply + 1) - penalty - retreatPenalty;
               }
             }
+            rootCandidates.push({ action: actionKey(action), score: Number.isFinite(score) ? Math.round(score) : null });
             if (score > bestScore) {
               bestScore = score;
               bestAction = action;
@@ -641,7 +643,8 @@
             if (alpha >= beta) break;
           }
           if (bestAction) store(key, { depth, score: bestScore, flag: "exact", best: bestAction });
-          return { bestAction, score: bestScore };
+          rootCandidates.sort((a,b) => (b.score ?? -INF) - (a.score ?? -INF));
+          return { bestAction, score: bestScore, rootCandidates: rootCandidates.slice(0, 5) };
         }
 
         let completed = null;
@@ -687,7 +690,8 @@
           transpositionHits: stats.ttHits,
           checkCacheHits: memo.checkHits,
           evaluationCacheHits: memo.evaluationHits,
-          elapsedMs: Math.round(now() - started)
+          elapsedMs: Math.round(now() - started),
+          rootCandidates: result.rootCandidates || []
         });
       })().catch(reject);
     });
