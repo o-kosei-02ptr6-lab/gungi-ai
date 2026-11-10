@@ -5,7 +5,7 @@
   importScripts(
     "./engine-20261107bb.js?v=20261108cycle5",
     "./evaluation-20261107be.js?v=20261111evalcache2",
-    "./search-20261108cycle2.js?v=20261111evalcache2"
+    "./search-20261108cycle3.js?v=20261111setupcompletion1"
   );
   const E=self.GungiEngine, AI=self.GungiAI, S=self.GungiSearch;
   const FEATURES=["material","hand","position","activity","mobility","threats","exposure","kingSafety","mateNet"];
@@ -36,8 +36,8 @@
   }
   async function searchSetupPlacement(state,side,diagnostics,allowFinish=true){
     if(state.setupTurn!==side)throw new Error("配置順が一致しません。");
-    const options={timeMs:100,maxNodes:100,rootCandidateLimit:12,replyCandidateLimit:6,
-      rootBeam:4,replyBeam:3,allowFinish,requireNoCheckBoth:true};
+    const options={timeMs:350,maxNodes:360,rootCandidateLimit:12,replyCandidateLimit:6,
+      rootBeam:4,replyBeam:2,allowFinish,requireNoCheckBoth:true};
     let result=await S.findBestSetupPlacement(state,options);
     if(!result.bestMove){
       // If a neutral placement is impossible, retain own-king safety rather than
