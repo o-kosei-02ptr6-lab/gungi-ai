@@ -5,7 +5,7 @@
   importScripts(
     "./engine-20261107bb.js?v=20261108cycle5",
     "./evaluation-20261107be.js?v=20261108conversion1",
-    "./search-20261108cycle2.js?v=20261110cyclesample3"
+    "./search-20261108cycle2.js?v=20261110cyclesample4"
   );
   const E=self.GungiEngine, AI=self.GungiAI, S=self.GungiSearch;
   const FEATURES=["material","hand","position","activity","mobility","threats","exposure","kingSafety","mateNet"];
@@ -154,6 +154,7 @@
         evaluationCacheHits:result.evaluationCacheHits||0,
         elapsedMs:result.elapsedMs||0,score:Number.isFinite(result.score)?result.score:null,
         selectedMove:describeSearchAction(result.bestMove,selectedPiece),
+        rootCandidateSource:result.rootCandidateSource||((result.rootCandidates||[]).length?"search":"none"),
         rootCandidates:(result.rootCandidates||[]).map(item=>({action:item.action,score:item.score})),
         iterations
       });
@@ -170,6 +171,7 @@
         completedDepth:Number.isFinite(result.depth)?result.depth:0,
         score:Number.isFinite(result.score)?Math.round(result.score):null,
         selectedMove:describeSearchAction(result.bestMove,selectedPiece),
+        rootCandidateSource:result.rootCandidateSource||((result.rootCandidates||[]).length?"search":"none"),
         rootCandidates:(result.rootCandidates||[]).map(item=>({action:item.action,score:item.score}))
       };
       positionSamples.push(positionSample);
