@@ -41,6 +41,17 @@ const secondPlacement=engine.placePiece(setupState,secondSetup.bestMove.row,
   secondSetup.bestMove.col,"後手",secondSetup.bestMove.pieceId);
 assert.ok(secondPlacement.ok,"second Marshal placement should execute");
 assert.equal(setupState.setupTurn,"先手","alternating setup order should be preserved");
+const thirdSetup=await search.findBestSetupPlacement(setupState,{
+  timeMs:100,maxNodes:100,allowFinish:true,requireNoCheckBoth:true
+});
+assert.ok(thirdSetup.bestMove,"setup search should continue after both Marshals are placed");
+if(thirdSetup.finishRecommended){
+  assert.ok(engine.finishSetup(setupState,setupState.setupTurn).ok,
+    "search-recommended finish should be accepted by the engine");
+}
+assert.ok(engine.placePiece(setupState,thirdSetup.bestMove.row,thirdSetup.bestMove.col,
+  setupState.setupTurn,thirdSetup.bestMove.pieceId).ok,
+  "searched setup placement should execute after an optional finish");
 
 const empty=()=>Array.from({length:9},()=>Array.from({length:9},()=>[]));
 const base={board:empty(),hands:{"先手":[],"後手":[]},turn:"先手",history:[]};
