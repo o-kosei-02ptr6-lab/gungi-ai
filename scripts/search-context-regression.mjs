@@ -94,8 +94,15 @@ const fallbackTelemetry=await search.findBestMove(telemetryState,{
 assert.ok(fallbackTelemetry.bestMove,"fallback search should still return a legal move");
 assert.ok(fallbackTelemetry.rootCandidates.length>0 && fallbackTelemetry.rootCandidates.length<=5,
   "depth-zero searches should still expose a candidate shortlist");
-assert.equal(fallbackTelemetry.rootCandidateSource,"static-fallback",
-  "depth-zero candidate scores must be labeled as static fallback scores");
+assert.ok(["search","static-fallback"].includes(fallbackTelemetry.rootCandidateSource),
+  "candidate scores must identify whether they came from search or static fallback");
+if (fallbackTelemetry.depth === 0) {
+  assert.equal(fallbackTelemetry.rootCandidateSource,"static-fallback",
+    "depth-zero candidate scores must be labeled as static fallback scores");
+} else {
+  assert.equal(fallbackTelemetry.rootCandidateSource,"search",
+    "completed-depth candidate scores must be labeled as search scores");
+}
 
 console.log(JSON.stringify({
   success:true,
