@@ -403,6 +403,7 @@
         const maxDeployCandidates = Math.max(0, Math.min(24, Number(options.maxDeployCandidates) || 12));
         const maxTTEntries = Math.max(2000, Math.min(100000, Number(options.maxTTEntries) || 30000));
         const started = now();
+        const evaluationCacheStart = AI.getEvaluationCacheStats ? AI.getEvaluationCacheStats().hits : 0;
         const deadline = started + timeMs;
         const root = cloneState(state);
         const table = new Map();
@@ -741,6 +742,8 @@
           transpositionHits: stats.ttHits,
           checkCacheHits: memo.checkHits,
           evaluationCacheHits: memo.evaluationHits,
+          positionEvaluationCacheHits: AI.getEvaluationCacheStats
+            ? AI.getEvaluationCacheStats().hits - evaluationCacheStart : 0,
           legalMoveCacheHits: memo.legalMoveHits,
           elapsedMs: Math.round(now() - started),
           rootCandidates,
