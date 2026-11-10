@@ -41,6 +41,23 @@
     return Math.round(output);
   }
   const breakdownCache = new WeakMap();
+  // Reuse exact evaluations across distinct cloned positions in the same worker.
+  // Evaluation depends on board, hands and weights, not on move history.
+  const positionBreakdownCache = new Map();
+  const POSITION_CACHE_LIMIT = 8192;
+  const positionCacheStats = { hits: 0, misses: 0 };
+  function positionCacheKey(state, signature) {
+    const board = state.board.map(row => row.map(stack =>
+      stack.map(piece => (piece.side === "先手" ? "S" : "G") + piece.id + ":" + piece.name).join(".")
+    ).join(",")).join("|");
+    const hands = ["先手", "後手"].map(side =>
+      (state.hands[side] || []).map(piece => piece.id + ":" + piece.name).sort().join(",")
+    ).join("|");
+    return signature + "#" + state.phase + "#" + (state.winner || "") + "#" + board + "#" + hands;
+  }
+  function getEvaluationCacheStats() {
+    return { ...positionCacheStats, size: positionBreakdownCache.size };
+  }
   function weightsSignature() {
     return WEIGHT_KEYS.map(key => weights[key]).join(",");
   }
@@ -480,6 +497,16 @@
     const signature = weightsSignature();
     const cached = breakdownCache.get(state);
     if (cached && cached.signature === signature) return cached.result;
+    const sharedKey = positionCacheKey(state, signature);
+    const shared = positionBreakdownCache.get(sharedKey);
+    if (shared) {
+      positionBreakdownCache.delete(sharedKey);
+      positionBreakdownCache.set(sharedKey, shared);
+      breakdownCache.set(state, { signature, result: shared });
+      positionCacheStats.hits += 1;
+      return shared;
+    }
+    positionCacheStats.misses += 1;
     const sides = ["先手", "後手"];
     const context = {
       moveLists: new Map(sides.map(side => [side, E.generateLegalMoves(state, side)])),
@@ -516,6 +543,11 @@
       terminal
     };
     breakdownCache.set(state, { signature, result });
+    positionBreakdownCache.set(sharedKey, result);
+    if (positionBreakdownCache.size > POSITION_CACHE_LIMIT) {
+      const oldest = positionBreakdownCache.keys().next();
+      if (!oldest.done) positionBreakdownCache.delete(oldest.value);
+    }
     return result;
   }
 
@@ -532,6 +564,7 @@
     setWeights,
     getWeights,
     evaluate,
-    evaluateBreakdown
+    evaluateBreakdown,
+    getEvaluationCacheStats
   });
 })();
