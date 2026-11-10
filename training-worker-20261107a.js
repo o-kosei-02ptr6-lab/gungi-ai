@@ -152,6 +152,11 @@
   async function play(message){
     const {candidateWeights,championWeights,candidateSide,maxPlies=108,searchOptions={},seed=1}=message;
     const setupStart=await makeStartPosition(seed),state=setupStart.state,setupDiagnostics=setupStart.setupDiagnostics;
+    const startStateSnapshot={
+      board:state.board.map(row=>row.map(stack=>stack.map(piece=>({side:piece.side,name:piece.name})))),
+      hands:Object.fromEntries(["先手","後手"].map(s=>[s,(state.hands[s]||[]).map(piece=>piece.name).sort()])),
+      turn:state.turn,phase:state.phase,moveNumber:state.moveNumber
+    };
     const startKey=positionKey(state),trajectory=[],mateSamples=[],repetitionEvents=[],moveLog=[],searchTelemetry=[],positionSamples=[];
     const positionVisits=new Map([[startKey,{visits:1,lastPly:0,lastActionIndex:0}]]);
     let nodes=0,plies=0,captures=0,deployments=0,repeatedPositionVisits=0,
@@ -275,7 +280,7 @@
       searchDepth:searchTelemetry.length?Math.max(...searchTelemetry.map(item=>item.completedDepth)):0,finalTarget,candidateFinalScore:outcome.candidateFinalScore,winner:state.winner||null,draw:state.phase!=="finished"||!state.winner,
       plies,nodes,captures,deployments,uniquePositions:positionVisits.size,repeatedPositionVisits,
       threefoldPositionCount,maxPositionVisits,endReason,adjudicated,adjudicationScore,
-      startState:{board:setupStart.state.board.map(row=>row.map(stack=>stack.map(piece=>({side:piece.side,name:piece.name})))),hands:Object.fromEntries(["先手","後手"].map(s=>[s,(setupStart.state.hands[s]||[]).map(piece=>piece.name).sort()]))},
+      startState:startStateSnapshot,
       finalState:{board:state.board,hands:state.hands,turn:state.turn,phase:state.phase,winner:state.winner,moveNumber:state.moveNumber},
       history:state.history.map(entry=>({...entry}))};
   }
