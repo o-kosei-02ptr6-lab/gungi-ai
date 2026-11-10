@@ -11,7 +11,7 @@ const context = vm.createContext({
   self, window: self, console, Date, Math, Map, Set, Object, Array, Number,
   String, Boolean, JSON, Promise, Error, TypeError, performance, setTimeout, clearTimeout
 });
-for (const file of ["engine-20261107bb.js","evaluation-20261107be.js","search-20261108cycle2.js"]) {
+for (const file of ["engine-20261107bb.js","evaluation-20261107be.js","search-20261108cycle3.js"]) {
   vm.runInContext(fs.readFileSync(path.join(root,file),"utf8"),context,{filename:file});
 }
 const search=self.GungiSearch;
