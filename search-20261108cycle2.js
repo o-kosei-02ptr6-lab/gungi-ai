@@ -408,7 +408,7 @@
         const table = new Map();
         const stats = { nodes: 0, qnodes: 0, cutoffs: 0, ttHits: 0,
           q: { inCheckNodes: 0, quietNodes: 0, standPatEvaluations: 0,
-            standPatCutoffs: 0, qplyLimitStops: 0, repetitionStops: 0,
+            standPatCutoffs: 0, qplyLimitStops: 0, adaptiveQuietStops: 0, repetitionStops: 0,
             terminalNodes: 0, evasionActions: 0, captureActions: 0,
             checkingActions: 0, noTacticalActions: 0, appliedActions: 0,
             evasionLimitNodes: 0, timingSamples: 0,
@@ -470,9 +470,19 @@
           if (sampled) q.evaluationMs += now() - t;
           if (!inCheck) {
             q.standPatEvaluations++;
+            const alphaBeforeStandPat = alpha;
             if (standPat >= beta) { q.standPatCutoffs++; return standPat; }
             if (standPat > alpha) alpha = standPat;
-            if (qply >= 5) { q.qplyLimitStops++; return standPat; }
+            // Stable quiet positions stop after two tactical plies when the
+            // stand-pat score is close to the incoming alpha. This keeps early
+            // captures and the opponent's immediate recapture, while avoiding
+            // expensive speculative capture chains in quiet positions.
+            // Check evasions are handled above and are never pruned here.
+            if (qply >= 2 && standPat >= alphaBeforeStandPat - 120) {
+              q.adaptiveQuietStops++;
+              return alpha;
+            }
+            if (qply >= 5) { q.qplyLimitStops++; return alpha; }
           }
 
           // 帥手中は静止評価で打ち切らず、合法な全応手を調べる。
