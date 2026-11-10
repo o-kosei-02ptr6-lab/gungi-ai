@@ -70,7 +70,7 @@
   async function searchSetupPlacement(state,side){
     if(state.setupTurn!==side)throw new Error("配置順が一致しません。");
     const options={timeMs:100,maxNodes:100,rootCandidateLimit:12,replyCandidateLimit:6,
-      rootBeam:4,replyBeam:3,allowFinish:false,requireNoCheckBoth:true};
+      rootBeam:4,replyBeam:3,allowFinish:true,requireNoCheckBoth:true};
     let result=await S.findBestSetupPlacement(state,options);
     if(!result.bestMove)result=await S.findBestSetupPlacement(state,{...options,requireNoCheckBoth:false});
     if(!result.bestMove)throw new Error(side+"の配置探索で合法手が見つかりません。");
@@ -89,16 +89,9 @@
     AI.setWeights(BASELINE_WEIGHTS);
     try{
       const state=E.createGameState();
-      for(let i=0;i<12;i++){
-        await searchSetupPlacement(state,"先手");
-        await searchSetupPlacement(state,"後手");
-      }
-      for(const side of ["先手","後手"]){
-        const finish=E.finishSetup(state,side);
-        if(!finish.ok)throw new Error("自己対局の「済」に失敗: "+finish.reason);
-        await searchSetupPlacement(state,side);
-      }
-      if(state.phase!=="move")throw new Error("初期配置を完了できませんでした。");
+      for(let step=0;state.phase==="setup"&&step<50;step++)
+        await searchSetupPlacement(state,state.setupTurn);
+      if(state.phase!=="move")throw new Error("配置探索が50回以内に初期配置を完了できませんでした。");
       return state;
     }finally{AI.setWeights(activeWeights);}
   }
