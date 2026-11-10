@@ -152,6 +152,7 @@
         cutoffs:result.cutoffs||0,transpositionHits:result.transpositionHits||0,
         checkCacheHits:result.checkCacheHits||0,
         evaluationCacheHits:result.evaluationCacheHits||0,
+        legalMoveCacheHits:result.legalMoveCacheHits||0,
         elapsedMs:result.elapsedMs||0,score:Number.isFinite(result.score)?result.score:null,
         selectedMove:describeSearchAction(result.bestMove,selectedPiece),
         rootCandidateSource:result.rootCandidateSource||((result.rootCandidates||[]).length?"search":"none"),
