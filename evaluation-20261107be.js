@@ -495,14 +495,16 @@
       throw new TypeError("有効な軍儀の局面を指定してください。");
     }
     const signature = weightsSignature();
-    const cached = breakdownCache.get(state);
-    if (cached && cached.signature === signature) return cached.result;
     const sharedKey = positionCacheKey(state, signature);
+    const cached = breakdownCache.get(state);
+    // Game states are mutable outside the search tree. Validate the current
+    // board/hand key before reusing an object-identity cache entry.
+    if (cached && cached.signature === signature && cached.key === sharedKey) return cached.result;
     const shared = positionBreakdownCache.get(sharedKey);
     if (shared) {
       positionBreakdownCache.delete(sharedKey);
       positionBreakdownCache.set(sharedKey, shared);
-      breakdownCache.set(state, { signature, result: shared });
+      breakdownCache.set(state, { signature, key: sharedKey, result: shared });
       positionCacheStats.hits += 1;
       return shared;
     }
@@ -542,7 +544,7 @@
       score: terminal === null ? first.total - second.total : terminal,
       terminal
     };
-    breakdownCache.set(state, { signature, result });
+    breakdownCache.set(state, { signature, key: sharedKey, result });
     positionBreakdownCache.set(sharedKey, result);
     if (positionBreakdownCache.size > POSITION_CACHE_LIMIT) {
       const oldest = positionBreakdownCache.keys().next();
