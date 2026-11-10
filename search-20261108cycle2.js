@@ -38,6 +38,22 @@
     return value;
   }
 
+  // Legal move generation is pure for an immutable search position. Share
+  // each side's move list across capture generation, checking extensions,
+  // and ordinary action generation within this search.
+  function legalMovesMemo(state, side, memo) {
+    if (!memo) return E.generateLegalMoves(state, side);
+    let bySide = memo.legalMoves.get(state);
+    if (!bySide) { bySide = new Map(); memo.legalMoves.set(state, bySide); }
+    if (bySide.has(side)) {
+      memo.legalMoveHits += 1;
+      return bySide.get(side);
+    }
+    const moves = E.generateLegalMoves(state, side);
+    bySide.set(side, moves);
+    return moves;
+  }
+
   function cloneState(state) {
     return {
       board: state.board.map(row => row.map(stack => stack.slice())),
@@ -166,7 +182,7 @@
 
   function generateActions(state, side, maxDeployCandidates, detectWinningCapture = true, memo = null) {
     const actions = [];
-    const moves = E.generateLegalMoves(state, side);
+    const moves = legalMovesMemo(state, side, memo);
     for (const move of moves) {
       const target = state.board[move.to.row][move.to.col];
       if (!target.length) {
@@ -338,9 +354,9 @@
 
   // 静止探索用：通常探索の末端でも、実際に駒を取る手だけを追加で読む。
   // 「取り合いの途中」で評価を止める水平線効果を軽減する。
-  function generateCaptureActions(state, side) {
+  function generateCaptureActions(state, side, memo = null) {
     const actions = [];
-    for (const move of E.generateLegalMoves(state, side)) {
+    for (const move of legalMovesMemo(state, side, memo)) {
       const target = state.board[move.to.row][move.to.col];
       if (!target.length || target[target.length - 1].side === side) continue;
       actions.push({
@@ -399,7 +415,7 @@
             generationMs: 0, orderingMs: 0, evaluationMs: 0,
             checkMs: 0, applyMs: 0 }
         };
-        const memo = { checks: new WeakMap(), evaluations: new WeakMap(), checkHits: 0, evaluationHits: 0 };
+        const memo = { checks: new WeakMap(), evaluations: new WeakMap(), legalMoves: new WeakMap(), checkHits: 0, evaluationHits: 0, legalMoveHits: 0 };
         // Killer moves and history scores improve ordering of quiet moves.
         // They are local to one search and never alter legal move generation.
         const killers = new Map();
@@ -467,7 +483,7 @@
             tactical = getSearchActions(position, position.turn, maxDeployCandidates, memo);
             q.evasionActions += tactical.length;
           } else {
-            const captures = generateCaptureActions(position, position.turn);
+            const captures = generateCaptureActions(position, position.turn, memo);
             q.captureActions += captures.length;
             if (qply >= 1) tactical = captures;
             else {
@@ -715,6 +731,7 @@
           transpositionHits: stats.ttHits,
           checkCacheHits: memo.checkHits,
           evaluationCacheHits: memo.evaluationHits,
+          legalMoveCacheHits: memo.legalMoveHits,
           elapsedMs: Math.round(now() - started),
           rootCandidates,
           rootCandidateSource
