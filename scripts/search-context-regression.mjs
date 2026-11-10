@@ -81,8 +81,23 @@ for(const key of ["depth","nodes","quiescenceNodes","cutoffs","transpositionHits
   assert.ok(Number.isFinite(telemetry[key]),"search result should expose "+key);
 assert.ok(progress.length>0,"iterative-deepening progress should be observable");
 assert.equal(progress.at(-1).depth,telemetry.depth);
+assert.ok(telemetry.rootCandidates.length>0 && telemetry.rootCandidates.length<=5,
+  "completed searches should preserve up to five root candidates");
+assert.equal(telemetry.rootCandidateSource,"search",
+  "completed-depth candidate scores should be labeled as search scores");
+
+// Force an intentionally tiny budget: even when no iteration completes, the
+// engine must retain a separate static-evaluation shortlist for diagnostics.
+const fallbackTelemetry=await search.findBestMove(telemetryState,{
+  maxDepth:8,timeMs:100,maxNodes:1000,maxDeployCandidates:0
+});
+assert.ok(fallbackTelemetry.bestMove,"fallback search should still return a legal move");
+assert.ok(fallbackTelemetry.rootCandidates.length>0 && fallbackTelemetry.rootCandidates.length<=5,
+  "depth-zero searches should still expose a candidate shortlist");
+assert.equal(fallbackTelemetry.rootCandidateSource,"static-fallback",
+  "depth-zero candidate scores must be labeled as static fallback scores");
 
 console.log(JSON.stringify({
   success:true,
-  tests:["history-sensitive TT key","cycle-length-independent repetition cost","repeat-count escalation","historical retreat diagnostic","Marshal escape exemption","per-search depth and cost telemetry"]
+  tests:["history-sensitive TT key","cycle-length-independent repetition cost","repeat-count escalation","historical retreat diagnostic","Marshal escape exemption","per-search depth and cost telemetry","root candidate shortlist after timeout","candidate score source labeling"]
 },null,2));
