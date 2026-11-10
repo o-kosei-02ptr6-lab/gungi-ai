@@ -255,6 +255,8 @@ const summary = {
         meanCheckCacheHits:Number(average("checkCacheHits").toFixed(2)),
         totalEvaluationCacheHits:all.reduce((sum,item)=>sum+(Number(item.evaluationCacheHits)||0),0),
         meanEvaluationCacheHits:Number(average("evaluationCacheHits").toFixed(2)),
+        totalLegalMoveCacheHits:all.reduce((sum,item)=>sum+(Number(item.legalMoveCacheHits)||0),0),
+        meanLegalMoveCacheHits:Number(average("legalMoveCacheHits").toFixed(2)),
         cacheHitSearches:all.filter(item=>(Number(item.checkCacheHits)||0)+(Number(item.evaluationCacheHits)||0)>0).length,
         bySide:["先手","後手"].reduce((out,side)=>{
           const subset=all.filter(item=>item.side===side);
