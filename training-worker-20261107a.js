@@ -37,7 +37,7 @@
   async function searchSetupPlacement(state,side,diagnostics){
     if(state.setupTurn!==side)throw new Error("配置順が一致しません。");
     const options={timeMs:100,maxNodes:100,rootCandidateLimit:12,replyCandidateLimit:6,
-      rootBeam:4,replyBeam:3,allowFinish:false,requireNoCheckBoth:true};
+      rootBeam:4,replyBeam:3,allowFinish:true,requireNoCheckBoth:true};
     let result=await S.findBestSetupPlacement(state,options);
     if(!result.bestMove){
       // If a neutral placement is impossible, retain own-king safety rather than
@@ -58,6 +58,7 @@
     diagnostics.nodes+=result.nodes||0;
     diagnostics.elapsedMs+=result.elapsedMs||0;
     diagnostics.candidates+=result.candidateCount||0;
+    diagnostics.finishDecisions+=result.finishRecommended?1:0;
     return result;
   }
   async function makeStartPosition(seed){
@@ -65,21 +66,13 @@
     AI.setWeights(BASELINE_WEIGHTS);
     try{
       const state=E.createGameState();
-      const setupDiagnostics={placements:0,nodes:0,elapsedMs:0,candidates:0,neutralFallbacks:0};
-      // Keep the established 12-round alternating order and the mandatory
-      // post-"済" placement, but choose every square and piece via shared search.
-      for(let i=0;i<12;i++){
-        await searchSetupPlacement(state,"先手",setupDiagnostics);
-        await searchSetupPlacement(state,"後手",setupDiagnostics);
+      const setupDiagnostics={placements:0,nodes:0,elapsedMs:0,candidates:0,neutralFallbacks:0,finishDecisions:0};
+      // Let the same two-ply setup search choose both placements and the
+      // timing of "済". Every chosen finish is followed by its mandatory placement.
+      for(let step=0;state.phase==="setup"&&step<50;step++){
+        await searchSetupPlacement(state,state.setupTurn,setupDiagnostics);
       }
-      for(const side of ["先手","後手"]){
-        const finish=E.finishSetup(state,side);
-        if(!finish.ok)throw new Error("自己対局の「済」に失敗: "+finish.reason);
-        await searchSetupPlacement(state,side,setupDiagnostics);
-      }
-      if(state.phase!=="move")throw new Error("初期配置を完了できませんでした。");
-      // Own-king safety is checked after every placement. An opponent check
-      // created by a placement is a legal strategic outcome, not a setup error.
+      if(state.phase!=="move")throw new Error("配置探索が50回以内に初期配置を完了できませんでした。");
       return {state,setupDiagnostics};
     }finally{AI.setWeights(activeWeights);}
   }
