@@ -558,7 +558,6 @@
           if (!actions.length) return isInCheckMemo(position, position.turn, memo) ? -MATE + ply : evaluateMemo(position, position.turn, memo);
           let bestScore = -INF;
           let bestAction = null;
-          const rootCandidates = [];
           for (let index = 0; index < actions.length; index += 1) {
             const action = actions[index];
             checkStop();
@@ -616,6 +615,7 @@
           const beta = betaStart;
           let bestScore = -INF;
           let bestAction = null;
+          const rootCandidates = [];
           for (let index = 0; index < actions.length; index += 1) {
             const action = actions[index];
             checkStop();
