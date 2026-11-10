@@ -80,6 +80,9 @@ assert.ok(telemetry.bestMove,"telemetry smoke position should produce a legal mo
 for(const key of ["depth","nodes","quiescenceNodes","cutoffs","transpositionHits","elapsedMs"])
   assert.ok(Number.isFinite(telemetry[key]),"search result should expose "+key);
 assert.ok(progress.length>0,"iterative-deepening progress should be observable");
+assert.ok(telemetry.quiescenceDiagnostics &&
+  Number.isFinite(telemetry.quiescenceDiagnostics.adaptiveQuietStops),
+  "quiescence diagnostics should expose adaptive quiet-position stops");
 assert.equal(progress.at(-1).depth,telemetry.depth);
 assert.ok(telemetry.rootCandidates.length>0 && telemetry.rootCandidates.length<=5,
   "completed searches should preserve up to five root candidates");
