@@ -5,7 +5,7 @@
   importScripts(
     "./engine-20261107bb.js?v=20261108cycle5",
     "./evaluation-20261107be.js?v=20261108conversion1",
-    "./search-20261108cycle2.js?v=20261108cycle14"
+    "./search-20261108cycle2.js?v=20261110cyclesample1"
   );
   const E=self.GungiEngine, AI=self.GungiAI, S=self.GungiSearch;
   const FEATURES=["material","hand","position","activity","mobility","threats","exposure","kingSafety","mateNet"];
@@ -117,12 +117,18 @@
   }
   async function play(message){
     const {candidateWeights,championWeights,candidateSide,maxPlies=108,searchOptions={},seed=1}=message;
-    const state=await makeStartPosition(seed),startKey=positionKey(state),trajectory=[],mateSamples=[],repetitionEvents=[],moveLog=[],searchTelemetry=[];
+    const state=await makeStartPosition(seed),startKey=positionKey(state),trajectory=[],mateSamples=[],repetitionEvents=[],moveLog=[],searchTelemetry=[],positionSamples=[];
     const positionVisits=new Map([[startKey,{visits:1,lastPly:0,lastActionIndex:0}]]);
     let nodes=0,plies=0,captures=0,deployments=0,repeatedPositionVisits=0,
       threefoldPositionCount=0,maxPositionVisits=1,endReason="max-plies";
     for(;plies<maxPlies&&state.phase==="move";plies++){
       const side=state.turn,isCandidate=side===candidateSide,positionFeatures=snapshotFeatures(state);
+      const positionSample={
+        ply:plies,turn:side,positionKey:positionKey(state),
+        board:state.board.map(row=>row.map(stack=>stack.map(piece=>({side:piece.side,name:piece.name})))),
+        hands:Object.fromEntries(["先手","後手"].map(s=>[s,(state.hands[s]||[]).map(piece=>piece.name).sort()])),
+        evaluationFeatures:positionFeatures
+      };
       // 全局面を常に学習AI側の視点に統一する。手番による反転は行わない。
       trajectory.push(candidateSide==="先手"?positionFeatures:Object.fromEntries(FEATURES.map(k=>[k,-positionFeatures[k]])));
       AI.setWeights(isCandidate?candidateWeights:championWeights);
@@ -148,6 +154,7 @@
         evaluationCacheHits:result.evaluationCacheHits||0,
         elapsedMs:result.elapsedMs||0,score:Number.isFinite(result.score)?result.score:null,
         selectedMove:describeSearchAction(result.bestMove,selectedPiece),
+        rootCandidates:(result.rootCandidates||[]).map(item=>({action:item.action,score:item.score})),
         iterations
       });
       const mateScore=isCandidate?result.score:-result.score;
@@ -158,6 +165,14 @@
         // 帥手を無視する合法手も探索候補に含めたうえで、真に手がない場合は引き分け扱いにする。
         state.phase="finished";state.winner=null;endReason="no-legal-action";break;
       }
+      positionSample.search={
+        requestedDepth:Math.max(1,Math.min(8,Number(searchOptions.maxDepth)||5)),
+        completedDepth:Number.isFinite(result.depth)?result.depth:0,
+        score:Number.isFinite(result.score)?Math.round(result.score):null,
+        selectedMove:describeSearchAction(result.bestMove,selectedPiece),
+        rootCandidates:(result.rootCandidates||[]).map(item=>({action:item.action,score:item.score}))
+      };
+      positionSamples.push(positionSample);
       const a=result.bestMove;
       const movingPiece=a.type==="move"?state.board[a.from.row][a.from.col].slice(-1)[0]:null;
       const deployingPiece=a.type==="deploy"?state.hands[side].find(piece=>piece.id===a.pieceId):null;
@@ -194,7 +209,8 @@
           repetitionEvents.push({ply:plies+1,previousPly:previous.lastPly,cycleLength:plies+1-previous.lastPly,visits,
             move:moveLog[moveLog.length-1]||null,
             cycleMoves:moveLog.slice(previous.lastActionIndex).slice(-24),
-            cycleSearches:searchTelemetry.filter(item=>item.ply>previous.lastPly&&item.ply<=plies+1)});
+            cycleSearches:searchTelemetry.filter(item=>item.ply>previous.lastPly&&item.ply<=plies+1),
+            cyclePositions:positionSamples.filter(sample=>sample.ply>=previous.lastPly&&sample.ply<plies+1).slice(-24)});
         }
         if(visits===3)threefoldPositionCount++;
         maxPositionVisits=Math.max(maxPositionVisits,visits);
@@ -210,7 +226,7 @@
       (!!state.winner&&state.winner===sample.attackerSide&&plies+1-sample.ply<=8))
       .map(sample=>({features:candidateSide==="先手"?sample.features:Object.fromEntries(FEATURES.map(k=>[k,-sample.features[k]])),
         target:sample.source==="search-proof"?sample.target:(sample.attackerSide===candidateSide?1:-1)}));
-    return {candidateSide,startKey,trajectory,mateSamples:directSamples,repetitionEvents,searchTelemetry,
+    return {candidateSide,startKey,trajectory,mateSamples:directSamples,repetitionEvents,searchTelemetry,positionSamples,
       searchDepth:searchTelemetry.length?Math.max(...searchTelemetry.map(item=>item.completedDepth)):0,finalTarget,candidateFinalScore:outcome.candidateFinalScore,winner:state.winner||null,draw:state.phase!=="finished"||!state.winner,
       plies,nodes,captures,deployments,uniquePositions:positionVisits.size,repeatedPositionVisits,
       threefoldPositionCount,maxPositionVisits,endReason,adjudicated,adjudicationScore,
