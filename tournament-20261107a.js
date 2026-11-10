@@ -151,7 +151,7 @@
         for(let pair=0;pair<pairsPerBatch&&totals.games<200;pair++){
           if(options.shouldStop&&options.shouldStop()){stopped=true;break;}
           const pairNumber=totals.pairs+1;
-          const start=T.makeStartPosition();
+          const start=await T.makeStartPosition();
           const first=await playOne(start,"後手",candidate,champion,settings,p=>options.onProgress&&options.onProgress({...p,pair:pairNumber,game:1,totalGames:totals.games}));
           const second=await playOne(start,"先手",candidate,champion,settings,p=>options.onProgress&&options.onProgress({...p,pair:pairNumber,game:2,totalGames:totals.games}));
           for(const [result,candidateSide,gameNumber] of [[first,"後手",1],[second,"先手",2]]){
