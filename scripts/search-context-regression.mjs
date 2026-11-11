@@ -58,6 +58,76 @@ assert.equal(illegalCheckDeploy.ok,false,"a deployment that leaves the checking 
 const legalCheckDeploy=engine.deployPiece(forcedCheck,6,4,"先手",reservePawn.id);
 assert.equal(legalCheckDeploy.ok,true,"a reserve deployment that blocks the checking ray must be accepted");
 assert.equal(engine.isInCheck(forcedCheck,"先手"),false,"the accepted deployment must actually resolve check");
+// A checked side's search list must contain only moves that actually resolve check.
+const searchCheck=engine.createGameState();
+searchCheck.phase="move";
+searchCheck.board[8][4].push(engine.createPiece("帥","先手","search-check-s"));
+searchCheck.board[4][4].push(engine.createPiece("大将","後手","search-check-g"));
+searchCheck.board[8][3].push(engine.createPiece("兵","先手","search-check-p"));
+searchCheck.turn="先手";
+const forcedActions=search.getSearchActions(searchCheck,{maxDeployCandidates:12});
+assert.ok(forcedActions.length>0,"the checked side should have at least one genuine evasion");
+for(const action of forcedActions){
+  const trial=search.cloneState(searchCheck);
+  const applied=action.type==="deploy"
+    ? engine.deployPiece(trial,action.row,action.col,"先手",action.pieceId)
+    : engine.movePiece(trial,action.from.row,action.from.col,action.to.row,action.to.col,action.landingMode);
+  assert.ok(applied.ok,"every search action while checked must be executable");
+  assert.equal(trial.phase==="finished"&&trial.winner==="先手" ? false : engine.isInCheck(trial,"先手"),false,
+    "every search action while checked must resolve check or win by capturing the opposing Marshal");
+}
+
+// A Marshal may escape to a safe adjacent square.
+const escapeState=engine.createGameState();
+escapeState.phase="move";
+escapeState.board[8][4].push(engine.createPiece("帥","先手","escape-s"));
+escapeState.board[4][4].push(engine.createPiece("大将","後手","escape-g"));
+escapeState.turn="先手";
+assert.equal(engine.isInCheck(escapeState,"先手"),true);
+assert.ok(engine.movePiece(escapeState,8,4,8,3,"capture").ok,
+  "a Marshal escape that leaves the checking ray must be accepted");
+assert.equal(engine.isInCheck(escapeState,"先手"),false);
+
+// Capturing the checking piece is a valid evasion.
+const captureCheck=engine.createGameState();
+captureCheck.phase="move";
+captureCheck.board[8][4].push(engine.createPiece("帥","先手","capture-s"));
+captureCheck.board[7][4].push(engine.createPiece("大将","後手","capture-g"));
+captureCheck.turn="先手";
+assert.equal(engine.isInCheck(captureCheck,"先手"),true);
+assert.ok(engine.movePiece(captureCheck,8,4,7,4,"capture").ok,
+  "capturing the checking piece must be accepted");
+assert.equal(engine.isInCheck(captureCheck,"先手"),false);
+
+// A friendly move that interposes on a long checking ray is a valid evasion.
+const interposeState=engine.createGameState();
+interposeState.phase="move";
+interposeState.board[8][4].push(engine.createPiece("帥","先手","interpose-s"));
+interposeState.board[4][4].push(engine.createPiece("大将","後手","interpose-g"));
+interposeState.board[6][3].push(engine.createPiece("大将","先手","interpose-blocker"));
+interposeState.turn="先手";
+assert.equal(engine.isInCheck(interposeState,"先手"),true);
+assert.ok(engine.movePiece(interposeState,6,3,6,4,"capture").ok,
+  "moving a friendly piece onto the checking ray must be accepted");
+assert.equal(engine.isInCheck(interposeState,"先手"),false);
+
+// A boxed-in Marshal with every adjacent capture square defended is checkmated.
+const mateState=engine.createGameState();
+mateState.phase="move";
+mateState.board[8][4].push(engine.createPiece("帥","先手","mate-s"));
+mateState.board[7][4].push(engine.createPiece("大将","後手","mate-checker"));
+mateState.board[6][4].push(engine.createPiece("大将","後手","mate-guard"));
+for(const [row,col,id] of [[7,3,"mate-left"],[7,5,"mate-right"],[8,3,"mate-back-left"],[8,5,"mate-back-right"]])
+  mateState.board[row][col].push(engine.createPiece("兵","後手",id));
+mateState.turn="先手";
+assert.equal(engine.isInCheck(mateState,"先手"),true,"boxed Marshal must be in check");
+assert.equal(engine.hasLegalCheckEvasion(mateState,"先手"),false,
+  "all Marshal escapes and captures should be defended and no block should exist");
+assert.equal(engine.finishIfCheckmate(mateState,"先手","後手"),true,
+  "no legal check evasion must trigger immediate checkmate");
+assert.equal(mateState.phase,"finished");
+assert.equal(mateState.winner,"後手");
+
 const setupState=engine.createGameState();
 const firstSetup=await search.findBestSetupPlacement(setupState,{
   timeMs:100,maxNodes:100,allowFinish:false,requireNoCheckBoth:true
@@ -181,5 +251,5 @@ if (fallbackTelemetry.depth === 0) {
 
 console.log(JSON.stringify({
   success:true,
-  tests:["history-sensitive TT key","cycle-length-independent repetition cost","repeat-count escalation","historical retreat diagnostic","Marshal escape exemption","per-search depth and cost telemetry","root candidate shortlist after timeout","candidate score source labeling"]
+  tests:["history-sensitive TT key","cycle-length-independent repetition cost","repeat-count escalation","historical retreat diagnostic","Marshal escape exemption","forced check-only search actions","Marshal escape","capture checking piece","interpose by moving a friendly piece","immediate checkmate with all evasions covered","deployment interposition","per-search depth and cost telemetry","root candidate shortlist after timeout","candidate score source labeling"]
 },null,2));
