@@ -207,7 +207,13 @@
       seenNames.add(piece.name);
       return true;
     });
+    const inCheck = isInCheckMemo(state, side, memo);
     const deployments = [];
+    // 通常局面では各駒種の上位2候補だけを保持する。
+    // 旧実装は全マス×全駒種の候補を生成・整列してから捨てていたため、
+    // 静止探索で大量に呼ばれると候補生成が探索時間を圧迫していた。
+    // 帥手中は合い駒の見落としを防ぐため、従来どおり全候補を列挙する。
+    const perPieceTop = inCheck ? null : new Map();
     const front = E.getFrontmostFriendlyRow(state, side);
     const boundary = side === "先手"
       ? Math.min(front === null ? 6 : front, 6)
@@ -220,26 +226,30 @@
         const top = stack.length ? stack[stack.length - 1] : null;
         if (top && (top.side !== side || top.name === "帥")) continue;
         for (const piece of uniquePieces) {
-          deployments.push({
+          const candidate = {
             type: "deploy", row, col, pieceId: piece.id, pieceName: piece.name,
             priority: deploymentPriority(state, side, piece, row, col)
-          });
+          };
+          if (inCheck) {
+            deployments.push(candidate);
+          } else {
+            const bucket = perPieceTop.get(piece.name) || [];
+            if (bucket.length < 2) {
+              bucket.push(candidate);
+              bucket.sort((a,b) => b.priority - a.priority);
+            } else if (candidate.priority > bucket[1].priority) {
+              bucket[1] = candidate;
+              bucket.sort((a,b) => b.priority - a.priority);
+            }
+            perPieceTop.set(piece.name, bucket);
+          }
         }
       }
     }
-    deployments.sort((a,b) => b.priority - a.priority);
-    if (isInCheckMemo(state, side, memo)) {
-      // 帥手中は合い駒の見落としを防ぐため、配置候補を省略しない。
+    if (inCheck) {
       actions.push(...deployments.map(({priority, ...action}) => action));
     } else {
-      const perPiece = new Map();
-      const selected = [];
-      for (const action of deployments) {
-        const count = perPiece.get(action.pieceName) || 0;
-        if (count >= 2) continue;
-        perPiece.set(action.pieceName, count + 1);
-        selected.push(action);
-      }
+      const selected = [...perPieceTop.values()].flat();
       selected.sort((a,b) => b.priority - a.priority);
       actions.push(...selected.slice(0, maxDeployCandidates).map(({priority, ...action}) => action));
     }
