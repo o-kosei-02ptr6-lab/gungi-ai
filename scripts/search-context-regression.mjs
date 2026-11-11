@@ -99,6 +99,19 @@ assert.ok(engine.movePiece(captureCheck,8,4,7,4,"capture").ok,
   "capturing the checking piece must be accepted");
 assert.equal(engine.isInCheck(captureCheck,"先手"),false);
 
+// The Marshal may also neutralize a checking piece by stacking onto it,
+// when the stack-height rule prevents that piece from recapturing.
+const tsukeCheck=engine.createGameState();
+tsukeCheck.phase="move";
+tsukeCheck.board[8][4].push(engine.createPiece("帥","先手","tsuke-s"));
+tsukeCheck.board[7][4].push(engine.createPiece("大将","後手","tsuke-g"));
+tsukeCheck.turn="先手";
+assert.equal(engine.isInCheck(tsukeCheck,"先手"),true);
+assert.ok(engine.movePiece(tsukeCheck,8,4,7,4,"tsuke").ok,
+  "stacking the Marshal onto a checking piece must be accepted when legal");
+assert.equal(engine.isInCheck(tsukeCheck,"先手"),false,
+  "the stack-height rule should prevent the covered checker from attacking back");
+
 // A friendly move that interposes on a long checking ray is a valid evasion.
 const interposeState=engine.createGameState();
 interposeState.phase="move";
@@ -115,13 +128,16 @@ assert.equal(engine.isInCheck(interposeState,"先手"),false);
 const mateState=engine.createGameState();
 mateState.phase="move";
 mateState.board[8][4].push(engine.createPiece("帥","先手","mate-s"));
+mateState.board[7][4].push(engine.createPiece("兵","後手","mate-checker-base"));
 mateState.board[7][4].push(engine.createPiece("大将","後手","mate-checker"));
+mateState.board[6][4].push(engine.createPiece("兵","後手","mate-guard-base"));
 mateState.board[6][4].push(engine.createPiece("大将","後手","mate-guard"));
-for(const [row,col,id] of [[7,3,"mate-left"],[7,5,"mate-right"],[8,3,"mate-back-left"],[8,5,"mate-back-right"]])
+for(const [row,col,id] of [[7,3,"mate-left"],[7,5,"mate-right"],[8,3,"mate-back-left"],[8,5,"mate-back-right"]]){
+  mateState.board[row][col].push(engine.createPiece("兵","後手",id+"-base"));
   mateState.board[row][col].push(engine.createPiece("兵","後手",id));
+}
 mateState.turn="先手";
 assert.equal(engine.isInCheck(mateState,"先手"),true,"boxed Marshal must be in check");
-console.log("MATE_EVASIONS_DEBUG", JSON.stringify((()=>{const out=[];for(let row=0;row<9;row++)for(let col=0;col<9;col++){const st=mateState.board[row][col];if(st.length&&st.at(-1).side==="先手"){for(const target of engine.getMovementTargets(mateState,row,col)){if(engine.canMoveTo(mateState,row,col,target.row,target.col)){const dest=mateState.board[target.row][target.col];const top=dest.at(-1);for(const mode of (!top?["capture"]:(top.side==="先手"?["tsuke"]:["capture",...(dest.length<3?["tsuke"]:[])]))){const trial=search.cloneState(mateState);const res=engine.movePiece(trial,row,col,target.row,target.col,mode);if(res.ok&&!engine.isInCheck(trial,"先手"))out.push({from:[row,col],to:[target.row,target.col],mode});}}}}}return out;})()));
 assert.equal(engine.hasLegalCheckEvasion(mateState,"先手"),false,
   "all Marshal escapes and captures should be defended and no block should exist");
 assert.equal(engine.finishIfCheckmate(mateState,"先手","後手"),true,
@@ -252,5 +268,5 @@ if (fallbackTelemetry.depth === 0) {
 
 console.log(JSON.stringify({
   success:true,
-  tests:["history-sensitive TT key","cycle-length-independent repetition cost","repeat-count escalation","historical retreat diagnostic","Marshal escape exemption","forced check-only search actions","Marshal escape","capture checking piece","interpose by moving a friendly piece","immediate checkmate with all evasions covered","deployment interposition","per-search depth and cost telemetry","root candidate shortlist after timeout","candidate score source labeling"]
+  tests:["history-sensitive TT key","cycle-length-independent repetition cost","repeat-count escalation","historical retreat diagnostic","Marshal escape exemption","forced check-only search actions","Marshal escape","capture checking piece","Marshal tsuke onto checker","interpose by moving a friendly piece","immediate checkmate with all evasions covered","deployment interposition","per-search depth and cost telemetry","root candidate shortlist after timeout","candidate score source labeling"]
 },null,2));
