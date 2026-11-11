@@ -218,9 +218,13 @@
       if(Number.isFinite(mateScore)&&Math.abs(mateScore)>99900000)
         mateSamples.push({features:positionFeatures,target:mateScore>0?1:-1,source:"search-proof",ply:plies});
       if(!result.bestMove){
-        // 合法手がない状態を、帥を取った勝ちと誤認して学習しない。
-        // 帥手を無視する合法手も探索候補に含めたうえで、真に手がない場合は引き分け扱いにする。
-        state.phase="finished";state.winner=null;endReason="no-legal-action";break;
+        // 帥手中に応手がない場合は詰み。帥手でなければ従来どおり引き分け。
+        if(E.isInCheck(state,side)&&!E.hasLegalCheckEvasion(state,side)){
+          state.phase="finished";state.winner=side==="先手"?"後手":"先手";endReason="checkmate";
+        }else{
+          state.phase="finished";state.winner=null;endReason="no-legal-action";
+        }
+        break;
       }
       positionSample.search={
         requestedDepth:Math.max(1,Math.min(8,Number(searchOptions.maxDepth)||5)),
@@ -247,7 +251,7 @@
         gameSeed:seed,ply:plies+1,side,move:describeSearchAction(a,selectedPiece),
         board:liveBoard,turn:state.turn,phase:state.phase
       }));
-      if(applied.gameOver&&applied.winner===side)endReason="marshal-captured";
+      if(applied.gameOver&&applied.winner===side)endReason=applied.checkmate?"checkmate":"marshal-captured";
       const latestHistoryEntry=state.history[state.history.length-1];
       const historyMatchesAction=latestHistoryEntry&&latestHistoryEntry.type==="move"&&a.type==="move"&&
         latestHistoryEntry.from&&latestHistoryEntry.to&&
