@@ -147,6 +147,8 @@ for(const [row,col,id] of [[7,3,"mate-left"],[7,5,"mate-right"],[8,3,"mate-back-
 }
 mateState.turn="先手";
 assert.equal(engine.isInCheck(mateState,"先手"),true,"boxed Marshal must be in check");
+assert.deepEqual(search.getSearchActions(mateState,{maxDeployCandidates:12}),[],
+  "a checkmated side must have no search actions at all");
 assert.equal(engine.hasLegalCheckEvasion(mateState,"先手"),false,
   "all Marshal escapes and captures should be defended and no block should exist");
 assert.equal(engine.finishIfCheckmate(mateState,"先手","後手"),true,
