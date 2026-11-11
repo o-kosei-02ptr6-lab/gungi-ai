@@ -154,6 +154,32 @@ assert.equal(engine.finishIfCheckmate(mateState,"先手","後手"),true,
 assert.equal(mateState.phase,"finished");
 assert.equal(mateState.winner,"後手");
 
+// The move that creates an unavoidable check must end the game immediately.
+const instantMate=engine.createGameState();
+instantMate.phase="move";
+putFixturePiece(instantMate,8,4,"帥","先手","instant-mate-s");
+putFixturePiece(instantMate,6,4,"兵","後手","instant-mate-checker");
+putFixturePiece(instantMate,5,4,"兵","後手","instant-mate-guard-base");
+putFixturePiece(instantMate,5,4,"大将","後手","instant-mate-guard");
+for(const [row,col,id] of [[7,3,"im-left"],[7,5,"im-right"],[8,3,"im-back-left"],[8,5,"im-back-right"]]){
+  putFixturePiece(instantMate,row,col,"兵","後手",id+"-base");
+  putFixturePiece(instantMate,row,col,"兵","後手",id);
+}
+for(const [row,col,id] of [[6,3,"im-def-left"],[6,5,"im-def-right"],[7,2,"im-def-back-left"],[7,6,"im-def-back-right"]]){
+  putFixturePiece(instantMate,row,col,"兵","後手",id+"-base");
+  putFixturePiece(instantMate,row,col,"大将","後手",id);
+}
+instantMate.turn="後手";
+assert.equal(engine.isInCheck(instantMate,"先手"),false,
+  "the Marshal must not already be in check before the mating move");
+const matingMove=engine.movePiece(instantMate,6,4,7,4,"capture");
+assert.equal(matingMove.ok,true,"the checking pawn's move should be legal");
+assert.equal(matingMove.gameOver,true,"an unavoidable check must end the game on the checking move");
+assert.equal(matingMove.checkmate,true,"the result must be identified as checkmate");
+assert.equal(matingMove.winner,"後手");
+assert.equal(instantMate.phase,"finished");
+assert.equal(instantMate.winner,"後手");
+
 const setupState=engine.createGameState();
 const firstSetup=await search.findBestSetupPlacement(setupState,{
   timeMs:100,maxNodes:100,allowFinish:false,requireNoCheckBoth:true
@@ -277,5 +303,5 @@ if (fallbackTelemetry.depth === 0) {
 
 console.log(JSON.stringify({
   success:true,
-  tests:["history-sensitive TT key","cycle-length-independent repetition cost","repeat-count escalation","historical retreat diagnostic","Marshal escape exemption","forced check-only search actions","Marshal escape","capture checking piece","Marshal tsuke onto checker","interpose by moving a friendly piece","immediate checkmate with all evasions covered","deployment interposition","per-search depth and cost telemetry","root candidate shortlist after timeout","candidate score source labeling"]
+  tests:["history-sensitive TT key","cycle-length-independent repetition cost","repeat-count escalation","historical retreat diagnostic","Marshal escape exemption","forced check-only search actions","Marshal escape","capture checking piece","Marshal tsuke onto checker","interpose by moving a friendly piece","immediate checkmate with all evasions covered","instant checkmate after the checking move","deployment interposition","per-search depth and cost telemetry","root candidate shortlist after timeout","candidate score source labeling"]
 },null,2));
