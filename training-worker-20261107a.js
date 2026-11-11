@@ -5,7 +5,7 @@
   importScripts(
     "./engine-20261107bb.js?v=20261108cycle5",
     "./evaluation-20261107be.js?v=20261111evalcache2",
-    "./search-20261108cycle3.js?v=20261111setupcompletion1"
+    "./search-20261108cycle3.js?v=20261112deploytop2"
   );
   const E=self.GungiEngine, AI=self.GungiAI, S=self.GungiSearch;
   const FEATURES=["material","hand","position","activity","mobility","threats","exposure","kingSafety","mateNet"];
