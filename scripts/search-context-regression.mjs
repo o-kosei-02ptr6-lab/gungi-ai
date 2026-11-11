@@ -40,6 +40,24 @@ assert.notEqual(mutatedScore,cacheScoreA,
 // Setup search must honor the mandatory Marshal-first rule for both sides,
 // preserve the front-row-only Marshal square, and return executable placements.
 const engine=self.GungiEngine;
+
+// A checked side may not make an unrelated move or deploy. A reserve deployment
+// that blocks the checking ray is accepted as a legal evasion.
+const forcedCheck=engine.createGameState();
+forcedCheck.phase="move";
+forcedCheck.board[8][4].push(engine.createPiece("帥","先手","check-s"));
+forcedCheck.board[4][4].push(engine.createPiece("大将","後手","check-g"));
+forcedCheck.board[8][3].push(engine.createPiece("兵","先手","check-p"));
+forcedCheck.turn="先手";
+assert.equal(engine.isInCheck(forcedCheck,"先手"),true,"test position should begin in check");
+const illegalCheckMove=engine.movePiece(forcedCheck,8,3,7,3,"capture");
+assert.equal(illegalCheckMove.ok,false,"an unrelated move must be rejected while in check");
+const reservePawn=forcedCheck.hands["先手"].find(piece=>piece.name==="兵");
+const illegalCheckDeploy=engine.deployPiece(forcedCheck,6,5,"先手",reservePawn.id);
+assert.equal(illegalCheckDeploy.ok,false,"a deployment that leaves the checking ray open must be rejected");
+const legalCheckDeploy=engine.deployPiece(forcedCheck,6,4,"先手",reservePawn.id);
+assert.equal(legalCheckDeploy.ok,true,"a reserve deployment that blocks the checking ray must be accepted");
+assert.equal(engine.isInCheck(forcedCheck,"先手"),false,"the accepted deployment must actually resolve check");
 const setupState=engine.createGameState();
 const firstSetup=await search.findBestSetupPlacement(setupState,{
   timeMs:100,maxNodes:100,allowFinish:false,requireNoCheckBoth:true
