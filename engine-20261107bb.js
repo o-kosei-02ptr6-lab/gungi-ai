@@ -399,7 +399,7 @@
     const result = action.type === "deploy"
       ? deployPiece(test, action.row, action.col, side, action.pieceId, true)
       : movePiece(test, action.from.row, action.from.col, action.to.row, action.to.col, action.landingMode || "capture", true);
-    return !!(result && result.ok && test.phase !== "finished" && !isInCheck(test, side));
+    return !!(result && result.ok && ((test.phase === "finished" && test.winner === side) || !isInCheck(test, side)));
   }
   function hasLegalCheckEvasion(state, side) {
     for (let row = 0; row < SIZE; row += 1) for (let col = 0; col < SIZE; col += 1) {
