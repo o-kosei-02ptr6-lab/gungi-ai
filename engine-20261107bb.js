@@ -401,7 +401,7 @@
       : movePiece(test, action.from.row, action.from.col, action.to.row, action.to.col, action.landingMode || "capture", true);
     return !!(result && result.ok && ((test.phase === "finished" && test.winner === side) || !isInCheck(test, side)));
   }
-  function hasLegalCheckEvasion(state, side) {
+  function findLegalCheckEvasion(state, side) {
     for (let row = 0; row < SIZE; row += 1) for (let col = 0; col < SIZE; col += 1) {
       const stack = state.board[row][col];
       if (!stack.length || stack[stack.length - 1].side !== side) continue;
@@ -410,15 +410,22 @@
         const destination = getStack(state, target.row, target.col);
         const top = destination.length ? destination[destination.length - 1] : null;
         const modes = !top ? ["capture"] : (top.side === side ? ["tsuke"] : ["capture", ...(destination.length < 3 ? ["tsuke"] : [])]);
-        for (const landingMode of modes) if (isLegalCheckEvasion(state,
-          { type: "move", from: { row, col }, to: { row: target.row, col: target.col }, landingMode }, side)) return true;
+        for (const landingMode of modes) {
+          const action={type:"move",from:{row,col},to:{row:target.row,col:target.col},landingMode};
+          if (isLegalCheckEvasion(state,action,side)) return action;
+        }
       }
     }
     for (const piece of state.hands[side] || []) for (let row = 0; row < SIZE; row += 1) for (let col = 0; col < SIZE; col += 1) {
-      if (canDeployPiece(state, row, col, side, piece) &&
-          isLegalCheckEvasion(state, { type: "deploy", row, col, pieceId: piece.id }, side)) return true;
+      if (canDeployPiece(state, row, col, side, piece)) {
+        const action={type:"deploy",row,col,pieceId:piece.id};
+        if (isLegalCheckEvasion(state,action,side)) return action;
+      }
     }
-    return false;
+    return null;
+  }
+  function hasLegalCheckEvasion(state, side) {
+    return !!findLegalCheckEvasion(state,side);
   }
   function finishIfCheckmate(state, checkedSide, attackerSide) {
     if (!isInCheck(state, checkedSide) || hasLegalCheckEvasion(state, checkedSide)) return false;
@@ -457,6 +464,6 @@
   window.GungiEngine = Object.freeze({
     SIZE, PIECE_COUNTS, createEmptyBoard, createPiece, createInventory, createGameState,
     isInside, getStack, getTopPiece, isMovablePiece, canPlacePiece, placePiece, finishSetup, getFrontmostFriendlyRow, canDeployPiece, deployPiece, resolveLandingStack,
-    MOVE_RULES, getMovementTargets, canMoveTo, movePiece, getMarshalPosition, isInCheck, hasLegalCheckEvasion, finishIfCheckmate, generateLegalMoves
+    MOVE_RULES, getMovementTargets, canMoveTo, movePiece, getMarshalPosition, isInCheck, findLegalCheckEvasion, hasLegalCheckEvasion, finishIfCheckmate, generateLegalMoves
   });
 })();
