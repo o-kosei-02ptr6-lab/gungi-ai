@@ -121,6 +121,7 @@ for(const [row,col,id] of [[7,3,"mate-left"],[7,5,"mate-right"],[8,3,"mate-back-
   mateState.board[row][col].push(engine.createPiece("兵","後手",id));
 mateState.turn="先手";
 assert.equal(engine.isInCheck(mateState,"先手"),true,"boxed Marshal must be in check");
+console.log("MATE_EVASIONS_DEBUG", JSON.stringify((()=>{const out=[];for(let row=0;row<9;row++)for(let col=0;col<9;col++){const st=mateState.board[row][col];if(st.length&&st.at(-1).side==="先手"){for(const target of engine.getMovementTargets(mateState,row,col)){if(engine.canMoveTo(mateState,row,col,target.row,target.col)){const dest=mateState.board[target.row][target.col];const top=dest.at(-1);for(const mode of (!top?["capture"]:(top.side==="先手"?["tsuke"]:["capture",...(dest.length<3?["tsuke"]:[])]))){const trial=search.cloneState(mateState);const res=engine.movePiece(trial,row,col,target.row,target.col,mode);if(res.ok&&!engine.isInCheck(trial,"先手"))out.push({from:[row,col],to:[target.row,target.col],mode});}}}}}return out;})()));
 assert.equal(engine.hasLegalCheckEvasion(mateState,"先手"),false,
   "all Marshal escapes and captures should be defended and no block should exist");
 assert.equal(engine.finishIfCheckmate(mateState,"先手","後手"),true,
