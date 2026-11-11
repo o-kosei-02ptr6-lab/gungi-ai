@@ -519,7 +519,7 @@
       if (!applied || !applied.ok) {
         messageElement.textContent = "探索した手を実行できませんでした。" + (applied && applied.reason ? " " + applied.reason : "");
       } else if (applied.gameOver) {
-        messageElement.textContent = "AIが帥を取りました。対局終了！ " + applied.winner + "の勝利です。";
+        messageElement.textContent = applied.checkmate ? "AIが詰みを読み切りました。対局終了！ " + applied.winner + "の勝利です。" : "AIが帥を取りました。対局終了！ " + applied.winner + "の勝利です。";
         infoElement.textContent = applied.winner + "の勝利です。";
       } else {
         infoElement.textContent = "探索深度 " + result.depth + " ／ " + result.nodes.toLocaleString() +
