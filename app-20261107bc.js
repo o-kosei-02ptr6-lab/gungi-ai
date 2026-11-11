@@ -339,7 +339,7 @@
       moveChoiceElement.hidden = true;
       infoElement.textContent = "次の手番：" + state.turn;
       if (result.gameOver) {
-        messageElement.textContent = "帥を取りました。対局終了！ " + result.winner + "の勝利です。";
+        messageElement.textContent = result.checkmate ? "詰みです。対局終了！ " + result.winner + "の勝利です。" : "帥を取りました。対局終了！ " + result.winner + "の勝利です。";
         infoElement.textContent = result.winner + "の勝利。盤面を初期化すると新しい対局を始められます。";
       } else if (E.isInCheck(state, state.turn)) {
         messageElement.textContent += " 帥手です。";
