@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - "engine-20261107bb.js"
       - "search-20261108cycle3.js"
       - "evaluation-20261107be.js"
       - "scripts/search-context-regression.mjs"
