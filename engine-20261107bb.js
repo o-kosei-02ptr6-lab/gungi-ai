@@ -127,7 +127,7 @@
     if (top && (top.side !== side || top.name === "帥")) return false;
     return true;
   }
-  function deployPiece(state, row, col, side, pieceId) {
+  function deployPiece(state, row, col, side, pieceId, skipCheckRules = false) {
     if (state.phase === "finished") return { ok: false, reason: "対局は終了しています。" };
     if (side !== state.turn) return { ok: false, reason: "現在の手番では配置できません。" };
     const hand = state.hands[side];
@@ -136,13 +136,15 @@
     if (index < 0) return { ok: false, reason: "その駒は持ち駒にありません。" };
     const piece = hand[index];
     if (!canDeployPiece(state, row, col, side, piece)) return { ok: false, reason: "このマスには駒を配置できません。" };
+    if (!skipCheckRules && isInCheck(state, side) && !isLegalCheckEvasion(state, { type: "deploy", row, col, pieceId }, side)) return { ok: false, reason: "帥手中は帥手を解消する配置しかできません。" };
     const positionKey = getPositionKey(state);
     hand.splice(index, 1);
     state.board[row][col].push(piece);
     state.history.push({ type: "deploy", positionKey, row, col, side, piece, layer: state.board[row][col].length });
     state.moveNumber += 1;
     state.turn = state.turn === "先手" ? "後手" : "先手";
-    return { ok: true, piece };
+    const checkmate = !skipCheckRules && finishIfCheckmate(state, state.turn, side);
+    return { ok: true, piece, gameOver: checkmate, winner: checkmate ? side : null };
   }
 
   function resolveLandingStack(movingPiece, destinationStack) {
@@ -294,7 +296,7 @@
       entry.from && entry.to && entry.from.row === fromRow && entry.from.col === fromCol &&
       entry.to.row === toRow && entry.to.col === toCol && (entry.landingMode || "capture") === landingMode;
   }
-  function movePiece(state, fromRow, fromCol, toRow, toCol, landingMode = "capture") {
+  function movePiece(state, fromRow, fromCol, toRow, toCol, landingMode = "capture", skipCheckRules = false) {
     const sourceStack = getStack(state, fromRow, fromCol);
     const sourceTop = sourceStack && sourceStack.length ? sourceStack[sourceStack.length - 1] : null;
     if (state.phase === "finished") return { ok: false, reason: "対局は終了しています。" };
@@ -317,6 +319,7 @@
     } else if (landingMode !== "capture") {
       return { ok: false, reason: "この移動方法は選択できません。" };
     }
+    if (!skipCheckRules && isInCheck(state, state.turn) && !isLegalCheckEvasion(state, { type: "move", from: { row: fromRow, col: fromCol }, to: { row: toRow, col: toCol }, landingMode }, state.turn)) return { ok: false, reason: "帥手中は帥手を解消する手しか指せません。" };
     const source = state.board[fromRow][fromCol];
     const fromLayer = source.length;
     const movingPiece = source.pop();
@@ -341,7 +344,9 @@
     } else {
       state.turn = state.turn === "先手" ? "後手" : "先手";
     }
-    return { ok: true, piece: movingPiece, captured, gameOver: capturedMarshal, winner: capturedMarshal ? movingPiece.side : null };
+    const checkmate = !capturedMarshal && !skipCheckRules && finishIfCheckmate(state, state.turn, movingPiece.side);
+    const gameOver = capturedMarshal || checkmate;
+    return { ok: true, piece: movingPiece, captured, gameOver, winner: gameOver ? movingPiece.side : null };
   }
   // 帥の位置を取得する。盤上に存在しない場合は null。
   function getMarshalPosition(state, side) {
@@ -381,6 +386,45 @@
     return false;
   }
 
+  // 帥手中の移動・捕獲・ツケ・「新」を実盤面へ適用して応手を判定する。
+  function cloneForCheck(state) {
+    return { board: state.board.map(row => row.map(stack => stack.slice())),
+      hands: { "先手": state.hands["先手"].slice(), "後手": state.hands["後手"].slice() },
+      history: state.history.slice(), turn: state.turn, phase: state.phase,
+      winner: state.winner, moveNumber: state.moveNumber };
+  }
+  function isLegalCheckEvasion(state, action, side) {
+    if (!isInCheck(state, side)) return true;
+    const test = cloneForCheck(state);
+    const result = action.type === "deploy"
+      ? deployPiece(test, action.row, action.col, side, action.pieceId, true)
+      : movePiece(test, action.from.row, action.from.col, action.to.row, action.to.col, action.landingMode || "capture", true);
+    return !!(result && result.ok && test.phase !== "finished" && !isInCheck(test, side));
+  }
+  function hasLegalCheckEvasion(state, side) {
+    for (let row = 0; row < SIZE; row += 1) for (let col = 0; col < SIZE; col += 1) {
+      const stack = state.board[row][col];
+      if (!stack.length || stack[stack.length - 1].side !== side) continue;
+      for (const target of getMovementTargets(state, row, col)) {
+        if (!canMoveTo(state, row, col, target.row, target.col)) continue;
+        const destination = getStack(state, target.row, target.col);
+        const top = destination.length ? destination[destination.length - 1] : null;
+        const modes = !top ? ["capture"] : (top.side === side ? ["tsuke"] : ["capture", ...(destination.length < 3 ? ["tsuke"] : [])]);
+        for (const landingMode of modes) if (isLegalCheckEvasion(state,
+          { type: "move", from: { row, col }, to: { row: target.row, col: target.col }, landingMode }, side)) return true;
+      }
+    }
+    for (const piece of state.hands[side] || []) for (let row = 0; row < SIZE; row += 1) for (let col = 0; col < SIZE; col += 1) {
+      if (canDeployPiece(state, row, col, side, piece) &&
+          isLegalCheckEvasion(state, { type: "deploy", row, col, pieceId: piece.id }, side)) return true;
+    }
+    return false;
+  }
+  function finishIfCheckmate(state, checkedSide, attackerSide) {
+    if (!isInCheck(state, checkedSide) || hasLegalCheckEvasion(state, checkedSide)) return false;
+    state.phase = "finished"; state.winner = attackerSide; return true;
+  }
+
   function generateLegalMoves(state, side) {
     const moves = [];
     for (let row = 0; row < SIZE; row += 1) for (let col = 0; col < SIZE; col += 1) {
@@ -413,6 +457,6 @@
   window.GungiEngine = Object.freeze({
     SIZE, PIECE_COUNTS, createEmptyBoard, createPiece, createInventory, createGameState,
     isInside, getStack, getTopPiece, isMovablePiece, canPlacePiece, placePiece, finishSetup, getFrontmostFriendlyRow, canDeployPiece, deployPiece, resolveLandingStack,
-    MOVE_RULES, getMovementTargets, canMoveTo, movePiece, getMarshalPosition, isInCheck, generateLegalMoves
+    MOVE_RULES, getMovementTargets, canMoveTo, movePiece, getMarshalPosition, isInCheck, hasLegalCheckEvasion, finishIfCheckmate, generateLegalMoves
   });
 })();
