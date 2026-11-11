@@ -144,7 +144,7 @@
     state.moveNumber += 1;
     state.turn = state.turn === "先手" ? "後手" : "先手";
     const checkmate = !skipCheckRules && finishIfCheckmate(state, state.turn, side);
-    return { ok: true, piece, gameOver: checkmate, winner: checkmate ? side : null };
+    return { ok: true, piece, gameOver: checkmate, checkmate, winner: checkmate ? side : null };
   }
 
   function resolveLandingStack(movingPiece, destinationStack) {
@@ -346,7 +346,7 @@
     }
     const checkmate = !capturedMarshal && !skipCheckRules && finishIfCheckmate(state, state.turn, movingPiece.side);
     const gameOver = capturedMarshal || checkmate;
-    return { ok: true, piece: movingPiece, captured, gameOver, winner: gameOver ? movingPiece.side : null };
+    return { ok: true, piece: movingPiece, captured, gameOver, checkmate, winner: gameOver ? movingPiece.side : null };
   }
   // 帥の位置を取得する。盤上に存在しない場合は null。
   function getMarshalPosition(state, side) {
