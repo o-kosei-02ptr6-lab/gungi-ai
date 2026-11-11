@@ -303,8 +303,9 @@
       }
     }
     if (inCheck) {
-      const safeKeys = new Set(safeActions.map(actionKey));
-      return safeActions.concat(actions.filter(action => !safeKeys.has(actionKey(action))));
+      // 帥手中は、実際に帥手を解消できた手だけが合法。
+      // 応手がなければ空配列を返し、探索側で即詰みとして扱う。
+      return safeActions;
     }
     // 通常局面では自分の帥を危険にさらす手を除外する。
     return safeActions.length ? safeActions : actions;
@@ -898,6 +899,7 @@
     findBestSetupPlacement,
     generateSetupActions,
     generateActions: (state, options = {}) => generateActions(state, state.turn, options.maxDeployCandidates || 12),
+    getSearchActions: (state, options = {}) => getSearchActions(state, state.turn, options.maxDeployCandidates || 12),
     // Exposed for deterministic regression tests of history-sensitive TT keys.
     getSearchContextKey: searchContextKey,
     getAntiLoopPenalty: antiLoopPenalty,
