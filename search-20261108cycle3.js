@@ -383,23 +383,26 @@
 
   // 静止探索用：通常の捕獲に加え、帥手を掛ける静かな手も読む。
   // 連続王手からの詰み筋・逃げ道封鎖を探索の末端で見落としにくくする。
-  function generateCheckingActions(state, side, maxDeployCandidates, memo = null) {
+  function generateCheckingActions(state, side, maxDeployCandidates, memo = null,
+    ply = 0, killers = null, historyScores = null, inspectionLimit = 48) {
     const checks = [];
     // This helper is called only when the moving side is not in check.
-    // Avoid getSearchActions(), which applies every action once to test king
-    // safety; the old implementation then applied each surviving action a
-    // second time to test whether it gives check.
-    // Captures are already supplied by generateCaptureActions() in
-    // quiescence, so only inspect quiet moves/deployments here.
-    const actions = generateActions(state, side, maxDeployCandidates, false, memo);
-    for (const action of actions) {
-      if (!isQuietAction(state, action)) continue;
+    // Captures are supplied separately by generateCaptureActions().
+    // Quiet checks are an optional quiescence extension, unlike forced
+    // evasions and captures. Rank candidates first and inspect only a bounded
+    // prefix so a position with many legal quiet moves does not spend most of
+    // its search budget proving that dozens of them are not checks.
+    const actions = generateActions(state, side, maxDeployCandidates, false, memo)
+      .filter(action => isQuietAction(state, action));
+    const ordered = orderActions(state, actions, null, ply, killers, historyScores);
+    const inspected = ordered.slice(0, Math.max(1, inspectionLimit));
+    for (const action of inspected) {
       const child = applyAction(state, action);
       if (!child || child.phase === "finished") continue;
       if (isInCheckMemo(child, side, memo)) continue;
       if (isInCheckMemo(child, child.turn, memo)) checks.push(action);
     }
-    return checks;
+    return { checks, seen: actions.length, inspected: inspected.length };
   }
 
   function findBestMove(state, options = {}) {
@@ -422,7 +425,8 @@
           q: { inCheckNodes: 0, quietNodes: 0, standPatEvaluations: 0,
             standPatCutoffs: 0, qplyLimitStops: 0, adaptiveQuietStops: 0, repetitionStops: 0,
             terminalNodes: 0, evasionActions: 0, captureActions: 0,
-            checkingActions: 0, noTacticalActions: 0, appliedActions: 0,
+            checkingActions: 0, checkingCandidatesSeen: 0, checkingCandidatesInspected: 0,
+            noTacticalActions: 0, appliedActions: 0,
             evasionLimitNodes: 0, timingSamples: 0,
             generationMs: 0, orderingMs: 0, evaluationMs: 0,
             checkMs: 0, applyMs: 0 }
@@ -510,8 +514,12 @@
             if (qply >= 1) tactical = captures;
             else {
               const captureKeys = new Set(captures.map(actionKey));
-              const checks = generateCheckingActions(position, position.turn, maxDeployCandidates, memo)
-                .filter(action => !captureKeys.has(actionKey(action)));
+              const checkingScan = generateCheckingActions(
+                position, position.turn, maxDeployCandidates, memo, ply, killers, historyScores, 48
+              );
+              const checks = checkingScan.checks.filter(action => !captureKeys.has(actionKey(action)));
+              q.checkingCandidatesSeen = (q.checkingCandidatesSeen || 0) + checkingScan.seen;
+              q.checkingCandidatesInspected = (q.checkingCandidatesInspected || 0) + checkingScan.inspected;
               q.checkingActions += checks.length;
               // Quiet checks can be numerous in Gungi because reserve deployments
               // and stacked movement create many checking continuations. Keep all
