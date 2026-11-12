@@ -30,8 +30,10 @@ assert.ok(evaluator.getEvaluationCacheStats().hits>cacheBefore,
 // Evaluation is independent of unique piece IDs. A strategically identical
 // clone with renamed IDs must therefore reuse the same shared cache entry.
 const idVariant=search.cloneState(cacheProbe);
-for(const row of idVariant.board)for(const stack of row)for(const piece of stack)piece.id="renamed-"+piece.id;
-for(const side of ["先手","後手"])for(const piece of idVariant.hands[side])piece.id="renamed-"+piece.id;
+for(let row=0;row<idVariant.board.length;row++)for(let col=0;col<idVariant.board[row].length;col++)
+  idVariant.board[row][col]=idVariant.board[row][col].map(piece=>({...piece,id:"renamed-"+piece.id}));
+for(const side of ["先手","後手"])
+  idVariant.hands[side]=idVariant.hands[side].map(piece=>({...piece,id:"renamed-"+piece.id}));
 const idVariantHits=evaluator.getEvaluationCacheStats().hits;
 assert.equal(evaluator.evaluate(idVariant,"先手"),cacheScoreA,
   "renaming piece IDs must not change static evaluation");
