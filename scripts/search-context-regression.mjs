@@ -27,6 +27,16 @@ const cacheScoreB=evaluator.evaluate(search.cloneState(cacheProbe),"先手");
 assert.equal(cacheScoreA,cacheScoreB,"position cache must preserve the exact evaluation score");
 assert.ok(evaluator.getEvaluationCacheStats().hits>cacheBefore,
   "cloned identical positions should hit the shared evaluation cache");
+// Evaluation is independent of unique piece IDs. A strategically identical
+// clone with renamed IDs must therefore reuse the same shared cache entry.
+const idVariant=search.cloneState(cacheProbe);
+for(const row of idVariant.board)for(const stack of row)for(const piece of stack)piece.id="renamed-"+piece.id;
+for(const side of ["先手","後手"])for(const piece of idVariant.hands[side])piece.id="renamed-"+piece.id;
+const idVariantHits=evaluator.getEvaluationCacheStats().hits;
+assert.equal(evaluator.evaluate(idVariant,"先手"),cacheScoreA,
+  "renaming piece IDs must not change static evaluation");
+assert.ok(evaluator.getEvaluationCacheStats().hits>idVariantHits,
+  "positions differing only by unique IDs should share evaluation cache entries");
 const marshal=cacheProbe.hands["先手"].find(piece=>piece.name==="帥");
 assert.ok(self.GungiEngine.placePiece(cacheProbe,8,4,"先手",marshal.id).ok,
   "cache probe should mutate through a legal Marshal placement");
