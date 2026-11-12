@@ -45,14 +45,33 @@
   // Evaluation depends on board, hands and weights, not on move history.
   const positionBreakdownCache = new Map();
   const POSITION_CACHE_LIMIT = 8192;
-  const positionCacheStats = { hits: 0, misses: 0 };
+  const positionCacheStats = { hits: 0, misses: 0, keyBuildMs: 0, computeMs: 0 };
+  const cacheClock = () => (typeof performance !== "undefined" && performance.now
+    ? performance.now() : Date.now());
   function positionCacheKey(state, signature) {
-    const board = state.board.map(row => row.map(stack =>
-      stack.map(piece => (piece.side === "先手" ? "S" : "G") + piece.id + ":" + piece.name).join(".")
-    ).join(",")).join("|");
-    const hands = ["先手", "後手"].map(side =>
-      (state.hands[side] || []).map(piece => piece.id + ":" + piece.name).sort().join(",")
-    ).join("|");
+    // Evaluation depends on piece side/type and stack order, not unique piece IDs.
+    // Omitting IDs lets strategically identical positions share cached results.
+    const started = cacheClock();
+    let board = "";
+    for (let row = 0; row < E.SIZE; row += 1) {
+      for (let col = 0; col < E.SIZE; col += 1) {
+        const stack = state.board[row][col];
+        if (!stack.length) board += "-";
+        else {
+          for (let layer = 0; layer < stack.length; layer += 1) {
+            const piece = stack[layer];
+            board += (piece.side === "先手" ? "S" : "G") + piece.name + ".";
+          }
+        }
+        board += ",";
+      }
+      board += "|";
+    }
+    const hands = ["先手", "後手"].map(side => {
+      const names = (state.hands[side] || []).map(piece => piece.name).sort();
+      return names.join(".");
+    }).join("|");
+    positionCacheStats.keyBuildMs += cacheClock() - started;
     return signature + "#" + state.phase + "#" + (state.winner || "") + "#" + board + "#" + hands;
   }
   function getEvaluationCacheStats() {
@@ -509,6 +528,7 @@
       return shared;
     }
     positionCacheStats.misses += 1;
+    const computeStarted = cacheClock();
     const sides = ["先手", "後手"];
     const context = {
       moveLists: new Map(sides.map(side => [side, E.generateLegalMoves(state, side)])),
@@ -544,6 +564,7 @@
       score: terminal === null ? first.total - second.total : terminal,
       terminal
     };
+    positionCacheStats.computeMs += cacheClock() - computeStarted;
     breakdownCache.set(state, { signature, key: sharedKey, result });
     positionBreakdownCache.set(sharedKey, result);
     if (positionBreakdownCache.size > POSITION_CACHE_LIMIT) {
