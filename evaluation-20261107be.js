@@ -175,7 +175,7 @@
       moveCountByPiece.set(id, (moveCountByPiece.get(id) || 0) + 1);
       if (!movesByPiece.has(id)) movesByPiece.set(id, []);
       movesByPiece.get(id).push(move);
-      const key = move.to.row + "," + move.to.col;
+      const key = move.to.row * E.SIZE + move.to.col;
       if (!controlledSquares.has(key)) controlledSquares.set(key, move.to);
       if (!controllersBySquare.has(key)) controllersBySquare.set(key, new Set());
       controllersBySquare.get(key).add(id);
@@ -207,66 +207,67 @@
       }
     }
 
-    // ツケによって最上段の駒が得た攻撃的な移動先の質を評価する。
-    // 駒の保護や段数そのものには加点せず、敵帥への接近・包囲に役立つ移動だけを見る。
+    // 敵帥への接近評価を1回の盤面走査で計算する。
+    // 上位値は固定変数で保持し、配列生成・sort・Setによる重複排除を省く。
     if (enemyMarshalForStack) {
       let stackedTacticalActivity = 0;
-      for (let row = 0; row < E.SIZE; row += 1) {
-        for (let col = 0; col < E.SIZE; col += 1) {
-          const stack = state.board[row][col];
-          if (stack.length < 2 || stack[stack.length - 1].side !== side) continue;
-          const top = stack[stack.length - 1];
-          const currentDistance = Math.abs(row - enemyMarshalForStack.row) + Math.abs(col - enemyMarshalForStack.col);
-          const qualities = [];
-          for (const move of (movesByPiece.get(top.id) || [])) {
-            const target = state.board[move.to.row][move.to.col];
-            const targetTop = target.length ? target[target.length - 1] : null;
-            // 捕獲の価値は既存の threats で評価するため、ここでは重複させない。
-            if (targetTop && targetTop.side !== side) continue;
-            const nextDistance = Math.abs(move.to.row - enemyMarshalForStack.row) +
-              Math.abs(move.to.col - enemyMarshalForStack.col);
-            const distanceGain = Math.max(0, currentDistance - nextDistance);
-            const advanceGain = Math.max(0, advancement(move.to.row, side) - advancement(row, side));
-            const marshalZone = nextDistance <= 1 ? 18 : nextDistance <= 2 ? 10 : nextDistance <= 4 ? 4 : 0;
-            const quality = distanceGain * 4 + advanceGain * 2 + marshalZone;
-            if (quality > 0) qualities.push(quality);
-          }
-          qualities.sort((a, b) => b - a);
-          const bestThree = qualities.slice(0, 3).reduce((sum, value) => sum + value, 0);
-          const depthFactor = 1 + Math.max(0, stack.length - 2) * 0.25;
-          stackedTacticalActivity += Math.min(48, bestThree) * depthFactor;
-        }
-      }
-      activity += Math.min(150, stackedTacticalActivity);
-    }
-
-    // 全ての最上段駒について、敵帥へ近づき、かつ前進する合法手を評価する。
-    // 捕獲先は既存の threats と重複するため除外し、各駒の上位2手だけを加点する。
-    if (enemyMarshalForStack) {
       let purposefulAdvance = 0;
-      const seenTopPieces = new Set();
       for (let row = 0; row < E.SIZE; row += 1) {
         for (let col = 0; col < E.SIZE; col += 1) {
           const stack = state.board[row][col];
           if (!stack.length || stack[stack.length - 1].side !== side) continue;
           const top = stack[stack.length - 1];
-          if (seenTopPieces.has(top.id)) continue;
-          seenTopPieces.add(top.id);
-          const currentDistance = Math.abs(row - enemyMarshalForStack.row) + Math.abs(col - enemyMarshalForStack.col);
-          const gains = [];
-          for (const move of (movesByPiece.get(top.id) || [])) {
+          const currentDistance = Math.abs(row - enemyMarshalForStack.row) +
+            Math.abs(col - enemyMarshalForStack.col);
+          const moves = movesByPiece.get(top.id) || [];
+          let bestQuality1 = 0, bestQuality2 = 0, bestQuality3 = 0;
+          let bestGain1 = 0, bestGain2 = 0;
+          const isStacked = stack.length >= 2;
+
+          for (const move of moves) {
             const target = state.board[move.to.row][move.to.col];
-            if (target.length && target[target.length - 1].side !== side) continue;
+            const targetTop = target.length ? target[target.length - 1] : null;
+            if (targetTop && targetTop.side !== side) continue;
             const nextDistance = Math.abs(move.to.row - enemyMarshalForStack.row) +
               Math.abs(move.to.col - enemyMarshalForStack.col);
             const distanceGain = Math.max(0, currentDistance - nextDistance);
             const advanceGain = Math.max(0, advancement(move.to.row, side) - advancement(row, side));
-            if (distanceGain || advanceGain) gains.push(distanceGain * 3 + advanceGain * 2);
+
+            if (isStacked) {
+              const marshalZone = nextDistance <= 1 ? 18 : nextDistance <= 2 ? 10 : nextDistance <= 4 ? 4 : 0;
+              const quality = distanceGain * 4 + advanceGain * 2 + marshalZone;
+              if (quality > bestQuality1) {
+                bestQuality3 = bestQuality2;
+                bestQuality2 = bestQuality1;
+                bestQuality1 = quality;
+              } else if (quality > bestQuality2) {
+                bestQuality3 = bestQuality2;
+                bestQuality2 = quality;
+              } else if (quality > bestQuality3) {
+                bestQuality3 = quality;
+              }
+            }
+
+            if (distanceGain || advanceGain) {
+              const gain = distanceGain * 3 + advanceGain * 2;
+              if (gain > bestGain1) {
+                bestGain2 = bestGain1;
+                bestGain1 = gain;
+              } else if (gain > bestGain2) {
+                bestGain2 = gain;
+              }
+            }
           }
-          gains.sort((a, b) => b - a);
-          purposefulAdvance += Math.min(22, (gains[0] || 0) + (gains[1] || 0) * 0.35);
+
+          if (isStacked) {
+            const bestThree = bestQuality1 + bestQuality2 + bestQuality3;
+            const depthFactor = 1 + Math.max(0, stack.length - 2) * 0.25;
+            stackedTacticalActivity += Math.min(48, bestThree) * depthFactor;
+          }
+          purposefulAdvance += Math.min(22, bestGain1 + bestGain2 * 0.35);
         }
       }
+      activity += Math.min(150, stackedTacticalActivity);
       activity += Math.min(110, purposefulAdvance);
     }
 
@@ -285,7 +286,7 @@
         if (!dr && !dc) continue;
         const r = enemyMarshalForStack.row + dr, c = enemyMarshalForStack.col + dc;
         if (r < 0 || r >= E.SIZE || c < 0 || c >= E.SIZE) continue;
-        if (controlledSquares.has(r + "," + c)) ring.add(r + "," + c);
+        if (controlledSquares.has(r * E.SIZE + c)) ring.add(r * E.SIZE + c);
       }
       threats += Math.min(96, ring.size * 12);
     }
@@ -316,7 +317,7 @@
     let coordinatedControl = 0;
     for (const [key, controllers] of controllersBySquare) {
       if (controllers.size < 2) continue;
-      const [row, col] = key.split(",").map(Number);
+      const row = Math.floor(key / E.SIZE), col = key % E.SIZE;
       const distanceToEnemyMarshal = enemyMarshal
         ? Math.abs(row - enemyMarshal.row) + Math.abs(col - enemyMarshal.col)
         : 8;
@@ -346,7 +347,7 @@
     // but must not count the same capturable stack as several separate prizes.
     const enemyTargets = new Map();
     for (const move of enemyMoves) {
-      const key = move.to.row + "," + move.to.col;
+      const key = move.to.row * E.SIZE + move.to.col;
       const targetStack = state.board[move.to.row][move.to.col];
       const capturable = capturablePieces(targetStack, enemy);
       if (!capturable.length) continue;
@@ -374,7 +375,7 @@
           const distance = Math.abs(row - enemyMarshalForStack.row) +
             Math.abs(col - enemyMarshalForStack.col);
           if (distance > 3) continue;
-          const safe = !enemyTargets.has(row + "," + col);
+          const safe = !enemyTargets.has(row * E.SIZE + col);
           const base = distance === 1 ? 42 : distance === 2 ? 26 : 12;
           safeApproachPressure += base * (safe ? 1 : 0.35);
           if (safe) safeApproachAttackers += 1;
@@ -424,7 +425,7 @@
 
     const ownTargets = new Map();
     for (const move of moveList) {
-      const key = move.to.row + "," + move.to.col;
+      const key = move.to.row * E.SIZE + move.to.col;
       const targetStack = state.board[move.to.row][move.to.col];
       const capturable = capturablePieces(targetStack, side);
       if (!capturable.length) continue;
