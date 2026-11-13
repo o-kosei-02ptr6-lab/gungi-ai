@@ -38,7 +38,7 @@ const maxPlies = Math.max(20, Math.min(108, Number(process.env.MAX_PLIES) || 108
 const checkpointEvery = Math.max(1, Math.min(10, Number(process.env.CHECKPOINT_EVERY) || 1));
 const searchProfile = process.env.SEARCH_PROFILE === "deep" ? "deep" : "standard";
 const searchOptions = searchProfile === "deep"
-  ? { maxDepth: 8, timeMs: 2600, maxNodes: 60000, maxDeployCandidates: 12, maxTTEntries: 60000 }
+  ? { maxDepth: 8, timeMs: 5200, maxNodes: 60000, maxDeployCandidates: 12, maxTTEntries: 60000 }
   : {};
 
 function normalizeWeights(input) {
