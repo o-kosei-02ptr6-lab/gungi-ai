@@ -19,9 +19,9 @@ on:
         default: "1"
         type: string
       search_profile:
-        description: "Search profile: standard or deep (depth 8, 2.6s / move)"
+        description: "Search profile: standard or deep (depth 8, 5.2s / move)"
         required: true
-        default: "standard"
+        default: "deep"
         type: choice
         options:
           - standard
