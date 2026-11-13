@@ -180,7 +180,7 @@
     return center * 5 + advance * 1.4 + value * 0.025 + (ownStack ? 7 : 0) - enemyDistance * 0.15;
   }
 
-  function generateActions(state, side, maxDeployCandidates, detectWinningCapture = true, memo = null) {
+  function generateActions(state, side, maxDeployCandidates, detectWinningCapture = true, memo = null, quietOnly = false) {
     const actions = [];
     const moves = legalMovesMemo(state, side, memo);
     for (const move of moves) {
@@ -190,8 +190,12 @@
       } else {
         const top = target[target.length - 1];
         if (top.side !== side) {
-          actions.push({ type: "move", from: move.from, to: move.to, landingMode: "capture", pieceId: move.piece.id });
-          if (target.length < 3) actions.push({ type: "move", from: move.from, to: move.to, landingMode: "tsuke", pieceId: move.piece.id });
+          // Quiet-check scans never inspect enemy-occupied destinations: both
+          // capture and tsuke onto an enemy top are tactical, not quiet actions.
+          if (!quietOnly) {
+            actions.push({ type: "move", from: move.from, to: move.to, landingMode: "capture", pieceId: move.piece.id });
+            if (target.length < 3) actions.push({ type: "move", from: move.from, to: move.to, landingMode: "tsuke", pieceId: move.piece.id });
+          }
         } else if (target.length < 3) {
           actions.push({ type: "move", from: move.from, to: move.to, landingMode: "tsuke", pieceId: move.piece.id });
         }
@@ -392,8 +396,7 @@
     // evasions and captures. Rank candidates first and inspect only a bounded
     // prefix so a position with many legal quiet moves does not spend most of
     // its search budget proving that dozens of them are not checks.
-    const actions = generateActions(state, side, maxDeployCandidates, false, memo)
-      .filter(action => isQuietAction(state, action));
+    const actions = generateActions(state, side, maxDeployCandidates, false, memo, true);
     const ordered = orderActions(state, actions, null, ply, killers, historyScores);
     const inspected = ordered.slice(0, Math.max(1, inspectionLimit));
     for (const action of inspected) {
@@ -421,7 +424,7 @@
         const deadline = started + timeMs;
         const root = cloneState(state);
         const table = new Map();
-        const stats = { nodes: 0, qnodes: 0, cutoffs: 0, ttHits: 0,
+        const stats = { nodes: 0, qnodes: 0, cutoffs: 0, ttHits: 0, stopReason: null, rootActionCount: 0,
           q: { inCheckNodes: 0, quietNodes: 0, standPatEvaluations: 0,
             standPatCutoffs: 0, qplyLimitStops: 0, adaptiveQuietStops: 0, repetitionStops: 0,
             terminalNodes: 0, evasionActions: 0, captureActions: 0,
@@ -448,7 +451,8 @@
           historyScores.set(key, Math.min(200000, (historyScores.get(key) || 0) + depth * depth * 32));
         }
         const checkStop = () => {
-          if (stats.nodes >= maxNodes || now() >= deadline) throw new SearchAbort();
+          if (stats.nodes >= maxNodes) { stats.stopReason = "node-limit"; throw new SearchAbort(); }
+          if (now() >= deadline) { stats.stopReason = "time-limit"; throw new SearchAbort(); }
         };
 
         function store(key, entry) {
@@ -656,6 +660,7 @@
           const key = searchContextKey(root);
           const cached = table.get(key);
           const actions = orderActions(root, getSearchActions(root, root.turn, maxDeployCandidates, memo), previousBest || (cached && cached.best), 0, killers, historyScores);
+          stats.rootActionCount = Math.max(stats.rootActionCount, actions.length);
           let alpha = alphaStart;
           const beta = betaStart;
           let bestScore = -INF;
@@ -755,6 +760,8 @@
           score: result.score,
           depth: result.depth,
           nodes: stats.nodes,
+          stopReason: stats.stopReason || (now() >= deadline ? "time-limit" : stats.nodes >= maxNodes ? "node-limit" : "completed"),
+          rootActionCount: stats.rootActionCount,
           quiescenceNodes: stats.qnodes,
           quiescenceDiagnostics: { ...stats.q },
           cutoffs: stats.cutoffs,
