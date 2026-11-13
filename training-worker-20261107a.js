@@ -201,6 +201,7 @@
         ply:plies+1,side,isCandidate,inCheck:urgent,
         requestedDepth:Math.max(1,Math.min(8,Number(searchOptions.maxDepth)||5)),
         completedDepth:Number.isFinite(result.depth)?result.depth:0,
+        stopReason:result.stopReason||"unknown",rootActionCount:result.rootActionCount||0,
         nodes:result.nodes||0,quiescenceNodes:result.quiescenceNodes||0,
         quiescenceDiagnostics:result.quiescenceDiagnostics||{},
         cutoffs:result.cutoffs||0,transpositionHits:result.transpositionHits||0,
