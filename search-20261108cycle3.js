@@ -14,6 +14,13 @@
   // Reuse child positions already built while filtering legal actions. The search
   // tree treats parent positions as immutable, so this cache is safe per action.
   const appliedChildren = new WeakMap();
+  // Search states are immutable after creation. Cache history-derived keys and
+  // penalties per state so the same board/history is not rescanned at every node.
+  const repetitionKeys = new WeakMap();
+  const priorPositionInfos = new WeakMap();
+  const searchContextKeys = new WeakMap();
+  const retreatAdvances = new WeakMap();
+  const positionKeys = new WeakMap();
   const now = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
   const other = side => side === "先手" ? "後手" : "先手";
 
@@ -70,6 +77,8 @@
   }
 
   function positionKey(state) {
+    const cached = positionKeys.get(state);
+    if (cached !== undefined) return cached;
     let key = state.turn === "先手" ? "S|" : "G|";
     for (let r = 0; r < E.SIZE; r += 1) {
       for (let c = 0; c < E.SIZE; c += 1) {
@@ -82,6 +91,7 @@
       key += side === "先手" ? "|H1:" : "|H2:";
       key += state.hands[side].map(p => p.id).sort((a,b) => Number(a)-Number(b)).join(".");
     }
+    positionKeys.set(state, key);
     return key;
   }
 
@@ -94,15 +104,21 @@
   // 同じ盤面に戻る循環や、同じ駒を短い間隔で往復させる手を抑える。
   // engine側のpositionKeyと同じ形式で、駒IDではなく駒種・陣営・段構成を比較する。
   function repetitionKey(state) {
+    const cached = repetitionKeys.get(state);
+    if (cached !== undefined) return cached;
     const board = state.board.map(row => row.map(stack => stack.map(piece => piece.side + ":" + piece.name)));
     const hands = {};
     for (const side of ["先手", "後手"]) {
       hands[side] = {};
       for (const piece of state.hands[side] || []) hands[side][piece.name] = (hands[side][piece.name] || 0) + 1;
     }
-    return JSON.stringify({ board, hands, turn: state.turn });
+    const key = JSON.stringify({ board, hands, turn: state.turn });
+    repetitionKeys.set(state, key);
+    return key;
   }
   function priorPositionInfo(state) {
+    const cached = priorPositionInfos.get(state);
+    if (cached) return cached;
     const key = repetitionKey(state);
     const history = state.history || [];
     let count = 0;
@@ -112,7 +128,9 @@
     for (let i = 0; i < history.length; i += 1) {
       if (history[i].positionKey === key) { count += 1; lastIndex = i; }
     }
-    return { count, cycleLength: lastIndex >= 0 ? history.length - lastIndex : 0 };
+    const info = { count, cycleLength: lastIndex >= 0 ? history.length - lastIndex : 0 };
+    priorPositionInfos.set(state, info);
+    return info;
   }
   function priorPositionCount(state) {
     return priorPositionInfo(state).count;
@@ -134,12 +152,21 @@
     const side = piece.side;
     const advance = row => side === "先手" ? 8 - row : row;
     const currentAdvance = advance(action.from.row);
-    let bestAdvance = currentAdvance;
-    for (const entry of (state.history || [])) {
-      if (entry.type !== "move" || !entry.piece || entry.piece.id !== piece.id) continue;
-      if (entry.from && Number.isFinite(entry.from.row)) bestAdvance = Math.max(bestAdvance, advance(entry.from.row));
-      if (entry.to && Number.isFinite(entry.to.row)) bestAdvance = Math.max(bestAdvance, advance(entry.to.row));
+    let byPiece = retreatAdvances.get(state);
+    if (!byPiece) {
+      byPiece = new Map();
+      for (const entry of (state.history || [])) {
+        if (entry.type !== "move" || !entry.piece) continue;
+        const id = entry.piece.id;
+        const direction = entry.piece.side === "先手" ? row => 8 - row : row => row;
+        let best = byPiece.has(id) ? byPiece.get(id) : -1;
+        if (entry.from && Number.isFinite(entry.from.row)) best = Math.max(best, direction(entry.from.row));
+        if (entry.to && Number.isFinite(entry.to.row)) best = Math.max(best, direction(entry.to.row));
+        byPiece.set(id, best);
+      }
+      retreatAdvances.set(state, byPiece);
     }
+    const bestAdvance = Math.max(currentAdvance, byPiece.get(piece.id) ?? currentAdvance);
     const nextAdvance = advance(action.to.row);
     const oldRetreat = Math.max(0, bestAdvance - currentAdvance);
     const nextRetreat = Math.max(0, bestAdvance - nextAdvance);
@@ -162,12 +189,23 @@
     return child ? repeatedPositionPenalty(child) : 0;
   }
   function searchContextKey(state) {
-    const recent = state.history.slice(-16).map(entry => entry.type === "move"
-      ? [entry.piece && entry.piece.id, entry.from && entry.from.row, entry.from && entry.from.col,
-         entry.to && entry.to.row, entry.to && entry.to.col, entry.landingMode].join(":")
-      : entry.type).join("|");
+    const cached = searchContextKeys.get(state);
+    if (cached !== undefined) return cached;
+    const history = state.history;
+    const start = Math.max(0, history.length - 16);
+    const recentParts = [];
+    for (let i = start; i < history.length; i += 1) {
+      const entry = history[i];
+      if (entry.type === "move") {
+        const piece = entry.piece, from = entry.from, to = entry.to;
+        recentParts.push([piece && piece.id, from && from.row, from && from.col,
+          to && to.row, to && to.col, entry.landingMode].join(":"));
+      } else recentParts.push(entry.type);
+    }
     const repetition = priorPositionInfo(state);
-    return positionKey(state) + "|r" + repetition.count + "|c" + repetition.cycleLength + "|h" + recent;
+    const key = positionKey(state) + "|r" + repetition.count + "|c" + repetition.cycleLength + "|h" + recentParts.join("|");
+    searchContextKeys.set(state, key);
+    return key;
   }
 
   function deploymentPriority(state, side, piece, row, col) {
