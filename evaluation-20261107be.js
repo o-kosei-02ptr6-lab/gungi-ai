@@ -102,7 +102,19 @@
       : targetStack.filter(piece => piece.side !== attackingSide);
   }
 
-  function countSafeMarshalEscapes(state, side, moves, marshal) {
+  // Restrict evaluator trial histories to entries from the exact current position.
+  function evaluationTrialHistory(state, side) {
+    const board = state.board.map(row => row.map(stack => stack.map(piece => piece.side + ":" + piece.name)));
+    const hands = {};
+    for (const handSide of SIDES) {
+      hands[handSide] = {};
+      for (const piece of state.hands[handSide] || []) hands[handSide][piece.name] = (hands[handSide][piece.name] || 0) + 1;
+    }
+    const key = JSON.stringify({ board, hands, turn: side });
+    return (state.history || []).filter(entry => entry.positionKey === key);
+  }
+
+  function countSafeMarshalEscapes(state, side, moves, marshal, trialHistory) {
     if (!marshal) return 0;
     let safe = 0;
     // 評価側が参照するのは最大4個まで。必要数に達したら盤面複製と
@@ -114,7 +126,7 @@
         turn: side,
         board: state.board.map(line => line.map(stack => stack.slice())),
         hands: state.hands,
-        history: Array.isArray(state.history) ? state.history.slice() : []
+        history: trialHistory
       };
       const destination = nextState.board[move.to.row][move.to.col];
       const landingMode = destination.length && destination[destination.length - 1].side === side
@@ -129,7 +141,7 @@
     return safe;
   }
 
-  function countSafeCheckResponses(state, side, moves) {
+  function countSafeCheckResponses(state, side, moves, trialHistory) {
     let safe = 0;
     // 詰み評価で必要なのは0〜4の区別だけなので、4応手で打ち切る。
     for (const move of moves) {
@@ -137,7 +149,7 @@
         ...state, turn: side,
         board: state.board.map(line => line.map(stack => stack.slice())),
         hands: state.hands,
-        history: Array.isArray(state.history) ? state.history.slice() : []
+        history: trialHistory
       };
       const destination = nextState.board[move.to.row][move.to.col];
       const landingMode = destination.length && destination[destination.length - 1].side === side ? "tsuke" : "capture";
@@ -532,6 +544,7 @@
     const computeStarted = cacheClock();
     const sides = ["先手", "後手"];
     const context = {
+      trialHistory: new Map(sides.map(side => [side, evaluationTrialHistory(state, side)])),
       moveLists: new Map(sides.map(side => [side, E.generateLegalMoves(state, side)])),
       marshalPositions: new Map(sides.map(side => [side, E.getMarshalPosition(state, side)])),
       // A position's check status is immutable during evaluation. Compute it
@@ -544,12 +557,12 @@
     // clones, move applications, and check tests in every quiescence evaluation.
     context.safeMarshalEscapes = new Map(sides.map(side => [
       side,
-      countSafeMarshalEscapes(state, side, context.moveLists.get(side), context.marshalPositions.get(side))
+      countSafeMarshalEscapes(state, side, context.moveLists.get(side), context.marshalPositions.get(side), context.trialHistory.get(side))
     ]));
     context.safeCheckResponses = new Map(sides.map(side => [
       side,
       context.inCheck.get(side)
-        ? countSafeCheckResponses(state, side, context.moveLists.get(side))
+        ? countSafeCheckResponses(state, side, context.moveLists.get(side), context.trialHistory.get(side))
         : 0
     ]));
     const first = sideBreakdown(state, "先手", context);
