@@ -126,7 +126,7 @@
         turn: side,
         board: state.board.map(line => line.map(stack => stack.slice())),
         hands: state.hands,
-        history: trialHistory
+        history: trialHistory.slice()
       };
       const destination = nextState.board[move.to.row][move.to.col];
       const landingMode = destination.length && destination[destination.length - 1].side === side
@@ -149,7 +149,7 @@
         ...state, turn: side,
         board: state.board.map(line => line.map(stack => stack.slice())),
         hands: state.hands,
-        history: trialHistory
+        history: trialHistory.slice()
       };
       const destination = nextState.board[move.to.row][move.to.col];
       const landingMode = destination.length && destination[destination.length - 1].side === side ? "tsuke" : "capture";
