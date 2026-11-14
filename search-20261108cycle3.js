@@ -8,6 +8,9 @@
   if (!E || !AI) throw new Error("Rules engine and evaluator must load before search.");
   const INF = 1000000000;
   const MATE = 100000000;
+  // Quiet-check extensions are optional tactical candidates. Keep the highest-
+  // priority 32 per node; forced evasions and captures remain exhaustive.
+  const QUIET_CHECK_INSPECTION_LIMIT = 32;
   const PIECE_VALUES = AI.PIECE_VALUES;
 
   class SearchAbort extends Error {}
@@ -561,7 +564,7 @@
             else {
               const captureKeys = new Set(captures.map(actionKey));
               const checkingScan = generateCheckingActions(
-                position, position.turn, maxDeployCandidates, memo, ply, killers, historyScores, 48
+                position, position.turn, maxDeployCandidates, memo, ply, killers, historyScores, QUIET_CHECK_INSPECTION_LIMIT
               );
               const checks = checkingScan.checks.filter(action => !captureKeys.has(actionKey(action)));
               q.checkingCandidatesSeen = (q.checkingCandidatesSeen || 0) + checkingScan.seen;
