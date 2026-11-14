@@ -440,8 +440,12 @@
     for (const action of inspected) {
       const child = applyAction(state, action);
       if (!child || child.phase === "finished") continue;
-      if (isInCheckMemo(child, side, memo)) continue;
-      if (isInCheckMemo(child, child.turn, memo)) checks.push(action);
+      // Most quiet candidates do not give check. Test the opponent first and
+      // only pay for the moving side's king-safety scan when a check was found.
+      // This preserves the exact legality filter while avoiding a second full
+      // board scan for the overwhelming majority of non-checking candidates.
+      if (isInCheckMemo(child, child.turn, memo) &&
+          !isInCheckMemo(child, side, memo)) checks.push(action);
     }
     return { checks, seen: actions.length, inspected: inspected.length };
   }
