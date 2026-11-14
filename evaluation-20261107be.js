@@ -605,6 +605,7 @@
     setWeights,
     getWeights,
     evaluate,
+    evaluateSearch,
     evaluateBreakdown,
     getEvaluationCacheStats
   });
