@@ -575,6 +575,23 @@
     return result;
   }
 
+  // 探索木の局面は生成後に変更されないため、探索中に限って
+  // WeakMapの同一オブジェクト照合だけで評価結果を再利用する。
+  // 通常対局UIからのevaluate()は従来どおり盤面キーで変更を検出する。
+  const immutableSearchEvaluations = new WeakMap();
+  function evaluateSearch(state, perspective = "先手") {
+    if (perspective !== "先手" && perspective !== "後手") {
+      throw new TypeError("評価する陣営は「先手」または「後手」です。");
+    }
+    const signature = weightsSignature();
+    let cached = immutableSearchEvaluations.get(state);
+    if (!cached || cached.signature !== signature) {
+      cached = { signature, result: evaluateBreakdown(state) };
+      immutableSearchEvaluations.set(state, cached);
+    }
+    return perspective === "先手" ? cached.result.score : -cached.result.score;
+  }
+
   function evaluate(state, perspective = "先手") {
     if (perspective !== "先手" && perspective !== "後手") {
       throw new TypeError("評価する陣営は「先手」または「後手」です。");
