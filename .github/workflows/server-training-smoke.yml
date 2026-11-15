@@ -60,14 +60,28 @@ jobs:
       - name: Publish latest training replay
         if: success()
         run: |
-          node scripts/publish-training-replay.mjs
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add training-data/latest.json
-          if ! git diff --cached --quiet; then
+          # Training may finish while another workflow or manual commit updates
+          # main. Re-sync and regenerate the replay before each push attempt.
+          for attempt in 1 2 3 4 5; do
+            git fetch origin "${GITHUB_REF_NAME}"
+            git reset --hard "origin/${GITHUB_REF_NAME}"
+            node scripts/publish-training-replay.mjs
+            git add training-data/latest.json
+            if git diff --cached --quiet; then
+              echo "Replay is already up to date."
+              exit 0
+            fi
             git commit -m "Publish latest training replay data"
-            git push origin "HEAD:${GITHUB_REF_NAME}"
-          fi
+            if git push origin "HEAD:${GITHUB_REF_NAME}"; then
+              echo "Latest training replay published."
+              exit 0
+            fi
+            echo "Push raced with another update (attempt ${attempt}/5); retrying."
+          done
+          echo "Could not publish replay after 5 synchronized attempts."
+          exit 1
       - name: Upload training report and checkpoint
         if: always()
         uses: actions/upload-artifact@v4
