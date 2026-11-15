@@ -102,14 +102,16 @@
   }
   // 対局中の配置では、敵駒に覆われた味方を最前列の判定から除外する。
   function getFrontmostFriendlyRow(state, side) {
-    const rows = [];
-    for (let row = 0; row < SIZE; row += 1) for (let col = 0; col < SIZE; col += 1) {
-      const stack = state.board[row][col];
-      const top = stack.length ? stack[stack.length - 1] : null;
-      if (top && top.side === side) rows.push(row);
+    let front = null;
+    for (let row = 0; row < SIZE; row += 1) {
+      for (let col = 0; col < SIZE; col += 1) {
+        const stack = state.board[row][col];
+        const top = stack.length ? stack[stack.length - 1] : null;
+        if (!top || top.side !== side) continue;
+        if (front === null || (side === "先手" ? row < front : row > front)) front = row;
+      }
     }
-    if (!rows.length) return null;
-    return side === "先手" ? Math.min(...rows) : Math.max(...rows);
+    return front;
   }
   function canDeployPiece(state, row, col, side, piece) {
     if (!isInside(row, col) || !piece || !state.hands[side] || piece.side !== side) return false;
@@ -186,20 +188,33 @@
     if (!rule) return [];
     const vectors = [...rule[1], ...(level >= 2 ? rule[2] : []), ...(level >= 3 ? rule[3] : [])];
     const targets = [];
-    const seen = new Set();
+    // Board coordinates are bounded (9x9). An indexed byte array avoids
+    // allocating coordinate strings and hashing them in a Set for every piece.
+    const seen = new Uint8Array(SIZE * SIZE);
+    const jumps = rule.jumps || [];
     for (const [f, r] of vectors) {
       const [dr, dc] = rotateVector(f, r, piece.side);
       const tr = row + dr, tc = col + dc;
       if (!isInside(tr, tc)) continue;
-      const key = tr + "," + tc;
-      if (!seen.has(key)) { seen.add(key); targets.push({ row: tr, col: tc, jump: (rule.jumps || []).some(v => v[0] === f && v[1] === r) }); }
+      const key = tr * SIZE + tc;
+      if (!seen[key]) {
+        seen[key] = 1;
+        let jump = false;
+        for (let i = 0; i < jumps.length; i += 1) {
+          if (jumps[i][0] === f && jumps[i][1] === r) { jump = true; break; }
+        }
+        targets.push({ row: tr, col: tc, jump });
+      }
     }
     for (const [f, r] of (rule.rays || [])) {
       const [dr, dc] = rotateVector(f, r, piece.side);
       let tr = row + dr, tc = col + dc;
       while (isInside(tr, tc)) {
-        const key = tr + "," + tc;
-        if (!seen.has(key)) { seen.add(key); targets.push({ row: tr, col: tc, jump: false, ray: true }); }
+        const key = tr * SIZE + tc;
+        if (!seen[key]) {
+          seen[key] = 1;
+          targets.push({ row: tr, col: tc, jump: false, ray: true });
+        }
         const blocking = getTopPiece(state, tr, tc);
         if (blocking) break;
         tr += dr; tc += dc;
