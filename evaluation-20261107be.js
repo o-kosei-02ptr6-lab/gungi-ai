@@ -522,7 +522,7 @@
     };
   }
 
-  function evaluateBreakdown(state) {
+  function evaluateBreakdown(state, searchContext = null) {
     if (!state || !Array.isArray(state.board) || !state.hands) {
       throw new TypeError("有効な軍儀の局面を指定してください。");
     }
@@ -545,11 +545,22 @@
     const sides = ["先手", "後手"];
     const context = {
       trialHistory: new Map(sides.map(side => [side, evaluationTrialHistory(state, side)])),
-      moveLists: new Map(sides.map(side => [side, E.generateLegalMoves(state, side)])),
+      // Search supplies its per-position memoized rule results. The callbacks
+      // are invoked only after both evaluation caches miss, so cache hits do not
+      // trigger unnecessary move generation or check scans.
+      moveLists: new Map(sides.map(side => [side,
+        searchContext && typeof searchContext.getLegalMoves === "function"
+          ? searchContext.getLegalMoves(side)
+          : E.generateLegalMoves(state, side)
+      ])),
       marshalPositions: new Map(sides.map(side => [side, E.getMarshalPosition(state, side)])),
-      // A position's check status is immutable during evaluation. Compute it
-      // once per side and share it across both perspective breakdowns.
-      inCheck: new Map(sides.map(side => [side, E.isInCheck(state, side)]))
+      // Share the search's check memo as well; standalone UI evaluations retain
+      // the original direct engine path.
+      inCheck: new Map(sides.map(side => [side,
+        searchContext && typeof searchContext.getInCheck === "function"
+          ? searchContext.getInCheck(side)
+          : E.isInCheck(state, side)
+      ]))
     };
     // Both perspective breakdowns ask for the same Marshal escape/check-response
     // counts. Compute each side's tactical safety once per position and share it.
@@ -592,14 +603,14 @@
   // WeakMapの同一オブジェクト照合だけで評価結果を再利用する。
   // 通常対局UIからのevaluate()は従来どおり盤面キーで変更を検出する。
   const immutableSearchEvaluations = new WeakMap();
-  function evaluateSearch(state, perspective = "先手") {
+  function evaluateSearch(state, perspective = "先手", searchContext = null) {
     if (perspective !== "先手" && perspective !== "後手") {
       throw new TypeError("評価する陣営は「先手」または「後手」です。");
     }
     const signature = weightsSignature();
     let cached = immutableSearchEvaluations.get(state);
     if (!cached || cached.signature !== signature) {
-      cached = { signature, result: evaluateBreakdown(state) };
+      cached = { signature, result: evaluateBreakdown(state, searchContext) };
       immutableSearchEvaluations.set(state, cached);
     }
     return perspective === "先手" ? cached.result.score : -cached.result.score;
