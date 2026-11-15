@@ -43,7 +43,12 @@
     let bySide = memo.evaluations.get(state);
     if (!bySide) { bySide = new Map(); memo.evaluations.set(state, bySide); }
     if (bySide.has(side)) { memo.evaluationHits += 1; return bySide.get(side); }
-    const value = AI.evaluateSearch ? AI.evaluateSearch(state, side) : AI.evaluate(state, side);
+    const value = AI.evaluateSearch
+      ? AI.evaluateSearch(state, side, {
+          getLegalMoves: requestedSide => legalMovesMemo(state, requestedSide, memo),
+          getInCheck: requestedSide => isInCheckMemo(state, requestedSide, memo)
+        })
+      : AI.evaluate(state, side);
     bySide.set(side, value);
     return value;
   }
