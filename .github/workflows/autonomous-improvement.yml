@@ -24,7 +24,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: gungi-autonomous-no-api-\${{ github.ref }}
+  group: gungi-autonomous-no-api-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -36,7 +36,7 @@ jobs:
       - name: Check out the trained branch
         uses: actions/checkout@v4
         with:
-          ref: \${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref_name }}
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref_name }}
           fetch-depth: 1
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -46,13 +46,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .training-state
-          key: gungi-server-training-v2-\${{ github.ref_name }}-\${{ github.run_id }}-\${{ github.run_attempt }}
+          key: gungi-server-training-v2-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            gungi-server-training-v2-\${{ github.ref_name }}-
+            gungi-server-training-v2-${{ github.ref_name }}-
       - name: Run no-cost autonomous self-play and weight learning
         env:
-          AUTO_CYCLES: \${{ github.event_name == 'workflow_dispatch' && inputs.cycles || '2' }}
-          GAME_COUNT: \${{ github.event_name == 'workflow_dispatch' && inputs.games || '10' }}
+          AUTO_CYCLES: ${{ github.event_name == 'workflow_dispatch' && inputs.cycles || '2' }}
+          GAME_COUNT: ${{ github.event_name == 'workflow_dispatch' && inputs.games || '10' }}
           MAX_PLIES: "108"
           SEARCH_PROFILE: "deep"
           TRAINING_STATE_DIR: .training-state
@@ -61,7 +61,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: autonomous-no-api-\${{ github.run_id }}
+          name: autonomous-no-api-${{ github.run_id }}
           path: |
             artifacts/autonomous/
             artifacts/server-training-report.json
