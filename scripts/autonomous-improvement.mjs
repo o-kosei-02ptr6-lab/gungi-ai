@@ -118,9 +118,9 @@ for (let cycle = 1; cycle <= cycles; cycle++) {
   if (changedPaths.length !== 1 || changedPaths[0] !== target) {
     throw new Error("Patch attempted to modify a file outside the single-file allowlist.");
   }
-  const addedLines = patch.split("\\n").filter(line => line.startsWith("+") && !line.startsWith("+++"));
+  const addedLines = patch.split("\n").filter(line => line.startsWith("+") && !line.startsWith("+++"));
   if (addedLines.length > 80) throw new Error("Patch exceeds the 80-added-line safety limit.");
-  if (addedLines.some(line => /\\b(eval|Function)\\s*\\(|\\bfetch\\s*\\(|process\\.env|child_process|https?:\\/\\//.test(line))) {
+  if (addedLines.some(line => /\b(eval|Function)\s*\(|\bfetch\s*\(|process\.env|child_process|https?:\/\//.test(line))) {
     throw new Error("Patch contains a prohibited dynamic-code, network, process, or environment access pattern.");
   }
   try {
