@@ -118,6 +118,11 @@ for (let cycle = 1; cycle <= cycles; cycle++) {
   if (changedPaths.length !== 1 || changedPaths[0] !== target) {
     throw new Error("Patch attempted to modify a file outside the single-file allowlist.");
   }
+  const addedLines = patch.split("\\n").filter(line => line.startsWith("+") && !line.startsWith("+++"));
+  if (addedLines.length > 80) throw new Error("Patch exceeds the 80-added-line safety limit.");
+  if (addedLines.some(line => /\\b(eval|Function)\\s*\\(|\\bfetch\\s*\\(|process\\.env|child_process|https?:\\/\\//.test(line))) {
+    throw new Error("Patch contains a prohibited dynamic-code, network, process, or environment access pattern.");
+  }
   try {
     run("git", ["apply", "--check", "--"], { input: patch });
     run("git", ["apply", "--"], { input: patch });
@@ -147,6 +152,29 @@ for (let cycle = 1; cycle <= cycles; cycle++) {
   fs.writeFileSync(path.join(outDir, "cycle-" + cycle + "-training-report.json"), JSON.stringify(report, null, 2));
   fs.writeFileSync(path.join(outDir, "cycle-log.json"), JSON.stringify(log, null, 2));
   console.log(JSON.stringify({ event: "patch-accepted", cycle, target, commit }));
+}
+// 最後に必ず修正後コードで追加学習し、修正を学習へ反映したレポートを残す。
+if (log.some(item => item.status === "accepted-and-pushed")) {
+  console.log(JSON.stringify({ event: "final-retraining-start", games }));
+  run("node", ["scripts/server-training.mjs"], {
+    env: {
+      ...process.env,
+      GAME_COUNT: String(games),
+      MAX_PLIES: String(maxPlies),
+      CHECKPOINT_EVERY: "1",
+      SEARCH_PROFILE: "deep",
+      TRAINING_STATE_DIR: ".training-state"
+    }
+  });
+  const finalReport = JSON.parse(fs.readFileSync(path.join(root, "artifacts", "server-training-report.json"), "utf8"));
+  fs.writeFileSync(path.join(outDir, "final-verification-report.json"), JSON.stringify(finalReport, null, 2));
+  log.push({
+    status: "final-retraining-complete",
+    gamesThisRun: finalReport.gamesThisRun,
+    totalGames: finalReport.totalGames,
+    meanDepth: finalReport.progress?.searchDiagnostics?.meanCompletedDepth || 0,
+    meanElapsedMs: finalReport.progress?.searchDiagnostics?.meanElapsedMs || 0
+  });
 }
 fs.writeFileSync(path.join(outDir, "cycle-log.json"), JSON.stringify(log, null, 2));
 console.log(JSON.stringify({ event: "autonomous-improvement-complete", cyclesRequested: cycles, cyclesCompleted: log.length, log }, null, 2));
