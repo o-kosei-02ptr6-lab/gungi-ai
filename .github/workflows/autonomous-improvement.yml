@@ -1,0 +1,73 @@
+name: Autonomous train-analyze-fix-retrain
+
+on:
+  workflow_run:
+    workflows: ["Server self-play training"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      cycles:
+        description: "Maximum improvement cycles (1-2)"
+        required: true
+        default: "2"
+        type: choice
+        options: ["1", "2"]
+      games:
+        description: "Self-play games per cycle (1-20)"
+        required: true
+        default: "10"
+        type: string
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: gungi-autonomous-improvement-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  improve:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Check out the trained branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref_name }}
+          fetch-depth: 0
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Restore training checkpoint
+        uses: actions/cache@v4
+        with:
+          path: .training-state
+          key: gungi-autonomous-state-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            gungi-server-training-v2-main-
+            gungi-autonomous-state-main-
+      - name: Run bounded autonomous improvement loop
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-6.1-sol' }}
+          AUTO_CYCLES: ${{ github.event_name == 'workflow_dispatch' && inputs.cycles || '2' }}
+          GAME_COUNT: ${{ github.event_name == 'workflow_dispatch' && inputs.games || '10' }}
+          MAX_PLIES: "108"
+          SEARCH_PROFILE: "deep"
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/autonomous-improvement.mjs
+      - name: Upload autonomous analysis
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: autonomous-improvement-${{ github.run_id }}
+          path: |
+            artifacts/autonomous/
+            artifacts/server-training-report.json
+            artifacts/server-training-checkpoint.json
+          if-no-files-found: warn
+          retention-days: 30
