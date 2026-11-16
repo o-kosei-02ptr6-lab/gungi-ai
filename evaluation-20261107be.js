@@ -103,15 +103,26 @@
   }
 
   // Restrict evaluator trial histories to entries from the exact current position.
-  function evaluationTrialHistory(state, side) {
-    const board = state.board.map(row => row.map(stack => stack.map(piece => piece.side + ":" + piece.name)));
+  // Board and hand signatures are perspective-independent, so build them once
+  // and only serialize the small turn discriminator separately for each side.
+  function evaluationTrialHistories(state) {
+    const board = state.board.map(row => row.map(stack =>
+      stack.map(piece => piece.side + ":" + piece.name)
+    ));
     const hands = {};
     for (const handSide of SIDES) {
-      hands[handSide] = {};
-      for (const piece of state.hands[handSide] || []) hands[handSide][piece.name] = (hands[handSide][piece.name] || 0) + 1;
+      const counts = hands[handSide] = {};
+      for (const piece of state.hands[handSide] || []) {
+        counts[piece.name] = (counts[piece.name] || 0) + 1;
+      }
     }
-    const key = JSON.stringify({ board, hands, turn: side });
-    return (state.history || []).filter(entry => entry.positionKey === key);
+    const history = state.history || [];
+    const result = new Map();
+    for (const side of SIDES) {
+      const key = JSON.stringify({ board, hands, turn: side });
+      result.set(side, history.filter(entry => entry.positionKey === key));
+    }
+    return result;
   }
 
   function countSafeMarshalEscapes(state, side, moves, marshal, trialHistory) {
@@ -544,7 +555,7 @@
     const computeStarted = cacheClock();
     const sides = ["先手", "後手"];
     const context = {
-      trialHistory: new Map(sides.map(side => [side, evaluationTrialHistory(state, side)])),
+      trialHistory: evaluationTrialHistories(state),
       // Search supplies its per-position memoized rule results. The callbacks
       // are invoked only after both evaluation caches miss, so cache hits do not
       // trigger unnecessary move generation or check scans.
