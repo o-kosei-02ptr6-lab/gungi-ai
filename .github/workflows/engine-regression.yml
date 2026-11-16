@@ -13,6 +13,8 @@ on:
       - "training-20261107a.js"
       - "tournament-20261107a.js"
       - "scripts/server-training.mjs"
+      - "scripts/autonomous-improvement.mjs"
+      - ".github/workflows/autonomous-improvement.yml"
       - ".github/workflows/engine-regression.yml"
   pull_request:
     paths:
@@ -20,6 +22,8 @@ on:
       - "search-20261108cycle3.js"
       - "scripts/search-context-regression.mjs"
       - "scripts/movegen-regression.mjs"
+      - "scripts/autonomous-improvement.mjs"
+      - ".github/workflows/autonomous-improvement.yml"
       - ".github/workflows/engine-regression.yml"
   workflow_dispatch:
 
@@ -36,6 +40,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - name: Check autonomous controller syntax
+        run: node --check scripts/autonomous-improvement.mjs
       - name: Test history-sensitive transposition keys
         run: node scripts/search-context-regression.mjs
       - name: Test optimized move generation against reference implementation
