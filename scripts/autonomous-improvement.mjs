@@ -85,7 +85,8 @@ for (let cycle = 1; cycle <= cycles; cycle++) {
   });
   const report = readReport();
   const metrics = summarize(report);
-  const delta = previousWeights ? weightDelta(previousWeights, metrics.weights) : {};
+  const initialWeights = previousWeights || report.results?.[0]?.weightsBefore || {};
+  const delta = weightDelta(initialWeights, metrics.weights);
   const entry = {
     cycle,
     status: "completed",
