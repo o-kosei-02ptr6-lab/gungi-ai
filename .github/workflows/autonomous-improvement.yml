@@ -1,4 +1,4 @@
-name: Autonomous train-analyze-fix-retrain
+name: Autonomous train-analyze-retrain (no API)
 
 on:
   workflow_run:
@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       cycles:
-        description: "Maximum improvement cycles (1-2)"
+        description: "Maximum learning cycles (1-2)"
         required: true
         default: "2"
         type: choice
@@ -20,11 +20,11 @@ on:
         type: string
 
 permissions:
-  contents: write
+  contents: read
   actions: read
 
 concurrency:
-  group: gungi-autonomous-improvement-${{ github.ref }}
+  group: gungi-autonomous-no-api-\${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -36,35 +36,32 @@ jobs:
       - name: Check out the trained branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref_name }}
-          fetch-depth: 0
+          ref: \${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref_name }}
+          fetch-depth: 1
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Restore training checkpoint
+      - name: Restore learned evaluation weights
         uses: actions/cache@v4
         with:
           path: .training-state
-          key: gungi-autonomous-state-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: gungi-server-training-v2-\${{ github.ref_name }}-\${{ github.run_id }}-\${{ github.run_attempt }}
           restore-keys: |
-            gungi-server-training-v2-main-
-            gungi-autonomous-state-main-
-      - name: Run bounded autonomous improvement loop
+            gungi-server-training-v2-\${{ github.ref_name }}-
+      - name: Run no-cost autonomous self-play and weight learning
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-6.1-sol' }}
-          AUTO_CYCLES: ${{ github.event_name == 'workflow_dispatch' && inputs.cycles || '2' }}
-          GAME_COUNT: ${{ github.event_name == 'workflow_dispatch' && inputs.games || '10' }}
+          AUTO_CYCLES: \${{ github.event_name == 'workflow_dispatch' && inputs.cycles || '2' }}
+          GAME_COUNT: \${{ github.event_name == 'workflow_dispatch' && inputs.games || '10' }}
           MAX_PLIES: "108"
           SEARCH_PROFILE: "deep"
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TRAINING_STATE_DIR: .training-state
         run: node scripts/autonomous-improvement.mjs
       - name: Upload autonomous analysis
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: autonomous-improvement-${{ github.run_id }}
+          name: autonomous-no-api-\${{ github.run_id }}
           path: |
             artifacts/autonomous/
             artifacts/server-training-report.json
