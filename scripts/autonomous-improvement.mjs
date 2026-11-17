@@ -74,6 +74,11 @@ let previousWeights = null;
 for (let cycle = 1; cycle <= cycles; cycle++) {
   console.log(JSON.stringify({ event: "cycle-start", cycle, cycles, games }));
   run("node", ["scripts/server-training.mjs"], {
+    // The trainer emits one JSON line per move; discard stdout here to avoid
+    // execFileSync's small default maxBuffer being exhausted on long runs.
+    // Keep stderr captured so genuine failures remain visible in the job log.
+    stdio: ["ignore", "ignore", "pipe"],
+    maxBuffer: 10 * 1024 * 1024,
     env: {
       ...process.env,
       GAME_COUNT: String(games),
