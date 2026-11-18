@@ -10,7 +10,7 @@
   const MATE = 100000000;
   // Quiet-check extensions are optional tactical candidates. Keep the highest-
   // priority 32 per node; forced evasions and captures remain exhaustive.
-  const QUIET_CHECK_INSPECTION_LIMIT = 32;
+  const QUIET_CHECK_INSPECTION_LIMIT = 16;
   const PIECE_VALUES = AI.PIECE_VALUES;
 
   class SearchAbort extends Error {}
@@ -581,7 +581,7 @@
               // the first quiescence ply. This is deliberately limited to the
               // optional checking extension; forced check evasions remain exhaustive.
               const orderedChecks = orderActions(position, checks, null, ply, killers, historyScores);
-              const selectedChecks = orderedChecks.slice(0, 4);
+              const selectedChecks = orderedChecks.slice(0, 2);
               q.checkingCandidatesBeforeLimit = (q.checkingCandidatesBeforeLimit || 0) + checks.length;
               q.checkingCandidatesAfterLimit = (q.checkingCandidatesAfterLimit || 0) + selectedChecks.length;
               q.checkingCandidatesPruned = (q.checkingCandidatesPruned || 0) + Math.max(0, checks.length - selectedChecks.length);
