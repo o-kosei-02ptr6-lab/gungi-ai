@@ -222,7 +222,7 @@
     }
     return targets;
   }
-  function canMoveTo(state, fromRow, fromCol, toRow, toCol) {
+  function canMoveTo(state, fromRow, fromCol, toRow, toCol, knownOption = null) {
     if (!isInside(toRow, toCol) || (fromRow === toRow && fromCol === toCol)) return false;
     const source = getStack(state, fromRow, fromCol);
     if (!source || !source.length || source.length > 3) return false;
@@ -235,7 +235,7 @@
     // かつ移動先が3段未満の場合のみ可能。
     if (top && target.length > source.length) return false;
     if (top && top.side === moving.side && target.length >= 3) return false;
-    const option = getMovementTargets(state, fromRow, fromCol).find(p => p.row === toRow && p.col === toCol);
+    const option = knownOption || getMovementTargets(state, fromRow, fromCol).find(p => p.row === toRow && p.col === toCol);
     if (!option) return false;
     if (option.jump) {
       // 筒・砲の前方射程では、自分より高い段数の駒が途中にあると
@@ -453,7 +453,7 @@
       const stack = state.board[row][col];
       if (!stack.length || stack[stack.length - 1].side !== side) continue;
       for (const target of getMovementTargets(state, row, col)) {
-        if (canMoveTo(state, row, col, target.row, target.col)) moves.push({ from:{row,col}, to:{row:target.row,col:target.col}, piece:stack[stack.length-1] });
+        if (canMoveTo(state, row, col, target.row, target.col, target)) moves.push({ from:{row,col}, to:{row:target.row,col:target.col}, piece:stack[stack.length-1] });
       }
     }
     return moves;
