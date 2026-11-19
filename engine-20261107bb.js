@@ -421,7 +421,7 @@
       const stack = state.board[row][col];
       if (!stack.length || stack[stack.length - 1].side !== side) continue;
       for (const target of getMovementTargets(state, row, col)) {
-        if (!canMoveTo(state, row, col, target.row, target.col)) continue;
+        if (!canMoveTo(state, row, col, target.row, target.col, target)) continue;
         const destination = getStack(state, target.row, target.col);
         const top = destination.length ? destination[destination.length - 1] : null;
         const modes = !top ? ["capture"] : (top.side === side ? ["tsuke"] : ["capture", ...(destination.length < 3 ? ["tsuke"] : [])]);
