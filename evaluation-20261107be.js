@@ -48,31 +48,43 @@
   const positionCacheStats = { hits: 0, misses: 0, keyBuildMs: 0, computeMs: 0 };
   const cacheClock = () => (typeof performance !== "undefined" && performance.now
     ? performance.now() : Date.now());
+  // Compact, collision-free encoding of the exact evaluation inputs.
+  // Each board square uses four code units: stack height + up to three pieces.
+  // Piece IDs and hand ordering are intentionally omitted; only side/type/count matter.
+  const PIECE_CODES = new Map(Object.keys(PIECE_VALUES).map((name, index) => [name, index + 1]));
+  const PIECE_CODE_COUNT = PIECE_CODES.size;
   function positionCacheKey(state, signature) {
-    // Evaluation depends on piece side/type and stack order, not unique piece IDs.
-    // Omitting IDs lets strategically identical positions share cached results.
     const started = cacheClock();
-    let board = "";
+    const encoded = new Array(E.SIZE * E.SIZE * 4 + PIECE_CODE_COUNT * 2);
+    let cursor = 0;
     for (let row = 0; row < E.SIZE; row += 1) {
+      const line = state.board[row];
       for (let col = 0; col < E.SIZE; col += 1) {
-        const stack = state.board[row][col];
-        if (!stack.length) board += "-";
-        else {
-          for (let layer = 0; layer < stack.length; layer += 1) {
+        const stack = line[col];
+        const length = stack.length;
+        encoded[cursor++] = length;
+        for (let layer = 0; layer < 3; layer += 1) {
+          if (layer >= length) {
+            encoded[cursor++] = 0;
+          } else {
             const piece = stack[layer];
-            board += (piece.side === "先手" ? "S" : "G") + piece.name + ".";
+            const pieceCode = PIECE_CODES.get(piece.name) || 0;
+            encoded[cursor++] = pieceCode + (piece.side === "先手" ? 0 : PIECE_CODE_COUNT);
           }
         }
-        board += ",";
       }
-      board += "|";
     }
-    const hands = ["先手", "後手"].map(side => {
-      const names = (state.hands[side] || []).map(piece => piece.name).sort();
-      return names.join(".");
-    }).join("|");
+    for (const side of SIDES) {
+      const counts = new Uint8Array(PIECE_CODE_COUNT);
+      for (const piece of state.hands[side] || []) {
+        const code = PIECE_CODES.get(piece.name);
+        if (code) counts[code - 1] += 1;
+      }
+      for (let i = 0; i < counts.length; i += 1) encoded[cursor++] = counts[i];
+    }
     positionCacheStats.keyBuildMs += cacheClock() - started;
-    return signature + "#" + state.phase + "#" + (state.winner || "") + "#" + board + "#" + hands;
+    return signature + "#" + state.phase + "#" + (state.winner || "") + "#" +
+      String.fromCharCode(...encoded);
   }
   function getEvaluationCacheStats() {
     return { ...positionCacheStats, size: positionBreakdownCache.size };
