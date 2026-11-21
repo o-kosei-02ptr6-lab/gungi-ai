@@ -377,40 +377,59 @@
     return !target.length || target[target.length - 1].side === state.turn;
   }
 
+  function scoreAction(state, action, preferred, killerList, historyScores) {
+    let score = actionKey(action) === preferred ? 100000000 : 0;
+    if (action.type === "deploy") {
+      const piece = state.hands[state.turn].find(p => p.id === action.pieceId);
+      if (piece) score += deploymentPriority(state, state.turn, piece, action.row, action.col) * 3;
+    } else {
+      if (isQuietAction(state, action)) {
+        const key = actionKey(action);
+        const killerIndex = killerList.indexOf(key);
+        if (killerIndex >= 0) score += 42000 - killerIndex * 4000;
+        if (historyScores) score += historyScores.get(key) || 0;
+      }
+      const target = state.board[action.to.row][action.to.col];
+      const attacker = state.board[action.from.row][action.from.col].slice(-1)[0];
+      if (target.length && target[target.length - 1].side !== state.turn) {
+        if (action.landingMode === "capture") {
+          const hasFriendlyUnderneath = target.some(piece => piece.side === state.turn);
+          const captured = hasFriendlyUnderneath
+            ? [target[target.length - 1]]
+            : target.filter(piece => piece.side !== state.turn);
+          const capturedValue = captured.reduce((sum, piece) => sum + (PIECE_VALUES[piece.name] || 0), 0);
+          score += capturedValue * 12 - (PIECE_VALUES[attacker.name] || 0);
+        } else {
+          score += 25;
+        }
+      }
+      if (attacker && attacker.name === "帥") score += 15;
+    }
+    return score;
+  }
+
   function orderActions(state, actions, ttMove, ply = 0, killers = null, historyScores = null) {
     const preferred = actionKey(ttMove);
     const killerList = killers && killers.get(ply) || [];
-    return actions.map(action => {
-      let score = actionKey(action) === preferred ? 100000000 : 0;
-      if (action.type === "deploy") {
-        const piece = state.hands[state.turn].find(p => p.id === action.pieceId);
-        if (piece) score += deploymentPriority(state, state.turn, piece, action.row, action.col) * 3;
-      } else {
-        if (isQuietAction(state, action)) {
-          const key = actionKey(action);
-          const killerIndex = killerList.indexOf(key);
-          if (killerIndex >= 0) score += 42000 - killerIndex * 4000;
-          if (historyScores) score += historyScores.get(key) || 0;
-        }
-        const target = state.board[action.to.row][action.to.col];
-        const attacker = state.board[action.from.row][action.from.col].slice(-1)[0];
-        if (target.length && target[target.length - 1].side !== state.turn) {
-          if (action.landingMode === "capture") {
-            const hasFriendlyUnderneath = target.some(piece => piece.side === state.turn);
-            const captured = hasFriendlyUnderneath
-              ? [target[target.length - 1]]
-              : target.filter(piece => piece.side !== state.turn);
-            const capturedValue = captured.reduce((sum, piece) => sum + (PIECE_VALUES[piece.name] || 0), 0);
-            score += capturedValue * 12 - (PIECE_VALUES[attacker.name] || 0);
-          } else {
-            // ツケは捕獲ではない。捕獲手と混同せず、候補として少しだけ優先する。
-            score += 25;
-          }
-        }
-        if (attacker && attacker.name === "帥") score += 15;
+    return actions.map(action => ({ action, score: scoreAction(state, action, preferred, killerList, historyScores) }))
+      .sort((a,b) => b.score - a.score).map(item => item.action);
+  }
+
+  // Quiet-check scanning needs only its best bounded prefix. Keep a stable
+  // top-K list instead of sorting every generated candidate at every qnode.
+  function topOrderedActions(state, actions, limit, ply, killers, historyScores) {
+    const killerList = killers && killers.get(ply) || [];
+    const best = [];
+    for (const action of actions) {
+      const item = { action, score: scoreAction(state, action, "", killerList, historyScores) };
+      let at = best.length;
+      while (at > 0 && item.score > best[at - 1].score) at--;
+      if (at < limit) {
+        best.splice(at, 0, item);
+        if (best.length > limit) best.pop();
       }
-      return { action, score };
-    }).sort((a,b) => b.score - a.score).map(item => item.action);
+    }
+    return best.map(item => item.action);
   }
 
   // 静止探索用：通常探索の末端でも、実際に駒を取る手だけを追加で読む。
@@ -443,8 +462,7 @@
     // prefix so a position with many legal quiet moves does not spend most of
     // its search budget proving that dozens of them are not checks.
     const actions = generateActions(state, side, maxDeployCandidates, false, memo, true);
-    const ordered = orderActions(state, actions, null, ply, killers, historyScores);
-    const inspected = ordered.slice(0, Math.max(1, inspectionLimit));
+    const inspected = topOrderedActions(state, actions, Math.max(1, inspectionLimit), ply, killers, historyScores);
     for (const action of inspected) {
       const child = applyAction(state, action);
       if (!child || child.phase === "finished") continue;
