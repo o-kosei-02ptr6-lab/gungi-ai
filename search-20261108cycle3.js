@@ -9,9 +9,17 @@
   const INF = 1000000000;
   const MATE = 100000000;
   // Quiet-check extensions are optional tactical candidates. Keep the highest-
-  // priority 32 per node; forced evasions and captures remain exhaustive.
+  // priority 16 per node; forced evasions and captures remain exhaustive.
   const QUIET_CHECK_INSPECTION_LIMIT = 16;
   const PIECE_VALUES = AI.PIECE_VALUES;
+
+  // Preserve an explicit zero so tests and callers can disable reserve deployments.
+  function getMaxDeployCandidates(options = {}) {
+    const raw = options && options.maxDeployCandidates;
+    if (raw === undefined || raw === null || raw === "") return 12;
+    const value = Number(raw);
+    return Number.isFinite(value) ? Math.max(0, Math.min(24, value)) : 12;
+  }
 
   class SearchAbort extends Error {}
   // Reuse child positions already built while filtering legal actions. The search
@@ -485,7 +493,7 @@
         const maxDepth = Math.max(1, Math.min(8, Number(options.maxDepth) || 4));
         const timeMs = Math.max(100, Math.min(15000, Number(options.timeMs) || 2200));
         const maxNodes = Math.max(1000, Math.min(1000000, Number(options.maxNodes) || 90000));
-        const maxDeployCandidates = Math.max(0, Math.min(24, Number(options.maxDeployCandidates) || 12));
+        const maxDeployCandidates = getMaxDeployCandidates(options);
         const maxTTEntries = Math.max(2000, Math.min(100000, Number(options.maxTTEntries) || 30000));
         const started = now();
         const evaluationCacheStart = AI.getEvaluationCacheStats ? AI.getEvaluationCacheStats() : {};
@@ -496,7 +504,8 @@
           q: { inCheckNodes: 0, quietNodes: 0, standPatEvaluations: 0,
             standPatCutoffs: 0, qplyLimitStops: 0, adaptiveQuietStops: 0, repetitionStops: 0,
             terminalNodes: 0, evasionActions: 0, captureActions: 0,
-            checkingActions: 0, checkingCandidatesSeen: 0, checkingCandidatesInspected: 0,
+            checkingActions: 0, checkingScanNodes: 0,
+            checkingCandidatesSeen: 0, checkingCandidatesInspected: 0,
             noTacticalActions: 0, appliedActions: 0,
             evasionLimitNodes: 0, timingSamples: 0,
             generationMs: 0, orderingMs: 0, evaluationMs: 0,
@@ -589,13 +598,14 @@
               const checkingScan = generateCheckingActions(
                 position, position.turn, maxDeployCandidates, memo, ply, killers, historyScores, QUIET_CHECK_INSPECTION_LIMIT
               );
+              q.checkingScanNodes++;
               const checks = checkingScan.checks.filter(action => !captureKeys.has(actionKey(action)));
               q.checkingCandidatesSeen = (q.checkingCandidatesSeen || 0) + checkingScan.seen;
               q.checkingCandidatesInspected = (q.checkingCandidatesInspected || 0) + checkingScan.inspected;
               q.checkingActions += checks.length;
               // Quiet checks can be numerous in Gungi because reserve deployments
               // and stacked movement create many checking continuations. Keep all
-              // captures, but search only the four best-ordered quiet checks at
+              // captures, but search only the two best-ordered quiet checks at
               // the first quiescence ply. This is deliberately limited to the
               // optional checking extension; forced check evasions remain exhaustive.
               const orderedChecks = orderActions(position, checks, null, ply, killers, historyScores);
@@ -997,8 +1007,8 @@
     findBestMove,
     findBestSetupPlacement,
     generateSetupActions,
-    generateActions: (state, options = {}) => generateActions(state, state.turn, options.maxDeployCandidates || 12),
-    getSearchActions: (state, options = {}) => getSearchActions(state, state.turn, options.maxDeployCandidates || 12),
+    generateActions: (state, options = {}) => generateActions(state, state.turn, getMaxDeployCandidates(options)),
+    getSearchActions: (state, options = {}) => getSearchActions(state, state.turn, getMaxDeployCandidates(options)),
     // Exposed for deterministic regression tests of history-sensitive TT keys.
     getSearchContextKey: searchContextKey,
     getAntiLoopPenalty: antiLoopPenalty,

@@ -279,6 +279,15 @@ const telemetryBoard=empty();
 telemetryBoard[8][4].push({id:"first-marshal",name:"帥",side:"先手"});
 telemetryBoard[0][4].push({id:"second-marshal",name:"帥",side:"後手"});
 const telemetryState={...base,board:telemetryBoard,phase:"move",winner:null,moveNumber:1};
+const zeroDeployActions=search.generateActions(telemetryState,{maxDeployCandidates:0});
+assert.equal(zeroDeployActions.filter(action=>action.type==="deploy").length,0,
+  "an explicit zero deployment limit must disable reserve candidates");
+const zeroDeploySearchActions=search.getSearchActions(telemetryState,{maxDeployCandidates:0});
+assert.equal(zeroDeploySearchActions.filter(action=>action.type==="deploy").length,0,
+  "the safety-filtered search list must also preserve an explicit zero deployment limit");
+const oneDeployActions=search.generateActions(telemetryState,{maxDeployCandidates:1});
+assert.ok(oneDeployActions.filter(action=>action.type==="deploy").length<=1,
+  "the public generator must respect a positive deployment candidate limit");
 const progress=[];
 const telemetry=await search.findBestMove(telemetryState,{
   maxDepth:1,timeMs:300,maxNodes:5000,maxDeployCandidates:0,
@@ -291,6 +300,15 @@ assert.ok(progress.length>0,"iterative-deepening progress should be observable")
 assert.ok(telemetry.quiescenceDiagnostics &&
   Number.isFinite(telemetry.quiescenceDiagnostics.adaptiveQuietStops),
   "quiescence diagnostics should expose adaptive quiet-position stops");
+const qdiag=telemetry.quiescenceDiagnostics;
+assert.ok(qdiag.checkingScanNodes>0,
+  "quiet-check candidate scanning should be counted in quiescence diagnostics");
+assert.ok(qdiag.checkingCandidatesInspected<=qdiag.checkingScanNodes*16,
+  "each quiet-check scan must inspect no more than the configured 16 candidates");
+assert.ok(qdiag.checkingCandidatesAfterLimit<=qdiag.checkingScanNodes*2,
+  "each quiet-check scan must retain no more than the configured two quiet checks");
+assert.ok(telemetry.rootCandidates.every(candidate=>!candidate.action.startsWith("D:")),
+  "findBestMove must not include reserve deployments when maxDeployCandidates is zero");
 assert.equal(progress.at(-1).depth,telemetry.depth);
 assert.ok(telemetry.rootCandidates.length>0 && telemetry.rootCandidates.length<=5,
   "completed searches should preserve up to five root candidates");
