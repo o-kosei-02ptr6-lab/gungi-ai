@@ -128,11 +128,16 @@
         counts[piece.name] = (counts[piece.name] || 0) + 1;
       }
     }
-    const history = state.history || [];
-    const result = new Map();
-    for (const side of SIDES) {
-      const key = JSON.stringify({ board, hands, turn: side });
-      result.set(side, history.filter(entry => entry.positionKey === key));
+    // Serialize the two turn-specific keys once, then scan history only once.
+    // The matching entries and their order are unchanged; only duplicate full
+    // array-filter passes are removed from every uncached evaluation.
+    const keys = new Map(SIDES.map(side => [
+      JSON.stringify({ board, hands, turn: side }), side
+    ]));
+    const result = new Map(SIDES.map(side => [side, []]));
+    for (const entry of state.history || []) {
+      const side = keys.get(entry.positionKey);
+      if (side !== undefined) result.get(side).push(entry);
     }
     return result;
   }
