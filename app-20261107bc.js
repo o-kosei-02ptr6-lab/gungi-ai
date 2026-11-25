@@ -468,6 +468,7 @@
           if (applied.complete) {
             mode = "move";
             actionMode = "move";
+            startHumanGameRecord();
           }
           messageElement.textContent = "AI（" + side + "）は" +
             (pressedFinish ? "「済」を押し、" : "") + applied.piece.name + "を " +
