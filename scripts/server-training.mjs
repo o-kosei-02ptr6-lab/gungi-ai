@@ -41,6 +41,26 @@ const searchOptions = searchProfile === "deep"
   ? { maxDepth: 8, timeMs: 5200, maxNodes: 60000, maxDeployCandidates: 12, maxTTEntries: 60000 }
   : {};
 
+function normalizePolicyWeights(input) {
+  const weights = {};
+  if (!input || typeof input !== "object" || Array.isArray(input)) return weights;
+  for (const [key, raw] of Object.entries(input)) {
+    const value = Number(raw);
+    if (key.length > 160 || !Number.isFinite(value)) continue;
+    weights[key] = Math.max(-180, Math.min(180, value));
+  }
+  return weights;
+}
+function trainPolicySamples(samples, outcome, initial) {
+  const weights = { ...initial };
+  const unique = [...new Set((samples || []).filter(key => typeof key === "string" && key.length > 0 && key.length <= 160))];
+  const reward = outcome > 0 ? 1 : outcome < 0 ? -1 : 0;
+  for (const key of unique) {
+    const previous = Number(weights[key]) || 0;
+    weights[key] = Math.max(-180, Math.min(180, previous * 0.995 + reward * 18));
+  }
+  return { weights, updates: unique.length, distinctKeys: Object.keys(weights).length };
+}
 function normalizeWeights(input) {
   const weights = {};
   for (const key of FEATURES) {
@@ -55,11 +75,12 @@ function normalizeWeights(input) {
 function readCheckpoint() {
   try {
     const saved = JSON.parse(fs.readFileSync(checkpointPath, "utf8"));
-    if (saved.format !== "gungi-server-training-checkpoint" || saved.version !== 1) return null;
+    if (saved.format !== "gungi-server-training-checkpoint" || ![1,2].includes(saved.version)) return null;
     return {
-      format: saved.format, version: 1,
+      format: saved.format, version: 2,
       games: Math.max(0, Number(saved.games) || 0),
       weights: normalizeWeights(saved.weights),
+      policyWeights: normalizePolicyWeights(saved.policyWeights),
       totals: saved.totals && typeof saved.totals === "object" ? saved.totals : {},
       updatedAt: saved.updatedAt || null
     };
@@ -119,13 +140,13 @@ function saveCheckpoint(checkpoint) {
   fs.mkdirSync(stateDir, { recursive: true });
   const temporary = checkpointPath + ".tmp";
   fs.writeFileSync(temporary, JSON.stringify({
-    format: "gungi-server-training-checkpoint", version: 1,
-    games: checkpoint.games, weights: checkpoint.weights, totals: checkpoint.totals,
+    format: "gungi-server-training-checkpoint", version: 2,
+    games: checkpoint.games, weights: checkpoint.weights, policyWeights: checkpoint.policyWeights || {}, totals: checkpoint.totals,
     updatedAt: new Date().toISOString()
   }, null, 2));
   fs.renameSync(temporary, checkpointPath);
 }
-function playGame(id, candidateWeights, championWeights, candidateSide, seed, searchOptions) {
+function playGame(id, candidateWeights, championWeights, candidatePolicyWeights, championPolicyWeights, candidateSide, seed, searchOptions) {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error("Self-play game timed out after 30 minutes.")), 30 * 60 * 1000);
     self.postMessage = message => {
@@ -133,14 +154,14 @@ function playGame(id, candidateWeights, championWeights, candidateSide, seed, se
       if (message && message.ok) resolve(message.result);
       else reject(new Error(message && message.error || "Training worker returned no result."));
     };
-    self.onmessage({ data: { id, candidateWeights, championWeights, candidateSide, maxPlies, seed, searchOptions } });
+    self.onmessage({ data: { id, candidateWeights, championWeights, candidatePolicyWeights, championPolicyWeights, candidateSide, maxPlies, seed, searchOptions } });
   });
 }
 
 const previous = readCheckpoint();
 let checkpoint = previous || {
-  format: "gungi-server-training-checkpoint", version: 1, games: 0,
-  weights: { ...BASELINE },
+  format: "gungi-server-training-checkpoint", version: 2, games: 0,
+  weights: { ...BASELINE }, policyWeights: {},
   totals: { candidateWins: 0, championWins: 0, draws: 0, nodes: 0, plies: 0, tdUpdates: 0, mateUpdates: 0, tdErrorSum: 0, tdErrorGames: 0 }
 };
 const championWeights = { ...BASELINE };
@@ -157,8 +178,13 @@ for (let index = 0; index < gamesRequested; index++) {
   const candidateSide = (checkpoint.games % 2 === 0) ? "先手" : "後手";
   const beforeWeights = { ...checkpoint.weights };
   const gameNumber = checkpoint.games + 1;
-  const result = await playGame("server-training-" + gameNumber, beforeWeights, championWeights, candidateSide, gameNumber * 7919 + 104729, searchOptions);
+  const beforePolicyWeights = { ...checkpoint.policyWeights };
+  const result = await playGame("server-training-" + gameNumber, beforeWeights, championWeights,
+    beforePolicyWeights, {}, candidateSide, gameNumber * 7919 + 104729, searchOptions);
   let learned = { weights: beforeWeights, updates: 0, meanTdError: 0 };
+  const policyOutcome = result.winner === candidateSide ? 1 : result.winner ? -1 : 0;
+  const learnedPolicy = trainPolicySamples(result.policySamples, policyOutcome, beforePolicyWeights);
+  checkpoint.policyWeights = learnedPolicy.weights;
   if (result.trajectory && result.trajectory.length) {
     learned = trainTrajectory(result.trajectory, result.finalTarget, beforeWeights);
   }
@@ -175,6 +201,7 @@ for (let index = 0; index < gamesRequested; index++) {
   totals.plies = (totals.plies || 0) + (result.plies || 0);
   totals.tdUpdates = (totals.tdUpdates || 0) + (learned.updates || 0);
   totals.mateUpdates = (totals.mateUpdates || 0) + (mate.updates || 0);
+  totals.policyUpdates = (totals.policyUpdates || 0) + learnedPolicy.updates;
   totals.tdErrorSum = (totals.tdErrorSum || 0) + (learned.meanTdError || 0);
   totals.tdErrorGames = (totals.tdErrorGames || 0) + (learned.updates ? 1 : 0);
   const gameSummary = {
@@ -204,6 +231,7 @@ for (let index = 0; index < gamesRequested; index++) {
     maxPositionVisits: result.maxPositionVisits || 1, finalTarget: result.finalTarget,
     candidateFinalScore: result.candidateFinalScore, trajectorySamples: result.trajectory.length,
     mateSamples: (result.mateSamples || []).length, tdUpdates: learned.updates, mateUpdates: mate.updates,
+    policySamples: (result.policySamples || []).length, policyUpdates: learnedPolicy.updates,
     finalState: result.finalState
   };
   runResults.push(gameSummary);
@@ -288,7 +316,11 @@ const summary = {
   },
   drawMeanCandidateFinalScore: checkpoint.totals.drawEvaluationCount
     ? checkpoint.totals.drawEvaluationSum / checkpoint.totals.drawEvaluationCount : 0,
-  totals: checkpoint.totals, weights: checkpoint.weights,
+  totals: checkpoint.totals, weights: checkpoint.weights, policyWeights: checkpoint.policyWeights,
+  policyDiagnostics: { distinctActionPatterns: Object.keys(checkpoint.policyWeights || {}).length,
+    nonZeroActionPatterns: Object.values(checkpoint.policyWeights || {}).filter(value => Math.abs(value) >= 0.5).length,
+    meanAbsolutePreference: Object.values(checkpoint.policyWeights || {}).length
+      ? Object.values(checkpoint.policyWeights).reduce((sum, value) => sum + Math.abs(value), 0) / Object.keys(checkpoint.policyWeights).length : 0 },
   meanTdError: checkpoint.totals.tdErrorGames
     ? checkpoint.totals.tdErrorSum / checkpoint.totals.tdErrorGames : 0
 };
