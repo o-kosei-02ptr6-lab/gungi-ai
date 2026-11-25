@@ -18,6 +18,19 @@ const search=self.GungiSearch;
 const evaluator=self.GungiAI;
 assert.ok(search,"search engine should load");
 assert.equal(typeof search.getSearchContextKey,"function");
+assert.equal(typeof search.getPolicyActionKey,"function",
+  "search should expose the generalized action features used by persistent policy learning");
+const policyFixture=self.GungiEngine.createGameState();
+const policyPawn=policyFixture.hands["先手"].find(piece=>piece.name==="兵");
+assert.equal(search.getPolicyActionKey(policyFixture,{
+  type:"deploy",pieceId:policyPawn.id,row:5,col:4
+}),"D|兵|1|0|0",
+  "deployment policy keys should encode piece, relative advance, centrality, and stack level");
+policyFixture.board[6][4].push(self.GungiEngine.createPiece("兵","先手","policy-pawn"));
+assert.equal(search.getPolicyActionKey(policyFixture,{
+  type:"move",pieceId:"policy-pawn",from:{row:6,col:4},to:{row:5,col:4},landingMode:"capture"
+}),"M|兵|F|0|capture",
+  "move policy keys should encode piece, side-relative direction, target level, and landing mode");
 
 // A cloned but position-identical state should reuse the exact evaluation.
 const cacheProbe=self.GungiEngine.createGameState();
