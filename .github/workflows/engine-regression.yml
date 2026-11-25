@@ -12,6 +12,8 @@ on:
       - "training-worker-20261107a.js"
       - "training-20261107a.js"
       - "tournament-20261107a.js"
+      - "app-20261107bc.js"
+      - "index.html"
       - "scripts/server-training.mjs"
       - "scripts/autonomous-improvement.mjs"
       - ".github/workflows/autonomous-improvement.yml"
@@ -40,6 +42,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - name: Check application and training script syntax
+        run: node --check app-20261107bc.js && node --check training-20261107a.js
       - name: Check autonomous controller syntax
         run: node --check scripts/autonomous-improvement.mjs
       - name: Test history-sensitive transposition keys
