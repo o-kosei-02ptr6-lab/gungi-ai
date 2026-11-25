@@ -7,6 +7,7 @@
   const CHAMPION_KEY="gungi-ai-champion-weights-v1";
   const STATS_KEY="gungi-ai-tournament-stats-v2";
   const BACKUP_KEY="gungi-ai-previous-backup-v1";
+  const AUTO_BACKUP_KEY="gungi-ai-latest-full-backup-v1";
   function readStored(key){try{return JSON.parse(localStorage.getItem(key)||"null");}catch(_){return null;}}
   function currentSnapshot(){
     return {format:"gungi-ai-full-backup",version:2,createdAt:new Date().toISOString(),
@@ -15,6 +16,14 @@
   }
   function createBackup(){
     try{localStorage.setItem(BACKUP_KEY,JSON.stringify(currentSnapshot()));return true;}catch(_){return false;}
+  }
+  function createLatestFullBackup(){
+    try{localStorage.setItem(AUTO_BACKUP_KEY,JSON.stringify(currentSnapshot()));return true;}
+    catch(_){return false;}
+  }
+  function exportLatestFullBackup(){
+    const saved=readStored(AUTO_BACKUP_KEY);
+    return saved||exportData();
   }
   function normalizeWeights(weights){
     const result={...BASELINE_WEIGHTS};
@@ -149,6 +158,7 @@
   function saveWeights(weights,games){
     createBackup();
     try{localStorage.setItem(STORAGE_KEY,JSON.stringify({weights,games,updatedAt:new Date().toISOString()}));}catch(_){}
+    createLatestFullBackup();
   }
   function championWeights(){
     const keys=FEATURES;
@@ -219,7 +229,7 @@
   function exportHumanGames(){return {format:"gungi-ai-human-games",version:1,exportedAt:new Date().toISOString(),games:readHumanGames()};}
   function importHumanGames(input){const d=typeof input==="string"?JSON.parse(input):input;if(!d||d.format!=="gungi-ai-human-games"||d.version!==1||!Array.isArray(d.games))throw Error("人間対局データの形式またはバージョンが違います。");if(d.games.length>200)throw Error("一度に読み込める対局は200局までです。");if(!d.games.every(isValidHumanGame))throw Error("不正な対局データが含まれています。読み込みを中止しました。");const list=readHumanGames(),seen=new Set(list.map(g=>g.id));let added=0;for(const g of d.games)if(!seen.has(g.id)){list.unshift({...g,trainedAt:null});seen.add(g.id);added++;}list.sort((a,b)=>String(b.savedAt||"").localeCompare(String(a.savedAt||"")));const kept=list.slice(0,HUMAN_GAMES_LIMIT);localStorage.setItem(HUMAN_GAMES_KEY,JSON.stringify(kept));return {added,total:kept.length};}
   function humanGameStats(){const g=readHumanGames();return {games:g.length,untrained:g.filter(x=>!x.trainedAt).length,humanVsHuman:g.filter(x=>x.source==="人間同士").length,humanVsAi:g.filter(x=>x.source==="人間対AI").length,positions:g.reduce((n,x)=>n+x.trajectory.length,0)};}
-  function trainHumanGames(){const games=readHumanGames(),pending=games.filter(g=>!g.trainedAt);if(!pending.length)throw Error("未学習の人間対局データがありません。先に対局を保存するか、棋譜データを読み込んでください。");createBackup();let weights=loadWeights(),updates=0,error=0,positions=0;for(const g of pending){const sign=g.winner==="後手"?-1:1,trajectory=g.trajectory.map(s=>Object.fromEntries(FEATURES.map(k=>[k,(s[k]||0)*sign]))),target=g.draw?0:1,learned=trainTrajectory(trajectory,target,weights);weights=learned.weights;updates+=learned.updates;error+=learned.meanTdError*learned.updates;positions+=trajectory.length;g.trainedAt=new Date().toISOString();}AI.setWeights(weights);let count=0;try{const s=JSON.parse(localStorage.getItem(STORAGE_KEY)||"null");count=s&&Number(s.games)||0;}catch(_){}saveWeights(weights,count+pending.length);localStorage.setItem(HUMAN_GAMES_KEY,JSON.stringify(games));return {games:pending.length,positions,updates,meanTdError:updates?error/updates:0,weights,stats:humanGameStats()};}
+  function trainHumanGames(){const games=readHumanGames(),pending=games.filter(g=>!g.trainedAt);if(!pending.length)throw Error("未学習の人間対局データがありません。先に対局を保存するか、棋譜データを読み込んでください。");createBackup();let weights=loadWeights(),updates=0,error=0,positions=0;for(const g of pending){const sign=g.winner==="後手"?-1:1,trajectory=g.trajectory.map(s=>Object.fromEntries(FEATURES.map(k=>[k,(s[k]||0)*sign]))),target=g.draw?0:1,learned=trainTrajectory(trajectory,target,weights);weights=learned.weights;updates+=learned.updates;error+=learned.meanTdError*learned.updates;positions+=trajectory.length;g.trainedAt=new Date().toISOString();}AI.setWeights(weights);let count=0;try{const s=JSON.parse(localStorage.getItem(STORAGE_KEY)||"null");count=s&&Number(s.games)||0;}catch(_){}saveWeights(weights,count+pending.length);localStorage.setItem(HUMAN_GAMES_KEY,JSON.stringify(games));const backupSaved=createLatestFullBackup();return {games:pending.length,positions,updates,meanTdError:updates?error/updates:0,weights,stats:humanGameStats(),backupSaved};}
 
   function createWorker(){
     return new Worker("./training-worker-20261107a.js?v=20261111openingguard1");
@@ -321,6 +331,6 @@
     return {weights:AI.getWeights(),games:Math.max(0,Number(data.games)||0)};
   }
   migrateLegacyGameRecords();
-  window.GungiTraining=Object.freeze({train,trainSequential,trainParallel,loadWeights,saveWeights,makeStartPosition,exportData,importData,createBackup,restorePreviousBackup,getLatestGameKifu,getLatestGameKifus,recordHumanGame,exportHumanGames,importHumanGames,humanGameStats,trainHumanGames});
+  window.GungiTraining=Object.freeze({train,trainSequential,trainParallel,loadWeights,saveWeights,makeStartPosition,exportData,importData,createBackup,restorePreviousBackup,getLatestGameKifu,getLatestGameKifus,recordHumanGame,exportHumanGames,importHumanGames,humanGameStats,trainHumanGames,exportLatestFullBackup,createLatestFullBackup});
   loadWeights();
 })();
