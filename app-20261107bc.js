@@ -326,7 +326,7 @@
         mode = "move";
         actionMode = "move";
         infoElement.textContent = "現在の手番：先手";
-        humanGameStarted = false; humanGameTrajectory = []; humanGameAiSides.clear(); startHumanGameRecord();
+        humanGameStarted = false; humanGameTrajectory = []; startHumanGameRecord();
       }
       infoElement.textContent = result.ok
         ? "このマスの駒は " + state.board[row][col].length + " 枚です。"
@@ -376,13 +376,13 @@
         moveTargets = [];
         actionMode = "move";
         infoElement.textContent = "次の手番：" + state.turn;
+        recordHumanPosition();
         if (result.gameOver) {
           messageElement.textContent = "詰みです。対局終了！ " + result.winner + "の勝利です。";
           finishHumanGameRecord();
         } else if (E.isInCheck(state, state.turn)) {
           messageElement.textContent += " 帥手です。"; showCheck(state.turn);
         }
-        recordHumanPosition();
       } else { messageElement.textContent = result.reason; }
       render();
       return;
@@ -532,7 +532,7 @@
       if (!applied || !applied.ok) {
         messageElement.textContent = "探索した手を実行できませんでした。" + (applied && applied.reason ? " " + applied.reason : "");
       } else {
-        humanGameAiSides.add(side);
+        humanGameAiSides.add(applied.piece ? applied.piece.side : (state.turn === "先手" ? "後手" : "先手"));
         recordHumanPosition();
         if (applied.gameOver) {
           messageElement.textContent = applied.checkmate ? "AIが詰みを読み切りました。対局終了！ " + applied.winner + "の勝利です。" : "AIが帥を取りました。対局終了！ " + applied.winner + "の勝利です。";
