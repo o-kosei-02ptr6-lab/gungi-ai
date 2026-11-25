@@ -9,8 +9,9 @@
   const BACKUP_KEY="gungi-ai-previous-backup-v1";
   function readStored(key){try{return JSON.parse(localStorage.getItem(key)||"null");}catch(_){return null;}}
   function currentSnapshot(){
-    return {format:"gungi-ai-full-backup",version:1,createdAt:new Date().toISOString(),
-      learned:readStored(STORAGE_KEY),champion:readStored(CHAMPION_KEY),tournament:readStored(STATS_KEY)};
+    return {format:"gungi-ai-full-backup",version:2,createdAt:new Date().toISOString(),
+      learned:readStored(STORAGE_KEY),champion:readStored(CHAMPION_KEY),tournament:readStored(STATS_KEY),
+      humanGames:readStored(HUMAN_GAMES_KEY)||[]};
   }
   function createBackup(){
     try{localStorage.setItem(BACKUP_KEY,JSON.stringify(currentSnapshot()));return true;}catch(_){return false;}
@@ -25,7 +26,7 @@
   }
   function validWeights(weights){try{normalizeWeights(weights);return true;}catch(_){return false;}}
   function restoreSnapshot(snapshot){
-    if(!snapshot||snapshot.format!=="gungi-ai-full-backup"||snapshot.version!==1)
+    if(!snapshot||snapshot.format!=="gungi-ai-full-backup"||![1,2].includes(snapshot.version))
       throw new Error("バックアップの形式またはバージョンが違います。");
     if(snapshot.learned&&(!snapshot.learned.weights||!validWeights(snapshot.learned.weights)))
       throw new Error("学習AIの重みが不正です。");
@@ -33,14 +34,17 @@
       throw new Error("最良AIの重みが不正です。");
     if(snapshot.tournament&&(typeof snapshot.tournament!=="object"||!Number.isFinite(Number(snapshot.tournament.games))))
       throw new Error("検証記録が不正です。");
+    if(snapshot.humanGames!==undefined&&(!Array.isArray(snapshot.humanGames)||snapshot.humanGames.length>HUMAN_GAMES_LIMIT||!snapshot.humanGames.every(isValidHumanGame)))
+      throw new Error("人間対局データが不正です。復元を中止しました。");
     createBackup();
     for(const [key,value] of [[STORAGE_KEY,snapshot.learned],[CHAMPION_KEY,snapshot.champion],[STATS_KEY,snapshot.tournament]]){
       if(value==null)localStorage.removeItem(key);else localStorage.setItem(key,JSON.stringify(value));
     }
+    if(snapshot.humanGames!==undefined)localStorage.setItem(HUMAN_GAMES_KEY,JSON.stringify(snapshot.humanGames));
     const active=snapshot.learned&&snapshot.learned.weights?snapshot.learned.weights:
       snapshot.champion&&snapshot.champion.weights?snapshot.champion.weights:BASELINE_WEIGHTS;
     AI.setWeights(normalizeWeights(active));
-    return {games:snapshot.learned&&Number(snapshot.learned.games)||0,hasChampion:!!snapshot.champion,hasTournament:!!snapshot.tournament};
+    return {games:snapshot.learned&&Number(snapshot.learned.games)||0,hasChampion:!!snapshot.champion,hasTournament:!!snapshot.tournament,humanGames:Array.isArray(snapshot.humanGames)?snapshot.humanGames.length:0};
   }
   function restorePreviousBackup(){
     const snapshot=readStored(BACKUP_KEY);
