@@ -25,6 +25,11 @@
     const saved=readStored(AUTO_BACKUP_KEY);
     return saved||exportData();
   }
+  function restoreLatestFullBackup(){
+    const saved=readStored(AUTO_BACKUP_KEY);
+    if(!saved)throw new Error("自動バックアップがまだありません。");
+    return restoreSnapshot(saved);
+  }
   function normalizeWeights(weights){
     const result={...BASELINE_WEIGHTS};
     for(const key of FEATURES){
@@ -331,6 +336,6 @@
     return {weights:AI.getWeights(),games:Math.max(0,Number(data.games)||0)};
   }
   migrateLegacyGameRecords();
-  window.GungiTraining=Object.freeze({train,trainSequential,trainParallel,loadWeights,saveWeights,makeStartPosition,exportData,importData,createBackup,restorePreviousBackup,getLatestGameKifu,getLatestGameKifus,recordHumanGame,exportHumanGames,importHumanGames,humanGameStats,trainHumanGames,exportLatestFullBackup,createLatestFullBackup});
+  window.GungiTraining=Object.freeze({train,trainSequential,trainParallel,loadWeights,saveWeights,makeStartPosition,exportData,importData,createBackup,restorePreviousBackup,getLatestGameKifu,getLatestGameKifus,recordHumanGame,exportHumanGames,importHumanGames,humanGameStats,trainHumanGames,exportLatestFullBackup,restoreLatestFullBackup,createLatestFullBackup});
   loadWeights();
 })();
