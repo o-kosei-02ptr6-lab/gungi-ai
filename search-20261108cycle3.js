@@ -117,6 +117,31 @@
     return "M:" + action.from.row + ":" + action.from.col + ":" + action.to.row + ":" + action.to.col + ":" + action.landingMode;
   }
 
+  // Generalized, side-relative action features shared by policy training and search.
+  function policyActionKey(state, action) {
+    if (!state || !action) return "";
+    const side = state.turn;
+    if (action.type === "deploy") {
+      const piece = (state.hands[side] || []).find(item => item.id === action.pieceId);
+      if (!piece) return "";
+      const advance = side === "先手" ? 8 - action.row : action.row;
+      const centerDistance = Math.abs(action.col - 4);
+      const centerBand = centerDistance <= 1 ? 0 : centerDistance <= 3 ? 1 : 2;
+      const stackLevel = Math.min(2, (state.board[action.row] && state.board[action.row][action.col] || []).length);
+      return ["D", piece.name, Math.min(2, Math.floor(advance / 3)), centerBand, stackLevel].join("|");
+    }
+    const fromStack = state.board[action.from.row] && state.board[action.from.row][action.from.col];
+    const piece = fromStack && fromStack[fromStack.length - 1];
+    if (!piece) return "";
+    const dr = action.to.row - action.from.row;
+    const dc = action.to.col - action.from.col;
+    const forward = side === "先手" ? -dr : dr;
+    const direction = forward > 0 ? (dc === 0 ? "F" : "FD")
+      : forward < 0 ? (dc === 0 ? "B" : "BD") : "L";
+    const target = state.board[action.to.row] && state.board[action.to.row][action.to.col] || [];
+    return ["M", piece.name, direction, Math.min(2, target.length), action.landingMode || "capture"].join("|");
+  }
+
   // 同じ盤面に戻る循環や、同じ駒を短い間隔で往復させる手を抑える。
   // engine側のpositionKeyと同じ形式で、駒IDではなく駒種・陣営・段構成を比較する。
   function repetitionKey(state) {
@@ -387,6 +412,10 @@
 
   function scoreAction(state, action, preferred, killerList, historyScores) {
     let score = actionKey(action) === preferred ? 100000000 : 0;
+    if (historyScores) {
+      const policyKey = policyActionKey(state, action);
+      if (policyKey) score += historyScores.get("P:" + policyKey) || 0;
+    }
     if (action.type === "deploy") {
       const piece = state.hands[state.turn].find(p => p.id === action.pieceId);
       if (piece) score += deploymentPriority(state, state.turn, piece, action.row, action.col) * 3;
@@ -516,6 +545,16 @@
         // They are local to one search and never alter legal move generation.
         const killers = new Map();
         const historyScores = new Map();
+        // Persisted policy preferences are read-only during a search. Local
+        // killer/history heuristics remain separate and are still search-scoped.
+        if (options.policyWeights && typeof options.policyWeights === "object") {
+          for (const [key, value] of Object.entries(options.policyWeights)) {
+            const numeric = Number(value);
+            if (key.length <= 160 && Number.isFinite(numeric)) {
+              historyScores.set("P:" + key, Math.max(-180, Math.min(180, numeric)));
+            }
+          }
+        }
         function rememberQuietCutoff(position, action, depth, ply) {
           if (!isQuietAction(position, action)) return;
           const key = actionKey(action);
@@ -1014,6 +1053,7 @@
     getAntiLoopPenalty: antiLoopPenalty,
     getHistoricalRetreatPenalty: historicalRetreatPenalty,
     getRepeatedPositionPenalty: repeatedPositionPenalty,
+    getPolicyActionKey: policyActionKey,
     isThreefoldRepetition,
     cloneState
   });
