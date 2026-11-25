@@ -757,8 +757,8 @@
   if (exportTrainingButton && window.GungiTraining) {
     exportTrainingButton.addEventListener("click", () => {
       try {
-        transferTextarea.value = JSON.stringify(window.GungiTraining.exportData(), null, 2);
-        transferStatus.textContent = "書き出しました。データをコピーして引き継ぎ先へ送ってください。";
+        transferTextarea.value = JSON.stringify(window.GungiTraining.exportLatestFullBackup(), null, 2);
+        transferStatus.textContent = "学習済み重み・学習回数・最良AI・検証記録・人間対局棋譜を含む一括バックアップを書き出しました。コピーして保管してください。";
       } catch (error) {
         transferStatus.textContent = "書き出しに失敗しました：" + (error.message || String(error));
       }
@@ -783,6 +783,22 @@
         transferTextarea.focus();
         transferTextarea.select();
         transferStatus.textContent = "自動コピーできませんでした。選択された文字列をコピーしてください。";
+      }
+    });
+  }
+  const restoreLatestFullBackupButton = document.getElementById("restore-latest-full-backup");
+  if (restoreLatestFullBackupButton && window.GungiTraining) {
+    restoreLatestFullBackupButton.addEventListener("click", () => {
+      try {
+        const result = window.GungiTraining.restoreLatestFullBackup();
+        transferStatus.textContent = "最新の自動一括バックアップを復元しました。学習AI " + result.games +
+          "局分 ／ 人間対局 " + (result.humanGames || 0) + "局 ／ 最良AI " +
+          (result.hasChampion ? "あり" : "初期状態") + " ／ 検証記録 " +
+          (result.hasTournament ? "あり" : "なし") + "。";
+        const trainingStatus = document.getElementById("training-status");
+        if (trainingStatus) trainingStatus.textContent = "最新の自動バックアップから復元しました。";
+      } catch (error) {
+        transferStatus.textContent = "自動バックアップを復元できませんでした：" + (error.message || String(error));
       }
     });
   }
