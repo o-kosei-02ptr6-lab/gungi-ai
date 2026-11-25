@@ -27,6 +27,14 @@
   let tournamentRunning = false;
   let checkOverlayTimer = null;
   let checkOverlayFadeTimer = null;
+
+  let humanGameStarted=false,humanGameTrajectory=[];
+  const humanGameAiSides=new Set();
+  function humanFeatureSnapshot(){const b=window.GungiAI.evaluateBreakdown(state),f={};for(const k of ["material","hand","position","activity","mobility","threats","exposure","kingSafety","mateNet"])f[k]=(b["先手"][k]||0)-(b["後手"][k]||0);return f;}
+  function startHumanGameRecord(){if(humanGameStarted||state.phase!=="move")return;humanGameStarted=true;humanGameTrajectory=[humanFeatureSnapshot()];}
+  function recordHumanPosition(){if(state.phase!=="move"&&state.phase!=="finished")return;startHumanGameRecord();if(humanGameStarted)humanGameTrajectory.push(humanFeatureSnapshot());}
+  function finishHumanGameRecord(){if(!humanGameStarted||!window.GungiTraining||!humanGameTrajectory.length)return;const result=window.GungiTraining.recordHumanGame({id:"human-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8),source:humanGameAiSides.size?"人間対AI":"人間同士",aiSides:Array.from(humanGameAiSides),winner:state.winner||null,draw:!state.winner,plies:state.history.filter(e=>e.type==="move"||e.type==="deploy").length,trajectory:humanGameTrajectory,history:state.history.map(e=>({...e}))});const el=document.getElementById("human-training-status");if(el)el.textContent=result.ok?"対局を端末に保存しました（"+(humanGameAiSides.size?"人間対AI":"人間同士")+"・局面 "+result.positions+"件）。":"対局の保存に失敗しました："+result.error;humanGameStarted=false;humanGameTrajectory=[];}
+
   function showCheck(side) {
     checkOverlay.textContent = "帥手";
     checkOverlay.classList.remove("is-fading");
@@ -318,6 +326,7 @@
         mode = "move";
         actionMode = "move";
         infoElement.textContent = "現在の手番：先手";
+        humanGameStarted = false; humanGameTrajectory = []; humanGameAiSides.clear(); startHumanGameRecord();
       }
       infoElement.textContent = result.ok
         ? "このマスの駒は " + state.board[row][col].length + " 枚です。"
@@ -345,6 +354,8 @@
         messageElement.textContent += " 帥手です。";
         showCheck(state.turn);
       }
+      recordHumanPosition();
+      if (result.gameOver) finishHumanGameRecord();
     } else {
       messageElement.textContent = result.reason;
     }
@@ -365,13 +376,14 @@
         moveTargets = [];
         actionMode = "move";
         infoElement.textContent = "次の手番：" + state.turn;
-        if (E.isInCheck(state, state.turn)) {
-          messageElement.textContent += " 帥手です。";
-          showCheck(state.turn);
+        if (result.gameOver) {
+          messageElement.textContent = "詰みです。対局終了！ " + result.winner + "の勝利です。";
+          finishHumanGameRecord();
+        } else if (E.isInCheck(state, state.turn)) {
+          messageElement.textContent += " 帥手です。"; showCheck(state.turn);
         }
-      } else {
-        messageElement.textContent = result.reason;
-      }
+        recordHumanPosition();
+      } else { messageElement.textContent = result.reason; }
       render();
       return;
     }
@@ -442,6 +454,7 @@
           return;
         }
         const side = state.setupTurn;
+        humanGameAiSides.add(side);
         let pressedFinish = false;
         if (result.finishRecommended) {
           const finish = E.finishSetup(state, side);
@@ -518,15 +531,16 @@
       }
       if (!applied || !applied.ok) {
         messageElement.textContent = "探索した手を実行できませんでした。" + (applied && applied.reason ? " " + applied.reason : "");
-      } else if (applied.gameOver) {
-        messageElement.textContent = applied.checkmate ? "AIが詰みを読み切りました。対局終了！ " + applied.winner + "の勝利です。" : "AIが帥を取りました。対局終了！ " + applied.winner + "の勝利です。";
-        infoElement.textContent = applied.winner + "の勝利です。";
       } else {
-        infoElement.textContent = "探索深度 " + result.depth + " ／ " + result.nodes.toLocaleString() +
-          "局面 ／ " + result.elapsedMs + " ms ／ 評価値 " + result.score;
-        if (E.isInCheck(state, state.turn)) {
-          messageElement.textContent += " 帥手です。";
-          showCheck(state.turn);
+        humanGameAiSides.add(side);
+        recordHumanPosition();
+        if (applied.gameOver) {
+          messageElement.textContent = applied.checkmate ? "AIが詰みを読み切りました。対局終了！ " + applied.winner + "の勝利です。" : "AIが帥を取りました。対局終了！ " + applied.winner + "の勝利です。";
+          infoElement.textContent = applied.winner + "の勝利です。";
+          finishHumanGameRecord();
+        } else {
+          infoElement.textContent = "探索深度 " + result.depth + " ／ " + result.nodes.toLocaleString() + "局面 ／ " + result.elapsedMs + " ms ／ 評価値 " + result.score;
+          if (E.isInCheck(state, state.turn)) { messageElement.textContent += " 帥手です。"; showCheck(state.turn); }
         }
       }
     } catch (error) {
@@ -584,6 +598,7 @@
   });
   document.getElementById("reset-board").addEventListener("click", () => {
     const fresh = E.createGameState();
+    humanGameStarted = false; humanGameTrajectory = []; humanGameAiSides.clear();
     state.board = fresh.board;
     state.hands = fresh.hands;
     state.history = [];
@@ -800,5 +815,13 @@
       }
     });
   }
+
+  const humanGamesTextarea=document.getElementById("human-games-data"),humanGamesStatus=document.getElementById("human-training-status");
+  function refreshHumanGameStatus(){if(!window.GungiTraining||!humanGamesStatus)return;const s=window.GungiTraining.humanGameStats();humanGamesStatus.textContent="保存済み "+s.games+"局（人間同士 "+s.humanVsHuman+"局・人間対AI "+s.humanVsAi+"局）／未学習 "+s.untrained+"局／学習局面 "+s.positions+"件。";}
+  const humanExportButton=document.getElementById("human-games-export");if(humanExportButton&&window.GungiTraining)humanExportButton.addEventListener("click",()=>{try{humanGamesTextarea.value=JSON.stringify(window.GungiTraining.exportHumanGames(),null,2);humanGamesStatus.textContent="書き出し用JSONを表示しました。コピーして別端末へ移せます。";humanGamesTextarea.focus();humanGamesTextarea.select();}catch(e){humanGamesStatus.textContent="書き出しに失敗しました："+(e.message||String(e));}});
+  const humanImportButton=document.getElementById("human-games-import");if(humanImportButton&&window.GungiTraining)humanImportButton.addEventListener("click",()=>{try{if(!humanGamesTextarea.value.trim())throw Error("対局データJSONを貼り付けてください。");const r=window.GungiTraining.importHumanGames(humanGamesTextarea.value.trim());humanGamesStatus.textContent=r.added+"局を読み込みました。端末内の保存は合計 "+r.total+"局です。";refreshHumanGameStatus();}catch(e){humanGamesStatus.textContent="読み込みに失敗しました："+(e.message||String(e));}});
+  const humanTrainButton=document.getElementById("human-games-train");if(humanTrainButton&&window.GungiTraining)humanTrainButton.addEventListener("click",()=>{try{if(trainingRunning||tournamentRunning||aiThinking)throw Error("対局または別の学習が進行中です。終了後に実行してください。");humanTrainButton.disabled=true;const r=window.GungiTraining.trainHumanGames();humanGamesStatus.textContent=r.games+"局・"+r.positions+"局面を学習しました。TD更新 "+r.updates+"回／平均TD誤差 "+r.meanTdError.toFixed(4)+"。";refreshHumanGameStatus();document.getElementById("training-status").textContent="人間対局データの学習が完了しました。";document.getElementById("training-info").textContent="学習した人間対局 "+r.games+"局 ／ 局面 "+r.positions+"件 ／ TD更新 "+r.updates+"回。";}catch(e){humanGamesStatus.textContent="学習できませんでした："+(e.message||String(e));}finally{humanTrainButton.disabled=false;}});
+  refreshHumanGameStatus();
+
   render();
 })();
