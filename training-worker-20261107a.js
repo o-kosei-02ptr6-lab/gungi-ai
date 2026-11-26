@@ -163,6 +163,19 @@
       ?{type:"move",piece:piece?piece.name:null,from:{...action.from},to:{...action.to},landingMode:action.landingMode||"capture"}
       :{type:"deploy",piece:piece?piece.name:null,to:{row:action.row,col:action.col}};
   }
+  function policyKeyFromRootAction(state,encoded){
+    if(typeof encoded!=="string")return "";
+    const parts=encoded.split(":");
+    let action=null;
+    if(parts[0]==="M"&&parts.length>=6){
+      action={type:"move",from:{row:Number(parts[1]),col:Number(parts[2])},
+        to:{row:Number(parts[3]),col:Number(parts[4])},landingMode:parts[5]};
+    }else if(parts[0]==="D"&&parts.length>=4){
+      action={type:"deploy",pieceId:parts[1],row:Number(parts[2]),col:Number(parts[3])};
+    }
+    if(!action)return "";
+    return S.getPolicyActionKey(state,action)||"";
+  }
   async function play(message){
     const {candidateWeights,championWeights,candidatePolicyWeights={},championPolicyWeights={},candidateSide,maxPlies=108,searchOptions={},seed=1}=message;
     const setupStart=await makeStartPosition(seed),state=setupStart.state,setupDiagnostics=setupStart.setupDiagnostics;
@@ -199,8 +212,14 @@
       nodes+=result.nodes||0;
       const selectedPiece=aPieceForTelemetry(state,result.bestMove);
       if(isCandidate&&result.bestMove){
-        const policyKey=S.getPolicyActionKey(state,result.bestMove);
-        if(policyKey)policySamples.push(policyKey);
+        const chosen=S.getPolicyActionKey(state,result.bestMove);
+        if(chosen){
+          const alternatives=(result.rootCandidates||[]).map(item=>({
+            key:policyKeyFromRootAction(state,item.action),score:Number(item.score)
+          })).filter(item=>item.key&&item.key!==chosen&&Number.isFinite(item.score));
+          const uniqueAlternatives=[...new Map(alternatives.map(item=>[item.key,item])).values()];
+          policySamples.push({chosen,chosenScore:Number(result.score)||0,alternatives:uniqueAlternatives});
+        }
       }
       searchTelemetry.push({
         ply:plies+1,side,isCandidate,inCheck:urgent,
