@@ -53,13 +53,42 @@ function normalizePolicyWeights(input) {
 }
 function trainPolicySamples(samples, outcome, initial) {
   const weights = { ...initial };
-  const unique = [...new Set((samples || []).filter(key => typeof key === "string" && key.length > 0 && key.length <= 160))];
   const reward = outcome > 0 ? 1 : outcome < 0 ? -1 : 0;
-  for (const key of unique) {
-    const previous = Number(weights[key]) || 0;
-    weights[key] = Math.max(-180, Math.min(180, previous * 0.995 + reward * 18));
+  const legacy = new Set();
+  let updates = 0, pairwiseUpdates = 0;
+  for (const sample of samples || []) {
+    // Backward compatibility with checkpoints/runs that stored only the chosen key.
+    if (typeof sample === "string") {
+      if (sample.length > 0 && sample.length <= 160) legacy.add(sample);
+      continue;
+    }
+    if (!sample || typeof sample.chosen !== "string" || sample.chosen.length > 160) continue;
+    const alternatives = Array.isArray(sample.alternatives) ? sample.alternatives
+      .filter(item => item && typeof item.key === "string" && item.key.length > 0 &&
+        item.key.length <= 160 && item.key !== sample.chosen && Number.isFinite(Number(item.score))) : [];
+    if (!alternatives.length || reward === 0) continue;
+    const unique = [...new Map(alternatives.map(item => [item.key, item])).values()];
+    const chosenScore = Number(sample.chosenScore) || 0;
+    const previousChosen = Number(weights[sample.chosen]) || 0;
+    const step = 2.4;
+    weights[sample.chosen] = Math.max(-180, Math.min(180, previousChosen * 0.999 + reward * step));
+    for (const alternative of unique) {
+      const gap = Math.max(-1, Math.min(1, (chosenScore - Number(alternative.score)) / 600));
+      const confidence = 0.5 + Math.abs(gap) * 0.5;
+      const previous = Number(weights[alternative.key]) || 0;
+      weights[alternative.key] = Math.max(-180, Math.min(180,
+        previous * 0.999 - reward * step * confidence / unique.length));
+      pairwiseUpdates++;
+    }
+    updates++;
   }
-  return { weights, updates: unique.length, distinctKeys: Object.keys(weights).length };
+  // Legacy samples continue to receive a small outcome signal; new samples use pairwise credit assignment.
+  for (const key of legacy) {
+    const previous = Number(weights[key]) || 0;
+    weights[key] = Math.max(-180, Math.min(180, previous * 0.995 + reward * 4));
+    updates++;
+  }
+  return { weights, updates, pairwiseUpdates, distinctKeys: Object.keys(weights).length };
 }
 function normalizeWeights(input) {
   const weights = {};
@@ -232,6 +261,7 @@ for (let index = 0; index < gamesRequested; index++) {
     candidateFinalScore: result.candidateFinalScore, trajectorySamples: result.trajectory.length,
     mateSamples: (result.mateSamples || []).length, tdUpdates: learned.updates, mateUpdates: mate.updates,
     policySamples: (result.policySamples || []).length, policyUpdates: learnedPolicy.updates,
+    policyPairwiseUpdates: learnedPolicy.pairwiseUpdates || 0,
     finalState: result.finalState
   };
   runResults.push(gameSummary);
