@@ -237,7 +237,7 @@
   function trainHumanGames(){const games=readHumanGames(),pending=games.filter(g=>!g.trainedAt);if(!pending.length)throw Error("未学習の人間対局データがありません。先に対局を保存するか、棋譜データを読み込んでください。");createBackup();let weights=loadWeights(),updates=0,error=0,positions=0;for(const g of pending){const sign=g.winner==="後手"?-1:1,trajectory=g.trajectory.map(s=>Object.fromEntries(FEATURES.map(k=>[k,(s[k]||0)*sign]))),target=g.draw?0:1,learned=trainTrajectory(trajectory,target,weights);weights=learned.weights;updates+=learned.updates;error+=learned.meanTdError*learned.updates;positions+=trajectory.length;g.trainedAt=new Date().toISOString();}AI.setWeights(weights);let count=0;try{const s=JSON.parse(localStorage.getItem(STORAGE_KEY)||"null");count=s&&Number(s.games)||0;}catch(_){}saveWeights(weights,count+pending.length);localStorage.setItem(HUMAN_GAMES_KEY,JSON.stringify(games));const backupSaved=createLatestFullBackup();return {games:pending.length,positions,updates,meanTdError:updates?error/updates:0,weights,stats:humanGameStats(),backupSaved};}
 
   function createWorker(){
-    return new Worker("./training-worker-20261107a.js?v=20261126policylearn1");
+    return new Worker("./training-worker-20261107a.js?v=20261127policypair1");
   }
   async function trainParallel(options={}){
     const continuous=options.continuous===true;
