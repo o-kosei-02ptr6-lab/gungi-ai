@@ -51,6 +51,14 @@ function normalizePolicyWeights(input) {
   }
   return weights;
 }
+function normalizePolicyWeightsBySide(input) {
+  if (input && typeof input === "object" && !Array.isArray(input) &&
+      (input["先手"] || input["後手"])) {
+    return { "先手": normalizePolicyWeights(input["先手"]), "後手": normalizePolicyWeights(input["後手"]) };
+  }
+  const legacy = normalizePolicyWeights(input);
+  return { "先手": { ...legacy }, "後手": { ...legacy } };
+}
 function trainPolicySamples(samples, outcome, initial) {
   const weights = { ...initial };
   const reward = outcome > 0 ? 1 : outcome < 0 ? -1 : 0;
@@ -109,7 +117,7 @@ function readCheckpoint() {
       format: saved.format, version: 2,
       games: Math.max(0, Number(saved.games) || 0),
       weights: normalizeWeights(saved.weights),
-      policyWeights: normalizePolicyWeights(saved.policyWeights),
+      policyWeightsBySide: normalizePolicyWeightsBySide(saved.policyWeightsBySide || saved.policyWeights),
       totals: saved.totals && typeof saved.totals === "object" ? saved.totals : {},
       updatedAt: saved.updatedAt || null
     };
@@ -170,7 +178,7 @@ function saveCheckpoint(checkpoint) {
   const temporary = checkpointPath + ".tmp";
   fs.writeFileSync(temporary, JSON.stringify({
     format: "gungi-server-training-checkpoint", version: 2,
-    games: checkpoint.games, weights: checkpoint.weights, policyWeights: checkpoint.policyWeights || {}, totals: checkpoint.totals,
+    games: checkpoint.games, weights: checkpoint.weights, policyWeightsBySide: checkpoint.policyWeightsBySide || { "先手": {}, "後手": {} }, totals: checkpoint.totals,
     updatedAt: new Date().toISOString()
   }, null, 2));
   fs.renameSync(temporary, checkpointPath);
@@ -190,7 +198,7 @@ function playGame(id, candidateWeights, championWeights, candidatePolicyWeights,
 const previous = readCheckpoint();
 let checkpoint = previous || {
   format: "gungi-server-training-checkpoint", version: 2, games: 0,
-  weights: { ...BASELINE }, policyWeights: {},
+  weights: { ...BASELINE }, policyWeightsBySide: { "先手": {}, "後手": {} },
   totals: { candidateWins: 0, championWins: 0, draws: 0, nodes: 0, plies: 0, tdUpdates: 0, mateUpdates: 0, tdErrorSum: 0, tdErrorGames: 0 }
 };
 const championWeights = { ...BASELINE };
@@ -207,13 +215,18 @@ for (let index = 0; index < gamesRequested; index++) {
   const candidateSide = (checkpoint.games % 2 === 0) ? "先手" : "後手";
   const beforeWeights = { ...checkpoint.weights };
   const gameNumber = checkpoint.games + 1;
-  const beforePolicyWeights = { ...checkpoint.policyWeights };
+  const beforePolicyWeightsBySide = { "先手": { ...(checkpoint.policyWeightsBySide["先手"] || {}) }, "後手": { ...(checkpoint.policyWeightsBySide["後手"] || {}) } };
   const result = await playGame("server-training-" + gameNumber, beforeWeights, championWeights,
-    beforePolicyWeights, {}, candidateSide, gameNumber * 7919 + 104729, searchOptions);
+    beforePolicyWeightsBySide, {}, candidateSide, gameNumber * 7919 + 104729, searchOptions);
   let learned = { weights: beforeWeights, updates: 0, meanTdError: 0 };
   const policyOutcome = result.winner === candidateSide ? 1 : result.winner ? -1 : 0;
-  const learnedPolicy = trainPolicySamples(result.policySamples, policyOutcome, beforePolicyWeights);
-  checkpoint.policyWeights = learnedPolicy.weights;
+  const learnedPolicyBySide = {};
+  for (const side of ["先手", "後手"]) {
+    learnedPolicyBySide[side] = trainPolicySamples((result.policySamples || []).filter(sample => sample && sample.side === side), policyOutcome, beforePolicyWeightsBySide[side]);
+    checkpoint.policyWeightsBySide[side] = learnedPolicyBySide[side].weights;
+  }
+  const learnedPolicy = { updates: learnedPolicyBySide["先手"].updates + learnedPolicyBySide["後手"].updates,
+    pairwiseUpdates: learnedPolicyBySide["先手"].pairwiseUpdates + learnedPolicyBySide["後手"].pairwiseUpdates };
   if (result.trajectory && result.trajectory.length) {
     learned = trainTrajectory(result.trajectory, result.finalTarget, beforeWeights);
   }
@@ -346,11 +359,14 @@ const summary = {
   },
   drawMeanCandidateFinalScore: checkpoint.totals.drawEvaluationCount
     ? checkpoint.totals.drawEvaluationSum / checkpoint.totals.drawEvaluationCount : 0,
-  totals: checkpoint.totals, weights: checkpoint.weights, policyWeights: checkpoint.policyWeights,
-  policyDiagnostics: { distinctActionPatterns: Object.keys(checkpoint.policyWeights || {}).length,
-    nonZeroActionPatterns: Object.values(checkpoint.policyWeights || {}).filter(value => Math.abs(value) >= 0.5).length,
-    meanAbsolutePreference: Object.values(checkpoint.policyWeights || {}).length
-      ? Object.values(checkpoint.policyWeights).reduce((sum, value) => sum + Math.abs(value), 0) / Object.keys(checkpoint.policyWeights).length : 0 },
+  totals: checkpoint.totals, weights: checkpoint.weights, policyWeightsBySide: checkpoint.policyWeightsBySide,
+  policyDiagnosticsBySide: Object.fromEntries(["先手", "後手"].map(side => {
+    const values = Object.values(checkpoint.policyWeightsBySide[side] || {});
+    return [side, { distinctActionPatterns: values.length, nonZeroActionPatterns: values.filter(value => Math.abs(value) >= 0.5).length,
+      meanAbsolutePreference: values.length ? values.reduce((sum, value) => sum + Math.abs(value), 0) / values.length : 0 }];
+  })),
+  policyDiagnostics: { distinctActionPatterns: ["先手", "後手"].reduce((sum, side) => sum + Object.keys(checkpoint.policyWeightsBySide[side] || {}).length, 0),
+    nonZeroActionPatterns: ["先手", "後手"].reduce((sum, side) => sum + Object.values(checkpoint.policyWeightsBySide[side] || {}).filter(value => Math.abs(value) >= 0.5).length, 0) },
   meanTdError: checkpoint.totals.tdErrorGames
     ? checkpoint.totals.tdErrorSum / checkpoint.totals.tdErrorGames : 0
 };
