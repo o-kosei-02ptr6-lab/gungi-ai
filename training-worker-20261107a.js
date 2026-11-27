@@ -204,7 +204,7 @@
       const result=await S.findBestMove(state,{
         maxDepth:5,timeMs:urgent?900:600,maxNodes:urgent?14000:9000,maxDeployCandidates:8,
         ...searchOptions,
-        policyWeights:isCandidate?candidatePolicyWeights:championPolicyWeights,
+        policyWeights:isCandidate?(candidatePolicyWeights[side]||{}):(championPolicyWeights[side]||{}),
         onProgress:progress=>iterations.push({
           depth:progress.depth,nodes:progress.nodes,elapsedMs:progress.elapsedMs,score:progress.score
         })
@@ -218,7 +218,7 @@
             key:policyKeyFromRootAction(state,item.action),score:Number(item.score)
           })).filter(item=>item.key&&item.key!==chosen&&Number.isFinite(item.score));
           const uniqueAlternatives=[...new Map(alternatives.map(item=>[item.key,item])).values()];
-          policySamples.push({chosen,chosenScore:Number(result.score)||0,alternatives:uniqueAlternatives});
+          policySamples.push({side,chosen,chosenScore:Number(result.score)||0,alternatives:uniqueAlternatives});
         }
       }
       searchTelemetry.push({
