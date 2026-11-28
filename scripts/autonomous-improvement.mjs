@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
+import vm from "node:vm";
 
 const root = process.cwd();
 const cycles = Math.max(1, Math.min(2, Number(process.env.AUTO_CYCLES) || 2));
@@ -61,6 +62,67 @@ function writeLog() {
   fs.writeFileSync(path.join(outDir, "cycle-log.json"), JSON.stringify(log, null, 2));
 }
 
+async function runPairedValidation(candidateWeights, candidatePolicyWeightsBySide, pairs = 2) {
+  const files = {
+    "engine-20261107bb.js": "engine-20261107bb.js",
+    "evaluation-20261107be.js": "evaluation-20261107be.js",
+    "search-20261108cycle3.js": "search-20261108cycle3.js",
+    "training-worker-20261107a.js": "training-worker-20261107a.js"
+  };
+  const self = {};
+  const context = vm.createContext({
+    self, window: self, console, Date, Math, Map, Set, Object, Array, Number,
+    String, Boolean, JSON, Promise, Error, TypeError, performance, setTimeout, clearTimeout
+  });
+  context.importScripts = (...urls) => {
+    for (const url of urls) {
+      const name = path.basename(String(url).split("?")[0]);
+      if (!files[name]) throw new Error("Unexpected worker import: " + url);
+      vm.runInContext(fs.readFileSync(path.join(root, files[name]), "utf8"), context, { filename: files[name] });
+    }
+  };
+  self.importScripts = context.importScripts;
+  vm.runInContext(fs.readFileSync(path.join(root, files["training-worker-20261107a.js"]), "utf8"), context);
+  const baseline = Object.fromEntries(["material","hand","position","activity","mobility","threats","exposure","kingSafety","mateNet"].map(key => [key, 1]));
+  const searchOptions = { maxDepth: 8, timeMs: 5200, maxNodes: 60000, maxDeployCandidates: 12, maxTTEntries: 60000 };
+  const play = (id, candidateSide, seed) => new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error("Paired validation timed out.")), 30 * 60 * 1000);
+    self.postMessage = message => {
+      clearTimeout(timeout);
+      if (message && message.ok) resolve(message.result);
+      else reject(new Error(message && message.error || "Validation worker returned no result."));
+    };
+    self.onmessage({ data: {
+      id, candidateWeights, championWeights: baseline,
+      candidatePolicyWeights: candidatePolicyWeightsBySide || { "先手": {}, "後手": {} },
+      championPolicyWeights: {}, candidateSide, maxPlies, searchOptions, seed
+    }});
+  });
+  const results = [];
+  for (let pair = 0; pair < pairs; pair++) {
+    const seed = 900001 + pair * 104729;
+    for (const candidateSide of ["先手", "後手"]) {
+      const result = await play("paired-validation-" + pair + "-" + candidateSide, candidateSide, seed);
+      results.push({
+        pair, seed, candidateSide, winner: result.winner || null, draw: !!result.draw,
+        score: result.winner === candidateSide ? 1 : result.winner ? 0 : 0.5,
+        plies: result.plies, nodes: result.nodes, startKey: result.startKey
+      });
+    }
+  }
+  const bySide = Object.fromEntries(["先手","後手"].map(side => {
+    const subset = results.filter(item => item.candidateSide === side);
+    return [side, { games: subset.length, wins: subset.filter(x=>x.score===1).length,
+      losses: subset.filter(x=>x.score===0).length, draws: subset.filter(x=>x.score===0.5).length,
+      scoreRate: subset.length ? Number((subset.reduce((sum,x)=>sum+x.score,0)/subset.length).toFixed(3)) : 0 }];
+  }));
+  return {
+    games: results.length, pairs, results, bySide,
+    scoreRate: Number((results.reduce((sum,x)=>sum+x.score,0)/results.length).toFixed(3)),
+    matchedStartPositions: results.every((item,index)=>index%2===0 || item.startKey===results[index-1].startKey)
+  };
+}
+
 console.log(JSON.stringify({
   event: "free-autonomous-training-start",
   mode: "deterministic-self-play-and-TD-weight-learning",
@@ -119,12 +181,20 @@ for (let cycle = 1; cycle <= cycles; cycle++) {
   }
 }
 const latest = log[log.length - 1];
+const finalReport = readReport();
+const pairedValidation = await runPairedValidation(
+  latest?.metrics?.weights || finalReport.weights || {},
+  finalReport.policyWeightsBySide || { "先手": {}, "後手": {} }, 2
+);
+fs.writeFileSync(path.join(outDir, "paired-validation.json"), JSON.stringify(pairedValidation, null, 2));
 fs.writeFileSync(path.join(outDir, "final-summary.json"), JSON.stringify({
   success: true,
   mode: "no-paid-model-api",
   cyclesCompleted: log.length,
   latestMetrics: latest?.metrics || null,
-  note: "Engine source code was not rewritten. The existing TD(lambda) and mate-sample learner updated checkpoint evaluation weights between self-play cycles."
+  pairedValidation,
+  promotionDecision: "not-automatic; retain champion until a larger statistically meaningful paired test confirms improvement",
+  note: "Engine source code was not rewritten. TD(lambda), mate-sample and side-specific policy learning were followed by matched-start validation against the unchanged baseline champion."
 }, null, 2));
 writeLog();
 console.log(JSON.stringify({
